@@ -33,3 +33,10 @@ Dynamic Island für Android im Nothing-OS-Look (schwarz, Monospace-Typo, roter A
 - **GitHub:** Projekt in ein Repo pushen. Der Workflow `.github/workflows/build.yml` baut die APK und legt sie unter Actions > Artifacts ab.
 
 Zum Installieren auf dem Handy "Apps aus unbekannten Quellen installieren" für den Browser oder Dateimanager erlauben.
+
+## Neu: Einstellungen, Live-Pille, Icon
+- **Einstellungen:** Position (horizontal / von oben), Größe, Breite der kleinen Pille, Anzeigedauer neuer Meldungen, Ruhe-Pille an/aus. Änderungen sind live sichtbar.
+- **Live-Pille:** Laufende Musik, Timer, Anrufe und Downloads bleiben dauerhaft in der kleinen Pille (Timer mit Live-Zeit). Antippen klappt sie auf, dort stehen die Buttons der App (Pause, Stopp, Weiter ...). Bei mehreren Aktivitäten wechselt "1/2" zwischen ihnen.
+- **Neue Meldungen** klappen weiterhin kurz auf und gehen danach zurück in die Live-Pille.
+- **App-Icon:** adaptives Icon (Punktring + roter Punkt), inkl. monochromer Variante für Themed Icons.
+- **QUERY_ALL_PACKAGES:** wird gebraucht, damit App-Namen und Icons aus fremden Benachrichtigungen geladen werden können.
