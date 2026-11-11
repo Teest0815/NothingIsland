@@ -160,6 +160,34 @@ class MainActivity : ComponentActivity() {
                 ) { v -> edit { it.copy(cameraGap = v.roundToInt()) } }
             }
 
+            SectionLabel("AUFGEKLAPPTE PILLE")
+            Card {
+                SettingSlider(
+                    label = "Größe",
+                    valueText = "${(s.expandedScale * 100).roundToInt()} %",
+                    value = s.expandedScale,
+                    range = 0.7f..1.5f,
+                ) { v ->
+                    edit { it.copy(expandedScale = (v * 20f).roundToInt() / 20f) }
+                    IslandBus.post(previewAlert())
+                }
+                SettingSlider(
+                    label = "Breite",
+                    valueText = "${(s.expandedWidth * 100).roundToInt()} %",
+                    value = s.expandedWidth,
+                    range = 0.7f..1.3f,
+                ) { v ->
+                    edit { it.copy(expandedWidth = (v * 20f).roundToInt() / 20f) }
+                    IslandBus.post(previewAlert())
+                }
+                Text(
+                    "Gilt für neue Meldungen und für die aufgeklappte Timer-/Musik-Pille. Beim Verschieben siehst du eine Vorschau oben.",
+                    color = Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+            }
+
             SectionLabel("VERHALTEN")
             Card {
                 ToggleRow("Ruhe-Pille anzeigen", s.idleVisible) { c -> edit { it.copy(idleVisible = c) } }
@@ -385,4 +413,10 @@ private fun demoNav(): IslandEvent = IslandEvent(
     title = "In 250 m",
     text = "Rechts abbiegen auf Hauptstraße",
     actions = listOf(IslandAction("Beenden", onClick = { IslandBus.removeOngoing("demo-nav") })),
+)
+
+private fun previewAlert(): IslandEvent = IslandEvent(
+    app = "Nothing Island",
+    title = "Vorschau",
+    text = "So groß ist die aufgeklappte Pille.",
 )

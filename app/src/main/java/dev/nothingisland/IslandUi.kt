@@ -167,9 +167,10 @@ fun IslandHost() {
     val gap = s.cameraGap.toFloat()
     val screenW = LocalConfiguration.current.screenWidthDp
     val limit = minOf(s.maxWidth.toFloat(), screenW - 16f)
-    val bigW = minOf(BASE_BIG_W * sc, limit)
+    val bsc = sc * s.expandedScale // Skalierung der aufgeklappten Pille
+    val bigW = minOf(BASE_BIG_W * bsc * s.expandedWidth, limit)
     val hasActions = current?.actions?.isNotEmpty() == true
-    val expandedH = (if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H) * sc
+    val expandedH = (if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H) * bsc
     val idleW = BASE_IDLE_W * sc * s.widthFactor
     val compactW = minOf(2f * BASE_COMPACT_SIDE * sc * s.widthFactor + gap, limit)
     val messageW = minOf(2f * BASE_MESSAGE_SIDE * sc * s.widthFactor + gap, limit)
@@ -183,12 +184,12 @@ fun IslandHost() {
     }
     val targetH = when (mode) {
         Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH
-        Mode.ALERT -> BASE_ALERT_H * sc
+        Mode.ALERT -> BASE_ALERT_H * bsc
         Mode.EXPANDED -> expandedH
     }
     val targetCorner = when (mode) {
         Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH / 2f
-        else -> 38f * sc
+        else -> 38f * bsc
     }
 
     val motion = spring<Dp>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
@@ -291,14 +292,14 @@ fun IslandHost() {
                         MessageContent(it, sc, gap, Modifier.requiredSize(messageW.dp, smallH.dp))
                     }
                     Mode.ALERT -> (alert ?: lastAlert)?.let {
-                        AlertContent(it, sc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * sc).dp))
+                        AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * bsc).dp))
                     }
                     Mode.EXPANDED -> shownCurrent?.let { cur ->
                         OngoingExpanded(
                             e = cur,
                             count = ongoing.size,
                             index = ongoing.indexOf(cur).coerceAtLeast(0),
-                            sc = sc,
+                            sc = bsc,
                             onCycle = {
                                 val i = ongoing.indexOf(cur)
                                 IslandBus.setPrimary(ongoing[(i + 1) % ongoing.size].key)
