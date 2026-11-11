@@ -43,6 +43,8 @@ data class IslandSettings(
     val idleVisible: Boolean = true,
     val showOngoing: Boolean = true,
     val alertSeconds: Int = 5,
+    /** Freier Platz in der Mitte der kleinen Pille (Kamera-Aussparung), in dp. */
+    val cameraGap: Int = 36,
 )
 
 /** Einfacher In-Process-Bus zwischen Listener-Service, Overlay-UI und Settings-Activity. */
@@ -66,6 +68,28 @@ object IslandBus {
         _preview.value = value
     }
 
+    /** Vom Nutzer aufgeklappte laufende Aktivität. */
+    private val _expanded = MutableStateFlow(false)
+    val expanded: StateFlow<Boolean> = _expanded.asStateFlow()
+
+    fun setExpanded(value: Boolean) {
+        _expanded.value = value
+    }
+
+    /** Aktivität in der großen Pille. Alle anderen erscheinen als Kreis daneben. */
+    private val _primaryKey = MutableStateFlow<String?>(null)
+    val primaryKey: StateFlow<String?> = _primaryKey.asStateFlow()
+
+    fun setPrimary(key: String) {
+        _primaryKey.value = key
+    }
+
+    /** Tippen außerhalb der Island: aufgeklappte Pille und Meldung wieder verkleinern. */
+    fun collapse() {
+        _expanded.value = false
+        _current.value = null
+    }
+
     // ---- Kurzzeit-Meldungen (neue Benachrichtigungen) ----
     fun post(event: IslandEvent) {
         _current.value = event
@@ -77,15 +101,18 @@ object IslandBus {
 
     // ---- Dauerhafte Aktivitäten (Musik, Timer, Anruf, Downloads ...) ----
     fun upsertOngoing(event: IslandEvent) {
+        val isNew = _ongoing.value.none { it.key == event.key }
         _ongoing.update { list ->
             val idx = list.indexOfFirst { it.key == event.key }
-            val merged = if (idx >= 0) list.toMutableList().also { it[idx] = event } else list + event
-            merged.sortedBy { it.kind.ordinal } // stabil: gleiche Art behält ihre Reihenfolge
+            if (idx >= 0) list.toMutableList().also { it[idx] = event } else list + event
         }
+        // Neue Aktivität übernimmt die große Pille, die bisherige wandert in den Kreis.
+        if (isNew) _primaryKey.value = event.key
     }
 
     fun removeOngoing(key: String) {
         _ongoing.update { list -> list.filterNot { it.key == key } }
+        if (_primaryKey.value == key) _primaryKey.value = null
     }
 
     // ---- Einstellungen ----
@@ -100,6 +127,7 @@ object IslandBus {
             idleVisible = p.getBoolean("idle_pill", d.idleVisible),
             showOngoing = p.getBoolean("showOngoing", d.showOngoing),
             alertSeconds = p.getInt("alertSeconds", d.alertSeconds),
+            cameraGap = p.getInt("cameraGap", d.cameraGap),
         )
     }
 
@@ -114,6 +142,7 @@ object IslandBus {
             .putBoolean("idle_pill", s.idleVisible)
             .putBoolean("showOngoing", s.showOngoing)
             .putInt("alertSeconds", s.alertSeconds)
+            .putInt("cameraGap", s.cameraGap)
             .apply()
     }
 }

@@ -145,6 +145,12 @@ class MainActivity : ComponentActivity() {
                     value = s.widthFactor,
                     range = 0.8f..1.8f,
                 ) { v -> edit { it.copy(widthFactor = (v * 20f).roundToInt() / 20f) } }
+                SettingSlider(
+                    label = "Kamera-Lücke (Mitte bleibt frei)",
+                    valueText = "${s.cameraGap} dp",
+                    value = s.cameraGap.toFloat(),
+                    range = 0f..100f,
+                ) { v -> edit { it.copy(cameraGap = v.roundToInt()) } }
             }
 
             SectionLabel("VERHALTEN")
