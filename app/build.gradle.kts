@@ -12,13 +12,28 @@ android {
         applicationId = "dev.nothingisland"
         minSdk = 29
         targetSdk = 34
-        versionCode = 1
+        // Muss bei jedem Update steigen; CI nutzt die Build-Nummer.
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
         versionName = "1.0"
     }
 
+    // Fester Schlüssel: Nur so lassen sich neue Versionen über die alte App installieren.
+    signingConfigs {
+        create("shared") {
+            storeFile = rootProject.file("keystore/nothingisland.jks")
+            storePassword = "nothingisland"
+            keyAlias = "nothingisland"
+            keyPassword = "nothingisland"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("shared")
+        }
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("shared")
         }
     }
     compileOptions {
