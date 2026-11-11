@@ -87,7 +87,6 @@ private val ButtonBg = Color(0xFF1C1C1C)
 
 private enum class Mode { IDLE, COMPACT, MESSAGE, ALERT, EXPANDED }
 
-private const val BASE_BIG_W = 348f
 private const val BASE_ALERT_H = 84f
 private const val BASE_EXPANDED_H = 84f
 private const val BASE_EXPANDED_ACTIONS_H = 134f
@@ -166,9 +165,9 @@ fun IslandHost() {
     val sc = s.scale
     val gap = s.cameraGap.toFloat()
     val screenW = LocalConfiguration.current.screenWidthDp
-    val limit = minOf(s.maxWidth.toFloat(), screenW - 16f)
+    val limit = minOf(s.maxWidth.toFloat(), screenW - 8f)
     val bsc = sc * s.expandedScale // Skalierung der aufgeklappten Pille
-    val bigW = minOf(BASE_BIG_W * bsc * s.expandedWidth, limit)
+    val bigW = minOf(s.expandedWidth.toFloat(), limit)
     val hasActions = current?.actions?.isNotEmpty() == true
     val expandedH = (if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H) * bsc
     val idleW = BASE_IDLE_W * sc * s.widthFactor

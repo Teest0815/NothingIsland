@@ -46,11 +46,11 @@ data class IslandSettings(
     /** Freier Platz in der Mitte der kleinen Pille (Kamera-Aussparung), in dp. */
     val cameraGap: Int = 36,
     /** Maximale Breite der Island in dp (gilt für alle Zustände). */
-    val maxWidth: Int = 400,
+    val maxWidth: Int = 480,
     /** Größe der aufgeklappten Pille (Meldung und aufgeklappte Aktivität), zusätzlich zur Gesamtgröße. */
     val expandedScale: Float = 1f,
-    /** Breite der aufgeklappten Pille als Faktor. */
-    val expandedWidth: Float = 1f,
+    /** Breite der aufgeklappten Pille in dp (wird auf die Bildschirmbreite begrenzt). */
+    val expandedWidth: Int = 348,
 )
 
 /** Einfacher In-Process-Bus zwischen Listener-Service, Overlay-UI und Settings-Activity. */
@@ -136,7 +136,7 @@ object IslandBus {
             cameraGap = p.getInt("cameraGap", d.cameraGap),
             maxWidth = p.getInt("maxWidth", d.maxWidth),
             expandedScale = p.getFloat("expandedScale", d.expandedScale),
-            expandedWidth = p.getFloat("expandedWidth", d.expandedWidth),
+            expandedWidth = p.getInt("expandedWidthDp", d.expandedWidth),
         )
     }
 
@@ -154,7 +154,7 @@ object IslandBus {
             .putInt("cameraGap", s.cameraGap)
             .putInt("maxWidth", s.maxWidth)
             .putFloat("expandedScale", s.expandedScale)
-            .putFloat("expandedWidth", s.expandedWidth)
+            .putInt("expandedWidthDp", s.expandedWidth)
             .apply()
     }
 }

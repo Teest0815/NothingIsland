@@ -150,7 +150,7 @@ class MainActivity : ComponentActivity() {
                     label = "Maximale Breite",
                     valueText = "${s.maxWidth} dp",
                     value = s.maxWidth.toFloat(),
-                    range = 140f..420f,
+                    range = 140f..480f,
                 ) { v -> edit { it.copy(maxWidth = v.roundToInt()) } }
                 SettingSlider(
                     label = "Kamera-Lücke (Mitte bleibt frei)",
@@ -173,15 +173,15 @@ class MainActivity : ComponentActivity() {
                 }
                 SettingSlider(
                     label = "Breite",
-                    valueText = "${(s.expandedWidth * 100).roundToInt()} %",
-                    value = s.expandedWidth,
-                    range = 0.7f..1.3f,
+                    valueText = "${s.expandedWidth} dp",
+                    value = s.expandedWidth.toFloat(),
+                    range = 200f..480f,
                 ) { v ->
-                    edit { it.copy(expandedWidth = (v * 20f).roundToInt() / 20f) }
+                    edit { it.copy(expandedWidth = v.roundToInt()) }
                     IslandBus.post(previewAlert())
                 }
                 Text(
-                    "Gilt für neue Meldungen und für die aufgeklappte Timer-/Musik-Pille. Beim Verschieben siehst du eine Vorschau oben.",
+                    "Gilt für neue Meldungen und für die aufgeklappte Timer-/Musik-Pille. Die Breite endet an der Bildschirmbreite und an der „Maximalen Breite“ oben. Beim Verschieben siehst du eine Vorschau.",
                     color = Muted,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(bottom = 8.dp),
