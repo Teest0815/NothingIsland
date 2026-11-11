@@ -167,7 +167,8 @@ fun IslandHost() {
     val screenW = LocalConfiguration.current.screenWidthDp
     val limit = minOf(s.maxWidth.toFloat(), screenW - 8f)
     val bsc = sc * s.expandedScale // Skalierung der aufgeklappten Pille
-    val bigW = minOf(s.expandedWidth.toFloat(), limit)
+    // Aufgeklappt gilt nur die eigene Breite (begrenzt durch den Bildschirm), nicht die "Maximale Breite".
+    val bigW = minOf(s.expandedWidth.toFloat(), screenW - 8f)
     val hasActions = current?.actions?.isNotEmpty() == true
     val expandedH = (if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H) * bsc
     val idleW = BASE_IDLE_W * sc * s.widthFactor

@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
         val ctx = this@MainActivity
         val s by IslandBus.settings.collectAsState()
         val overlayOk = Settings.canDrawOverlays(ctx)
-        val widthCap = minOf(s.maxWidth, resources.configuration.screenWidthDp - 8).coerceAtLeast(220)
+        val widthCap = (resources.configuration.screenWidthDp - 8).coerceAtLeast(220)
         val listenerOk = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(packageName)
         fun edit(t: (IslandSettings) -> IslandSettings) = IslandBus.updateSettings(ctx, t)
 
@@ -148,7 +148,7 @@ class MainActivity : ComponentActivity() {
                     range = 0.8f..1.8f,
                 ) { v -> edit { it.copy(widthFactor = (v * 20f).roundToInt() / 20f) } }
                 SettingSlider(
-                    label = "Maximale Breite",
+                    label = "Maximale Breite (kleine Pille)",
                     valueText = "${s.maxWidth} dp",
                     value = s.maxWidth.toFloat(),
                     range = 140f..480f,
@@ -197,7 +197,7 @@ class MainActivity : ComponentActivity() {
                     IslandBus.post(previewAlert())
                 }
                 Text(
-                    "Gilt für neue Meldungen und für die aufgeklappte Timer-/Musik-Pille. Breiter als $widthCap dp geht nicht (Bildschirmbreite bzw. „Maximale Breite“ oben). Beim Verschieben siehst du eine Vorschau.",
+                    "Gilt für neue Meldungen und für die aufgeklappte Timer-/Musik-Pille. Breiter als $widthCap dp (Bildschirmbreite) geht nicht. Die „Maximale Breite“ oben gilt hier nicht, nur für die kleine Pille. Beim Verschieben siehst du eine Vorschau.",
                     color = Muted,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(bottom = 8.dp),
