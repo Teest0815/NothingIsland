@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Solange die Einstellungen offen sind, zeigt die Island sich immer (Live-Vorschau).
         IslandBus.setPreview(true)
+        IslandListenerService.rebind(this)
         IslandListenerService.instance?.ensureOverlay()
         refresh++
     }
@@ -146,6 +147,12 @@ class MainActivity : ComponentActivity() {
                     range = 0.8f..1.8f,
                 ) { v -> edit { it.copy(widthFactor = (v * 20f).roundToInt() / 20f) } }
                 SettingSlider(
+                    label = "Maximale Breite",
+                    valueText = "${s.maxWidth} dp",
+                    value = s.maxWidth.toFloat(),
+                    range = 140f..420f,
+                ) { v -> edit { it.copy(maxWidth = v.roundToInt()) } }
+                SettingSlider(
                     label = "Kamera-Lücke (Mitte bleibt frei)",
                     valueText = "${s.cameraGap} dp",
                     value = s.cameraGap.toFloat(),
@@ -188,9 +195,13 @@ class MainActivity : ComponentActivity() {
             }
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PillButton("TESTS ENTFERNEN", filled = false, modifier = Modifier.weight(1f)) {
+                PillButton("NAVI", filled = false, modifier = Modifier.weight(1f)) {
+                    IslandBus.upsertOngoing(demoNav())
+                }
+                PillButton("LEEREN", filled = false, modifier = Modifier.weight(1f)) {
                     IslandBus.removeOngoing("demo-timer")
                     IslandBus.removeOngoing("demo-music")
+                    IslandBus.removeOngoing("demo-nav")
                 }
                 PillButton("ZURÜCKSETZEN", filled = false, modifier = Modifier.weight(1f)) {
                     edit { IslandSettings() }
@@ -364,4 +375,14 @@ private fun demoMusic(): IslandEvent = IslandEvent(
     title = "Lofi Beats",
     text = "Nothing Radio",
     actions = listOf(IslandAction("Zurück"), IslandAction("Pause"), IslandAction("Weiter")),
+)
+
+/** Nur zur Ansicht: Navigation wie von einer Karten-App. */
+private fun demoNav(): IslandEvent = IslandEvent(
+    key = "demo-nav",
+    kind = Kind.NAVIGATION,
+    app = "Karten",
+    title = "In 250 m",
+    text = "Rechts abbiegen auf Hauptstraße",
+    actions = listOf(IslandAction("Beenden", onClick = { IslandBus.removeOngoing("demo-nav") })),
 )

@@ -2,6 +2,7 @@ package dev.nothingisland
 
 import android.app.Notification
 import android.content.ComponentName
+import android.content.Context
 import android.graphics.PixelFormat
 import android.graphics.drawable.Icon
 import android.os.Build
@@ -107,7 +108,7 @@ class IslandListenerService : NotificationListenerService() {
         val n = sbn.notification
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
 
-        val kind = classify(n, sbn.isOngoing)
+        val kind = classify(n, sbn.isOngoing, sbn.packageName)
         if (kind != null) {
             val event = buildEvent(sbn, kind)
             if (event.title.isNotBlank() || event.text.isNotBlank() || event.chronoBase != null) {
@@ -123,7 +124,7 @@ class IslandListenerService : NotificationListenerService() {
     }
 
     /** Liefert die Art einer laufenden Aktivität oder null, wenn es eine normale Meldung ist. */
-    private fun classify(n: Notification, ongoing: Boolean): Kind? {
+    private fun classify(n: Notification, ongoing: Boolean, pkg: String): Kind? {
         val ex = n.extras
         val template = ex.getString(Notification.EXTRA_TEMPLATE).orEmpty()
         if (template.endsWith("MediaStyle") || n.category == Notification.CATEGORY_TRANSPORT) {
@@ -132,6 +133,7 @@ class IslandListenerService : NotificationListenerService() {
         if (!ongoing) return null
         return when {
             n.category == Notification.CATEGORY_CALL -> Kind.CALL
+            n.category == "navigation" || pkg in NAV_PACKAGES -> Kind.NAVIGATION
             ex.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER) -> Kind.TIMER
             n.category == Notification.CATEGORY_ALARM || n.category == "stopwatch" -> Kind.TIMER
             ex.getInt(Notification.EXTRA_PROGRESS_MAX) > 0 ||
@@ -270,5 +272,21 @@ class IslandListenerService : NotificationListenerService() {
     companion object {
         @Volatile
         var instance: IslandListenerService? = null
+
+        /** Karten-Apps, deren laufende Benachrichtigung als Navigation angezeigt wird. */
+        private val NAV_PACKAGES = setOf(
+            "com.google.android.apps.maps", "com.waze", "net.osmand", "net.osmand.plus",
+            "app.organicmaps", "com.here.app.maps", "com.sygic.aura", "de.komoot.android",
+        )
+
+        /** Nach App-Update oder Neustart: Benachrichtigungszugriff neu verbinden lassen. */
+        fun rebind(context: Context) {
+            if (instance != null) return
+            runCatching {
+                NotificationListenerService.requestRebind(
+                    ComponentName(context, IslandListenerService::class.java)
+                )
+            }
+        }
     }
 }

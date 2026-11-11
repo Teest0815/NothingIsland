@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /** Reihenfolge = Priorität in der kleinen Pille. */
-enum class Kind { CALL, TIMER, MEDIA, PROGRESS, OTHER }
+enum class Kind { CALL, NAVIGATION, TIMER, MEDIA, PROGRESS, OTHER }
 
 data class IslandAction(
     val title: String,
@@ -45,6 +45,8 @@ data class IslandSettings(
     val alertSeconds: Int = 5,
     /** Freier Platz in der Mitte der kleinen Pille (Kamera-Aussparung), in dp. */
     val cameraGap: Int = 36,
+    /** Maximale Breite der Island in dp (gilt für alle Zustände). */
+    val maxWidth: Int = 400,
 )
 
 /** Einfacher In-Process-Bus zwischen Listener-Service, Overlay-UI und Settings-Activity. */
@@ -128,6 +130,7 @@ object IslandBus {
             showOngoing = p.getBoolean("showOngoing", d.showOngoing),
             alertSeconds = p.getInt("alertSeconds", d.alertSeconds),
             cameraGap = p.getInt("cameraGap", d.cameraGap),
+            maxWidth = p.getInt("maxWidth", d.maxWidth),
         )
     }
 
@@ -143,6 +146,7 @@ object IslandBus {
             .putBoolean("showOngoing", s.showOngoing)
             .putInt("alertSeconds", s.alertSeconds)
             .putInt("cameraGap", s.cameraGap)
+            .putInt("maxWidth", s.maxWidth)
             .apply()
     }
 }

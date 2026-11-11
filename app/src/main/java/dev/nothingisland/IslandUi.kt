@@ -1,10 +1,18 @@
 package dev.nothingisland
 
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -17,6 +25,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -60,6 +69,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -101,6 +111,8 @@ fun IslandHost() {
     var lastAlert by remember { mutableStateOf<IslandEvent?>(null) }
     var lingering by remember { mutableStateOf<IslandEvent?>(null) }
     var lastCircle by remember { mutableStateOf<IslandEvent?>(null) }
+    var lastMessage by remember { mutableStateOf<IslandEvent?>(null) }
+    var lastCurrent by remember { mutableStateOf<IslandEvent?>(null) }
 
     // Neue Meldung: aufklappen, nach X Sekunden (oder Tippen außerhalb) in die kleine Pille schrumpfen.
     LaunchedEffect(alert?.id) {
@@ -144,17 +156,23 @@ fun IslandHost() {
         Mode.MESSAGE -> current
         else -> null
     }
-    SideEffect { if (circleItem != null) lastCircle = circleItem }
+    SideEffect {
+        if (circleItem != null) lastCircle = circleItem
+        if (lingering != null) lastMessage = lingering
+        if (current != null) lastCurrent = current
+    }
+    val shownCurrent = current ?: lastCurrent
 
     val sc = s.scale
     val gap = s.cameraGap.toFloat()
     val screenW = LocalConfiguration.current.screenWidthDp
-    val bigW = minOf(BASE_BIG_W * sc, screenW - 16f)
+    val limit = minOf(s.maxWidth.toFloat(), screenW - 16f)
+    val bigW = minOf(BASE_BIG_W * sc, limit)
     val hasActions = current?.actions?.isNotEmpty() == true
     val expandedH = (if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H) * sc
     val idleW = BASE_IDLE_W * sc * s.widthFactor
-    val compactW = minOf(2f * BASE_COMPACT_SIDE * sc * s.widthFactor + gap, screenW - 16f)
-    val messageW = minOf(2f * BASE_MESSAGE_SIDE * sc * s.widthFactor + gap, screenW - 16f)
+    val compactW = minOf(2f * BASE_COMPACT_SIDE * sc * s.widthFactor + gap, limit)
+    val messageW = minOf(2f * BASE_MESSAGE_SIDE * sc * s.widthFactor + gap, limit)
     val smallH = BASE_SMALL_H * sc
 
     val targetW = when (mode) {
@@ -174,8 +192,17 @@ fun IslandHost() {
     }
 
     val motion = spring<Dp>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
-    val width by animateDpAsState(targetW.dp, motion, label = "w")
-    val height by animateDpAsState(targetH.dp, motion, label = "h")
+    val growing = mode == Mode.ALERT || mode == Mode.EXPANDED
+    val widthSpec = spring<Dp>(
+        dampingRatio = if (growing) 0.66f else 0.88f,
+        stiffness = if (growing) 380f else 520f,
+    )
+    val heightSpec = spring<Dp>(
+        dampingRatio = if (growing) 0.74f else 0.92f,
+        stiffness = if (growing) 460f else 620f,
+    )
+    val width by animateDpAsState(targetW.dp, widthSpec, label = "w")
+    val height by animateDpAsState(targetH.dp, heightSpec, label = "h")
     val corner by animateDpAsState(targetCorner.dp, motion, label = "c")
     // Gleich großer freier Platz links und rechts, damit die Pille mittig (über der Kamera) bleibt.
     val slot by animateDpAsState(
@@ -183,10 +210,18 @@ fun IslandHost() {
         motion,
         label = "slot",
     )
-    val circleAlpha by animateFloatAsState(
+    val circleScale by animateFloatAsState(
         if (circleItem != null) 1f else 0f,
-        tween(180),
+        spring(dampingRatio = 0.5f, stiffness = Spring.StiffnessMedium),
         label = "circle",
+    )
+    // Leichtes Einfedern beim Antippen.
+    val press = remember { MutableInteractionSource() }
+    val pressed by press.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(
+        if (pressed && mode != Mode.IDLE) 0.95f else 1f,
+        spring(dampingRatio = 0.55f, stiffness = 700f),
+        label = "press",
     )
     val shape = RoundedCornerShape(corner)
 
@@ -195,12 +230,16 @@ fun IslandHost() {
 
         Box(
             modifier = Modifier
+                .graphicsLayer {
+                    scaleX = pressScale
+                    scaleY = pressScale
+                }
                 .size(width, height)
                 .clip(shape)
                 .background(Color.Black)
                 .border(1.dp, Hairline, shape)
                 .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
+                    interactionSource = press,
                     indication = null,
                     enabled = mode != Mode.IDLE,
                 ) {
@@ -223,19 +262,38 @@ fun IslandHost() {
                 },
             contentAlignment = Alignment.Center,
         ) {
-            Crossfade(targetState = mode, animationSpec = tween(180), label = "mode") { m ->
+            AnimatedContent(
+                targetState = mode,
+                transitionSpec = {
+                    val toBig = targetState == Mode.ALERT || targetState == Mode.EXPANDED
+                    val delay = if (toBig) 120 else 70
+                    ContentTransform(
+                        targetContentEnter = fadeIn(tween(240, delayMillis = delay)) +
+                            scaleIn(
+                                tween(320, delayMillis = delay, easing = FastOutSlowInEasing),
+                                initialScale = 0.9f,
+                            ),
+                        initialContentExit = fadeOut(tween(110)) +
+                            scaleOut(tween(160), targetScale = 0.95f),
+                        targetContentZIndex = 0f,
+                        sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
+                    )
+                },
+                contentAlignment = Alignment.Center,
+                label = "mode",
+            ) { m ->
                 when (m) {
                     Mode.IDLE -> IdleDots(sc)
-                    Mode.COMPACT -> current?.let {
+                    Mode.COMPACT -> shownCurrent?.let {
                         CompactContent(it, sc, gap, Modifier.requiredSize(compactW.dp, smallH.dp))
                     }
-                    Mode.MESSAGE -> lingering?.let {
+                    Mode.MESSAGE -> (lingering ?: lastMessage)?.let {
                         MessageContent(it, sc, gap, Modifier.requiredSize(messageW.dp, smallH.dp))
                     }
                     Mode.ALERT -> (alert ?: lastAlert)?.let {
                         AlertContent(it, sc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * sc).dp))
                     }
-                    Mode.EXPANDED -> current?.let { cur ->
+                    Mode.EXPANDED -> shownCurrent?.let { cur ->
                         OngoingExpanded(
                             e = cur,
                             count = ongoing.size,
@@ -258,13 +316,13 @@ fun IslandHost() {
             modifier = Modifier.width(slot).height(height),
             contentAlignment = Alignment.CenterEnd,
         ) {
-            if (circleAlpha > 0.01f) {
+            if (circleScale > 0.01f) {
                 (circleItem ?: lastCircle)?.let { c ->
                     Box(
                         Modifier.graphicsLayer {
-                            alpha = circleAlpha
-                            scaleX = 0.4f + 0.6f * circleAlpha
-                            scaleY = 0.4f + 0.6f * circleAlpha
+                            alpha = circleScale.coerceIn(0f, 1f)
+                            scaleX = circleScale.coerceAtLeast(0f)
+                            scaleY = circleScale.coerceAtLeast(0f)
                         },
                     ) {
                         CircleBubble(c, sc, smallH) {
@@ -357,9 +415,21 @@ private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, modifier: Modi
             }
         },
         right = {
-            Box(Modifier.size((5f * sc).dp).clip(CircleShape).background(NothingRed))
+            LivePulse(sc)
         },
     )
+}
+
+@Composable
+private fun LivePulse(sc: Float) {
+    val t = rememberInfiniteTransition(label = "pulse")
+    val a by t.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "pulseAlpha",
+    )
+    Box(Modifier.size((5f * sc).dp).clip(CircleShape).background(NothingRed.copy(alpha = a)))
 }
 
 /** Nach dem Verkleinern einer Meldung: Absender links, Nachricht rechts der Kamera. */

@@ -40,3 +40,9 @@ Zum Installieren auf dem Handy "Apps aus unbekannten Quellen installieren" für 
 - **Neue Meldungen** klappen weiterhin kurz auf und gehen danach zurück in die Live-Pille.
 - **App-Icon:** adaptives Icon (Punktring + roter Punkt), inkl. monochromer Variante für Themed Icons.
 - **QUERY_ALL_PACKAGES:** wird gebraucht, damit App-Namen und Icons aus fremden Benachrichtigungen geladen werden können.
+
+## Weitere Neuerungen
+- **Maximale Breite** einstellbar (gilt für alle Zustände der Island).
+- **Nach App-Updates:** Ein `RebindReceiver` verbindet den Benachrichtigungszugriff nach Update/Neustart automatisch neu.
+- **Navigation:** Laufende Routen von Karten-Apps (Google Maps, Waze, OsmAnd, Organic Maps, HERE, Komoot ...) erscheinen als Live-Aktivität.
+- **Animationen:** weiche Federn mit leichtem Überschwingen beim Aufklappen, Inhalt blendet verzögert ein, Antipp-Feedback, federnder Kreis, pulsierender Live-Punkt.
