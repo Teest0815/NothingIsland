@@ -51,6 +51,10 @@ data class IslandSettings(
     val expandedScale: Float = 1f,
     /** Breite der aufgeklappten Pille in dp (wird auf die Bildschirmbreite begrenzt). */
     val expandedWidth: Int = 348,
+    /** Eckenrundung der aufgeklappten Pille in dp. */
+    val expandedCorner: Int = 38,
+    /** Rundung der kleinen Pille: 1 = ganz rund, kleiner = eckiger. */
+    val smallRoundness: Float = 1f,
 )
 
 /** Einfacher In-Process-Bus zwischen Listener-Service, Overlay-UI und Settings-Activity. */
@@ -137,6 +141,8 @@ object IslandBus {
             maxWidth = p.getInt("maxWidth", d.maxWidth),
             expandedScale = p.getFloat("expandedScale", d.expandedScale),
             expandedWidth = p.getInt("expandedWidthDp", d.expandedWidth),
+            expandedCorner = p.getInt("expandedCorner", d.expandedCorner),
+            smallRoundness = p.getFloat("smallRoundness", d.smallRoundness),
         )
     }
 
@@ -155,6 +161,8 @@ object IslandBus {
             .putInt("maxWidth", s.maxWidth)
             .putFloat("expandedScale", s.expandedScale)
             .putInt("expandedWidthDp", s.expandedWidth)
+            .putInt("expandedCorner", s.expandedCorner)
+            .putFloat("smallRoundness", s.smallRoundness)
             .apply()
     }
 }

@@ -187,8 +187,8 @@ fun IslandHost() {
         Mode.EXPANDED -> expandedH
     }
     val targetCorner = when (mode) {
-        Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH / 2f
-        else -> 38f * bsc
+        Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH / 2f * s.smallRoundness
+        else -> minOf(s.expandedCorner * bsc, targetH / 2f)
     }
 
     val motion = spring<Dp>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)

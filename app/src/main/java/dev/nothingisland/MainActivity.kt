@@ -80,6 +80,7 @@ class MainActivity : ComponentActivity() {
         val ctx = this@MainActivity
         val s by IslandBus.settings.collectAsState()
         val overlayOk = Settings.canDrawOverlays(ctx)
+        val widthCap = minOf(s.maxWidth, resources.configuration.screenWidthDp - 8).coerceAtLeast(220)
         val listenerOk = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(packageName)
         fun edit(t: (IslandSettings) -> IslandSettings) = IslandBus.updateSettings(ctx, t)
 
@@ -158,6 +159,12 @@ class MainActivity : ComponentActivity() {
                     value = s.cameraGap.toFloat(),
                     range = 0f..100f,
                 ) { v -> edit { it.copy(cameraGap = v.roundToInt()) } }
+                SettingSlider(
+                    label = "Abrundung der kleinen Pille",
+                    valueText = "${(s.smallRoundness * 100).roundToInt()} %",
+                    value = s.smallRoundness,
+                    range = 0.2f..1f,
+                ) { v -> edit { it.copy(smallRoundness = (v * 20f).roundToInt() / 20f) } }
             }
 
             SectionLabel("AUFGEKLAPPTE PILLE")
@@ -173,15 +180,24 @@ class MainActivity : ComponentActivity() {
                 }
                 SettingSlider(
                     label = "Breite",
-                    valueText = "${s.expandedWidth} dp",
+                    valueText = "${minOf(s.expandedWidth, widthCap)} dp",
                     value = s.expandedWidth.toFloat(),
-                    range = 200f..480f,
+                    range = 200f..widthCap.toFloat(),
                 ) { v ->
                     edit { it.copy(expandedWidth = v.roundToInt()) }
                     IslandBus.post(previewAlert())
                 }
+                SettingSlider(
+                    label = "Abrundung der Ecken",
+                    valueText = "${s.expandedCorner} dp",
+                    value = s.expandedCorner.toFloat(),
+                    range = 0f..60f,
+                ) { v ->
+                    edit { it.copy(expandedCorner = v.roundToInt()) }
+                    IslandBus.post(previewAlert())
+                }
                 Text(
-                    "Gilt für neue Meldungen und für die aufgeklappte Timer-/Musik-Pille. Die Breite endet an der Bildschirmbreite und an der „Maximalen Breite“ oben. Beim Verschieben siehst du eine Vorschau.",
+                    "Gilt für neue Meldungen und für die aufgeklappte Timer-/Musik-Pille. Breiter als $widthCap dp geht nicht (Bildschirmbreite bzw. „Maximale Breite“ oben). Beim Verschieben siehst du eine Vorschau.",
                     color = Muted,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(bottom = 8.dp),
