@@ -256,7 +256,7 @@ fun IslandHost() {
             modifier = Modifier.width(slot).height(height),
             contentAlignment = Alignment.CenterEnd,
         ) {
-            AnimatedVisibility(
+            this.AnimatedVisibility(
                 visible = circleItem != null,
                 enter = fadeIn(tween(160)) + scaleIn(tween(200), initialScale = 0.4f),
                 exit = fadeOut(tween(120)) + scaleOut(tween(160), targetScale = 0.4f),
