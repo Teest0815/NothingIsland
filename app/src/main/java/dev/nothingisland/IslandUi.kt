@@ -1,15 +1,11 @@
 package dev.nothingisland
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -53,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -186,6 +183,11 @@ fun IslandHost() {
         motion,
         label = "slot",
     )
+    val circleAlpha by animateFloatAsState(
+        if (circleItem != null) 1f else 0f,
+        tween(180),
+        label = "circle",
+    )
     val shape = RoundedCornerShape(corner)
 
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -256,16 +258,20 @@ fun IslandHost() {
             modifier = Modifier.width(slot).height(height),
             contentAlignment = Alignment.CenterEnd,
         ) {
-            this.AnimatedVisibility(
-                visible = circleItem != null,
-                enter = fadeIn(tween(160)) + scaleIn(tween(200), initialScale = 0.4f),
-                exit = fadeOut(tween(120)) + scaleOut(tween(160), targetScale = 0.4f),
-            ) {
+            if (circleAlpha > 0.01f) {
                 (circleItem ?: lastCircle)?.let { c ->
-                    CircleBubble(c, sc, smallH) {
-                        lingering = null
-                        IslandBus.setPrimary(c.key)
-                        touch++
+                    Box(
+                        Modifier.graphicsLayer {
+                            alpha = circleAlpha
+                            scaleX = 0.4f + 0.6f * circleAlpha
+                            scaleY = 0.4f + 0.6f * circleAlpha
+                        },
+                    ) {
+                        CircleBubble(c, sc, smallH) {
+                            lingering = null
+                            IslandBus.setPrimary(c.key)
+                            touch++
+                        }
                     }
                 }
             }
