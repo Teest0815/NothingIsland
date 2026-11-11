@@ -61,6 +61,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.lerp
@@ -166,11 +170,12 @@ fun IslandHost() {
     val gap = s.cameraGap.toFloat()
     val screenW = LocalConfiguration.current.screenWidthDp
     val limit = minOf(s.maxWidth.toFloat(), screenW - 8f)
-    val bsc = sc * s.expandedScale // Skalierung der aufgeklappten Pille
+    val bsc = sc * s.expandedScale // Skalierung von Text und Symbolen der aufgeklappten Pille
+    val fsc = sc * minOf(s.expandedScale, s.expandedFrameMax) // Rahmen wächst nur bis zum Limit
     // Aufgeklappt gilt nur die eigene Breite (begrenzt durch den Bildschirm), nicht die "Maximale Breite".
     val bigW = minOf(s.expandedWidth.toFloat(), screenW - 8f)
     val hasActions = current?.actions?.isNotEmpty() == true
-    val expandedH = (if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H) * bsc
+    val expandedH = (if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H) * fsc
     val idleW = BASE_IDLE_W * sc * s.widthFactor
     val compactW = minOf(2f * BASE_COMPACT_SIDE * sc * s.widthFactor + gap, limit)
     val messageW = minOf(2f * BASE_MESSAGE_SIDE * sc * s.widthFactor + gap, limit)
@@ -184,12 +189,12 @@ fun IslandHost() {
     }
     val targetH = when (mode) {
         Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH
-        Mode.ALERT -> BASE_ALERT_H * bsc
+        Mode.ALERT -> BASE_ALERT_H * fsc
         Mode.EXPANDED -> expandedH
     }
     val targetCorner = when (mode) {
         Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH / 2f * s.smallRoundness
-        else -> minOf(s.expandedCorner * bsc, targetH / 2f)
+        else -> minOf(s.expandedCorner * fsc, targetH / 2f)
     }
 
     val motion = spring<Dp>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
@@ -286,13 +291,13 @@ fun IslandHost() {
                 when (m) {
                     Mode.IDLE -> IdleDots(sc)
                     Mode.COMPACT -> shownCurrent?.let {
-                        CompactContent(it, sc, gap, Modifier.requiredSize(compactW.dp, smallH.dp))
+                        CompactContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(compactW.dp, smallH.dp))
                     }
                     Mode.MESSAGE -> (lingering ?: lastMessage)?.let {
-                        MessageContent(it, sc, gap, Modifier.requiredSize(messageW.dp, smallH.dp))
+                        MessageContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(messageW.dp, smallH.dp))
                     }
                     Mode.ALERT -> (alert ?: lastAlert)?.let {
-                        AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * bsc).dp))
+                        AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp))
                     }
                     Mode.EXPANDED -> shownCurrent?.let { cur ->
                         OngoingExpanded(
@@ -369,6 +374,7 @@ private fun SmallIcon(icon: ImageBitmap?, size: Dp) {
 private fun SplitRow(
     sc: Float,
     gap: Float,
+    iconGap: Float,
     modifier: Modifier,
     rightAlignStart: Boolean = false,
     left: @Composable RowScope.() -> Unit,
@@ -381,7 +387,7 @@ private fun SplitRow(
         Row(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy((6f * sc).dp),
+            horizontalArrangement = Arrangement.spacedBy((iconGap * sc).dp),
             content = left,
         )
         Spacer(Modifier.width(gap.dp))
@@ -393,32 +399,105 @@ private fun SplitRow(
     }
 }
 
+/** Links Name (bei Navigation nur die Entfernung), rechts Zeit (bei Navigation der Abbiege-Pfeil). */
 @Composable
-private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, modifier: Modifier) {
+private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float, modifier: Modifier) {
+    val nav = e.kind == Kind.NAVIGATION
     SplitRow(
         sc = sc,
         gap = gap,
+        iconGap = iconGap,
         modifier = modifier,
         left = {
             SmallIcon(e.icon, (14f * sc).dp)
-            if (e.chronoBase != null) {
-                Chrono(e, (12f * sc).sp, Modifier.weight(1f))
-            } else {
-                Text(
-                    text = e.title.ifBlank { e.app },
-                    color = Color.White,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = (11f * sc).sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            Text(
+                text = if (nav) navDistance(e) else e.title.ifBlank { e.app },
+                color = Color.White,
+                fontFamily = if (nav) FontFamily.Monospace else FontFamily.Default,
+                fontWeight = if (nav) FontWeight.Medium else FontWeight.Normal,
+                fontSize = (if (nav) 12f else 11f).let { (it * sc).sp },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
         },
         right = {
-            LivePulse(sc)
+            val turn = if (nav) navTurn(e) else Turn.NONE
+            when {
+                nav && turn != Turn.NONE -> TurnArrow(turn, (16f * sc).dp)
+                e.chronoBase != null -> Chrono(e, (12f * sc).sp)
+                e.rightText != null -> Text(
+                    text = e.rightText,
+                    color = Color.White,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = (12f * sc).sp,
+                    maxLines = 1,
+                )
+                else -> LivePulse(sc)
+            }
         },
     )
+}
+
+// ---------------------------------------------------------------- Navigation
+
+private enum class Turn { LEFT, RIGHT, STRAIGHT, UTURN, ROUNDABOUT, NONE }
+
+private val DIST_REGEX = Regex("""(\d+(?:[.,]\d+)?)\s?(km|mi|ft|yd|m)\b""", RegexOption.IGNORE_CASE)
+
+/** Nur die Entfernung, z. B. "25 m". Findet sich keine, wird der Titel gezeigt. */
+private fun navDistance(e: IslandEvent): String =
+    DIST_REGEX.find(e.title)?.value
+        ?: DIST_REGEX.find(e.text)?.value
+        ?: e.title.ifBlank { e.app }
+
+/** Liest die Abbiegerichtung aus Titel/Text (Deutsch und Englisch). Das zuerst genannte Wort gewinnt. */
+private fun navTurn(e: IslandEvent): Turn {
+    val t = (e.title + " " + e.text).lowercase()
+    fun first(vararg words: String): Int =
+        words.map { t.indexOf(it) }.filter { it >= 0 }.minOrNull() ?: -1
+    if ("wenden" in t || "u-turn" in t || "u turn" in t) return Turn.UTURN
+    if ("kreisverkehr" in t || "roundabout" in t) return Turn.ROUNDABOUT
+    val l = first("links", "left")
+    val r = first("rechts", "right")
+    if (l >= 0 && (r < 0 || l < r)) return Turn.LEFT
+    if (r >= 0) return Turn.RIGHT
+    if ("geradeaus" in t || "straight" in t || "weiter" in t || "continue" in t) return Turn.STRAIGHT
+    return Turn.NONE
+}
+
+@Composable
+private fun TurnArrow(turn: Turn, size: Dp, color: Color = Color.White) {
+    Canvas(Modifier.size(size)) {
+        val w = this.size.width
+        val style = Stroke(width = w * 0.11f, cap = StrokeCap.Round, join = StrokeJoin.Round)
+        // Für "links" wird die Rechts-Form gespiegelt.
+        val mx: (Float) -> Float = if (turn == Turn.LEFT) { x -> 1f - x } else { x -> x }
+        val path = Path()
+        when (turn) {
+            Turn.STRAIGHT -> {
+                path.moveTo(0.5f * w, 0.92f * w); path.lineTo(0.5f * w, 0.12f * w)
+                path.moveTo(0.22f * w, 0.38f * w); path.lineTo(0.5f * w, 0.1f * w); path.lineTo(0.78f * w, 0.38f * w)
+            }
+            Turn.RIGHT, Turn.LEFT -> {
+                path.moveTo(mx(0.28f) * w, 0.92f * w); path.lineTo(mx(0.28f) * w, 0.4f * w); path.lineTo(mx(0.82f) * w, 0.4f * w)
+                path.moveTo(mx(0.62f) * w, 0.18f * w); path.lineTo(mx(0.84f) * w, 0.4f * w); path.lineTo(mx(0.62f) * w, 0.62f * w)
+            }
+            Turn.UTURN -> {
+                path.moveTo(0.7f * w, 0.92f * w); path.lineTo(0.7f * w, 0.38f * w)
+                path.cubicTo(0.7f * w, 0.08f * w, 0.3f * w, 0.08f * w, 0.3f * w, 0.38f * w)
+                path.lineTo(0.3f * w, 0.78f * w)
+                path.moveTo(0.12f * w, 0.6f * w); path.lineTo(0.3f * w, 0.8f * w); path.lineTo(0.48f * w, 0.6f * w)
+            }
+            Turn.ROUNDABOUT -> {
+                drawCircle(color, radius = 0.26f * w, center = Offset(0.5f * w, 0.4f * w), style = style)
+                path.moveTo(0.5f * w, 0.96f * w); path.lineTo(0.5f * w, 0.68f * w)
+            }
+            Turn.NONE -> Unit
+        }
+        drawPath(path, color, style = style)
+    }
 }
 
 @Composable
@@ -435,10 +514,11 @@ private fun LivePulse(sc: Float) {
 
 /** Nach dem Verkleinern einer Meldung: Absender links, Nachricht rechts der Kamera. */
 @Composable
-private fun MessageContent(e: IslandEvent, sc: Float, gap: Float, modifier: Modifier) {
+private fun MessageContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float, modifier: Modifier) {
     SplitRow(
         sc = sc,
         gap = gap,
+        iconGap = iconGap,
         modifier = modifier,
         rightAlignStart = true,
         left = {

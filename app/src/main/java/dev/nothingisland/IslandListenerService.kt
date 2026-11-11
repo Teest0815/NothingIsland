@@ -5,7 +5,11 @@ import android.content.ComponentName
 import android.content.Context
 import android.graphics.PixelFormat
 import android.graphics.drawable.Icon
+import android.media.session.MediaController
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Build
+import android.os.SystemClock
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -171,6 +175,30 @@ class IslandListenerService : NotificationListenerService() {
                 )
             }
 
+        var chronoBase: Long? = if (chrono) n.`when` else null
+        var countDown = chrono && ex.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN)
+        var rightText: String? = null
+
+        // Musik: Abspielposition aus der Media-Session lesen (läuft live weiter, pausiert = fester Wert).
+        if (kind == Kind.MEDIA) {
+            runCatching {
+                @Suppress("DEPRECATION")
+                val token = ex.getParcelable<MediaSession.Token>(Notification.EXTRA_MEDIA_SESSION)
+                    ?: return@runCatching
+                val st = MediaController(this, token).playbackState ?: return@runCatching
+                if (st.position < 0) return@runCatching
+                if (st.state == PlaybackState.STATE_PLAYING) {
+                    val since = SystemClock.elapsedRealtime() - st.lastPositionUpdateTime
+                    val pos = st.position + (since * st.playbackSpeed).toLong()
+                    chronoBase = System.currentTimeMillis() - pos
+                    countDown = false
+                } else {
+                    chronoBase = null
+                    rightText = mediaClock(st.position)
+                }
+            }
+        }
+
         return IslandEvent(
             key = sbn.key,
             kind = kind,
@@ -180,10 +208,17 @@ class IslandListenerService : NotificationListenerService() {
             icon = loadIcon(n.smallIcon),
             action = n.contentIntent,
             actions = actions,
-            chronoBase = if (chrono) n.`when` else null,
-            countDown = chrono && ex.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN),
+            chronoBase = chronoBase,
+            countDown = countDown,
             progress = progress,
+            rightText = rightText,
         )
+    }
+
+    private fun mediaClock(ms: Long): String {
+        val t = ms.coerceAtLeast(0) / 1000
+        return if (t >= 3600) String.format(java.util.Locale.ROOT, "%d:%02d:%02d", t / 3600, (t % 3600) / 60, t % 60)
+        else String.format(java.util.Locale.ROOT, "%02d:%02d", t / 60, t % 60)
     }
 
     private fun loadIcon(icon: Icon?): ImageBitmap? = runCatching {

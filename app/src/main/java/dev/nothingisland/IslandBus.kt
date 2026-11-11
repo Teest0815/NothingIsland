@@ -33,6 +33,8 @@ data class IslandEvent(
     val countDown: Boolean = false,
     /** 0..1 oder null */
     val progress: Float? = null,
+    /** Feststehender Text rechts in der kleinen Pille, z. B. die Zeit bei pausierter Musik. */
+    val rightText: String? = null,
 )
 
 data class IslandSettings(
@@ -55,6 +57,10 @@ data class IslandSettings(
     val expandedCorner: Int = 38,
     /** Rundung der kleinen Pille: 1 = ganz rund, kleiner = eckiger. */
     val smallRoundness: Float = 1f,
+    /** Abstand zwischen Symbol und Text links in der kleinen Pille, in dp. */
+    val iconTextGap: Int = 6,
+    /** Bis zu dieser Größe wächst der Rahmen der aufgeklappten Pille; darüber wachsen nur Text und Symbole. */
+    val expandedFrameMax: Float = 1.2f,
 )
 
 /** Einfacher In-Process-Bus zwischen Listener-Service, Overlay-UI und Settings-Activity. */
@@ -143,6 +149,8 @@ object IslandBus {
             expandedWidth = p.getInt("expandedWidthDp", d.expandedWidth),
             expandedCorner = p.getInt("expandedCorner", d.expandedCorner),
             smallRoundness = p.getFloat("smallRoundness", d.smallRoundness),
+            iconTextGap = p.getInt("iconTextGap", d.iconTextGap),
+            expandedFrameMax = p.getFloat("expandedFrameMax", d.expandedFrameMax),
         )
     }
 
@@ -163,6 +171,8 @@ object IslandBus {
             .putInt("expandedWidthDp", s.expandedWidth)
             .putInt("expandedCorner", s.expandedCorner)
             .putFloat("smallRoundness", s.smallRoundness)
+            .putInt("iconTextGap", s.iconTextGap)
+            .putFloat("expandedFrameMax", s.expandedFrameMax)
             .apply()
     }
 }

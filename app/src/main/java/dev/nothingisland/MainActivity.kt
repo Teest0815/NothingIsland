@@ -165,6 +165,12 @@ class MainActivity : ComponentActivity() {
                     value = s.smallRoundness,
                     range = 0.2f..1f,
                 ) { v -> edit { it.copy(smallRoundness = (v * 20f).roundToInt() / 20f) } }
+                SettingSlider(
+                    label = "Abstand Symbol → Text (links)",
+                    valueText = "${s.iconTextGap} dp",
+                    value = s.iconTextGap.toFloat(),
+                    range = 0f..24f,
+                ) { v -> edit { it.copy(iconTextGap = v.roundToInt()) } }
             }
 
             SectionLabel("AUFGEKLAPPTE PILLE")
@@ -173,9 +179,18 @@ class MainActivity : ComponentActivity() {
                     label = "Größe",
                     valueText = "${(s.expandedScale * 100).roundToInt()} %",
                     value = s.expandedScale,
-                    range = 0.7f..1.5f,
+                    range = 0.7f..2f,
                 ) { v ->
                     edit { it.copy(expandedScale = (v * 20f).roundToInt() / 20f) }
+                    IslandBus.post(previewAlert())
+                }
+                SettingSlider(
+                    label = "Rahmen wächst bis",
+                    valueText = "${(s.expandedFrameMax * 100).roundToInt()} %",
+                    value = s.expandedFrameMax,
+                    range = 0.7f..2f,
+                ) { v ->
+                    edit { it.copy(expandedFrameMax = (v * 20f).roundToInt() / 20f) }
                     IslandBus.post(previewAlert())
                 }
                 SettingSlider(
@@ -197,7 +212,7 @@ class MainActivity : ComponentActivity() {
                     IslandBus.post(previewAlert())
                 }
                 Text(
-                    "Gilt für neue Meldungen und für die aufgeklappte Timer-/Musik-Pille. Breiter als $widthCap dp (Bildschirmbreite) geht nicht. Die „Maximale Breite“ oben gilt hier nicht, nur für die kleine Pille. Beim Verschieben siehst du eine Vorschau.",
+                    "Gilt für neue Meldungen und für die aufgeklappte Timer-/Musik-Pille. Ist „Größe“ höher als „Rahmen wächst bis“, wächst der Rahmen nicht weiter, nur Text und Symbole. Breiter als $widthCap dp (Bildschirmbreite) geht nicht. Die „Maximale Breite“ oben gilt hier nicht, nur für die kleine Pille. Beim Verschieben siehst du eine Vorschau.",
                     color = Muted,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(bottom = 8.dp),
