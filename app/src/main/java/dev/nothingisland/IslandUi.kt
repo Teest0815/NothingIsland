@@ -229,9 +229,15 @@ fun IslandHost() {
         spring(dampingRatio = 0.55f, stiffness = 700f),
         label = "press",
     )
+    // Große Pille kann auf anderer Höhe sitzen als die kleine: Abstand im Layout, weich animiert.
+    val topPad by animateDpAsState(
+        ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).dp,
+        spring(dampingRatio = 0.8f, stiffness = 380f),
+        label = "top",
+    )
     val shape = RoundedCornerShape(corner)
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = Modifier.padding(top = topPad), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.width(slot))
 
         Box(

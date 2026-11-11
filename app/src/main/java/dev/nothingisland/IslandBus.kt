@@ -61,7 +61,15 @@ data class IslandSettings(
     val iconTextGap: Int = 6,
     /** Bis zu dieser Größe wächst der Rahmen der aufgeklappten Pille; darüber wachsen nur Text und Symbole. */
     val expandedFrameMax: Float = 1.2f,
-)
+    /** Höhe (Abstand von oben) der großen Pille in dp. -1 = wie die kleine Pille. */
+    val expandedOffsetY: Int = -1,
+) {
+    /** Tatsächlicher Abstand von oben für die große Pille. */
+    val expandedTop: Int get() = if (expandedOffsetY < 0) offsetY else expandedOffsetY
+
+    /** Das Fenster sitzt am höheren der beiden Werte, der Rest wird per Abstand im Layout erzeugt. */
+    val windowTop: Int get() = minOf(offsetY, expandedTop)
+}
 
 /** Einfacher In-Process-Bus zwischen Listener-Service, Overlay-UI und Settings-Activity. */
 object IslandBus {
@@ -79,6 +87,14 @@ object IslandBus {
     /** true solange die Einstellungen offen sind: Pille wird dann immer gezeigt. */
     private val _preview = MutableStateFlow(false)
     val preview: StateFlow<Boolean> = _preview.asStateFlow()
+
+    /** true, solange der Barrierefreiheits-Dienst die Island über der Statusleiste zeichnet. */
+    private val _accessibilityOverlay = MutableStateFlow(false)
+    val accessibilityOverlay: StateFlow<Boolean> = _accessibilityOverlay.asStateFlow()
+
+    fun setAccessibilityOverlay(value: Boolean) {
+        _accessibilityOverlay.value = value
+    }
 
     fun setPreview(value: Boolean) {
         _preview.value = value
@@ -151,6 +167,7 @@ object IslandBus {
             smallRoundness = p.getFloat("smallRoundness", d.smallRoundness),
             iconTextGap = p.getInt("iconTextGap", d.iconTextGap),
             expandedFrameMax = p.getFloat("expandedFrameMax", d.expandedFrameMax),
+            expandedOffsetY = p.getInt("expandedOffsetY", d.expandedOffsetY),
         )
     }
 
@@ -173,6 +190,7 @@ object IslandBus {
             .putFloat("smallRoundness", s.smallRoundness)
             .putInt("iconTextGap", s.iconTextGap)
             .putFloat("expandedFrameMax", s.expandedFrameMax)
+            .putInt("expandedOffsetY", s.expandedOffsetY)
             .apply()
     }
 }

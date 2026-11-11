@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Nothing Island</string>
+    <string name="accessibility_description">Zeigt die Nothing Island über der Statusleiste an. Die App liest keine Bildschirminhalte und wertet keine Eingaben aus.</string>
 </resources>

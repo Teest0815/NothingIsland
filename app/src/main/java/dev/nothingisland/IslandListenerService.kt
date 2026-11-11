@@ -39,51 +39,34 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
-/** Lifecycle-Owner, damit Compose ausserhalb einer Activity (im Service-Overlay) laufen kann. */
-private class OverlayOwner : LifecycleOwner, SavedStateRegistryOwner, ViewModelStoreOwner {
-    private val registry = LifecycleRegistry(this)
-    private val controller = SavedStateRegistryController.create(this)
-    private val store = ViewModelStore()
-
-    override val lifecycle: Lifecycle get() = registry
-    override val savedStateRegistry: SavedStateRegistry get() = controller.savedStateRegistry
-    override val viewModelStore: ViewModelStore get() = store
-
-    fun start() {
-        controller.performAttach()
-        controller.performRestore(null)
-        registry.currentState = Lifecycle.State.RESUMED
-    }
-
-    fun stop() {
-        registry.currentState = Lifecycle.State.DESTROYED
-        store.clear()
-    }
-}
-
 class IslandListenerService : NotificationListenerService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var layoutJob: Job? = null
-    private var windowManager: WindowManager? = null
-    private var overlay: ComposeView? = null
-    private var params: WindowManager.LayoutParams? = null
-    private var owner: OverlayOwner? = null
+    private val host = OverlayHost(this, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, scope)
+    private var connected = false
 
     override fun onCreate() {
         super.onCreate()
         instance = this
         IslandBus.loadPrefs(this)
+        // Zeichnet der Barrierefreiheits-Dienst (über der Statusleiste), bleibt dieses Overlay aus.
+        scope.launch {
+            IslandBus.accessibilityOverlay.collect { active ->
+                if (active) host.remove() else if (connected) showOverlay()
+            }
+        }
     }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        connected = true
         showOverlay()
         // Bereits laufende Aktivitäten (Musik, Timer ...) sofort übernehmen.
         runCatching { activeNotifications?.forEach { handle(it, allowAlert = false) } }
     }
 
     override fun onListenerDisconnected() {
+        connected = false
         removeOverlay()
         runCatching { requestRebind(ComponentName(this, IslandListenerService::class.java)) }
         super.onListenerDisconnected()
@@ -230,79 +213,13 @@ class IslandListenerService : NotificationListenerService() {
     /** Kann von der Settings-Activity aufgerufen werden, nachdem die Berechtigung erteilt wurde. */
     fun ensureOverlay() = showOverlay()
 
-    private fun applyPosition(s: IslandSettings) {
-        val p = params ?: return
-        val d = resources.displayMetrics.density
-        p.x = (s.offsetX * d).toInt()
-        p.y = (s.offsetY * d).toInt()
-        val v = overlay ?: return
-        runCatching { windowManager?.updateViewLayout(v, p) }
-    }
-
     private fun showOverlay() {
-        if (overlay != null) return
+        if (IslandBus.accessibilityOverlay.value) return // der Barrierefreiheits-Dienst übernimmt
         if (!Settings.canDrawOverlays(this)) return
-
-        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        val lifecycleOwner = OverlayOwner().also { it.start() }
-
-        val view = ComposeView(this).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-            setViewTreeLifecycleOwner(lifecycleOwner)
-            setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            setViewTreeViewModelStoreOwner(lifecycleOwner)
-            // Tippen außerhalb der Island verkleinert sie wieder.
-            setOnTouchListener { _, ev ->
-                if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE) IslandBus.collapse()
-                false
-            }
-            setContent { IslandHost() }
-        }
-
-        val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            // Erlaubt Positionen bis ganz oben, auch im Bereich der Kamera-Aussparung.
-            flags = flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-            }
-            val s = IslandBus.settings.value
-            val d = resources.displayMetrics.density
-            x = (s.offsetX * d).toInt()
-            y = (s.offsetY * d).toInt()
-        }
-
-        runCatching { wm.addView(view, lp) }
-            .onSuccess {
-                windowManager = wm
-                overlay = view
-                params = lp
-                owner = lifecycleOwner
-                layoutJob = scope.launch { IslandBus.settings.collect { applyPosition(it) } }
-            }
-            .onFailure { lifecycleOwner.stop() }
+        host.show()
     }
 
-    private fun removeOverlay() {
-        layoutJob?.cancel()
-        layoutJob = null
-        overlay?.let { v -> runCatching { windowManager?.removeView(v) } }
-        owner?.stop()
-        overlay = null
-        params = null
-        owner = null
-        windowManager = null
-    }
+    private fun removeOverlay() = host.remove()
 
     companion object {
         @Volatile

@@ -3,6 +3,7 @@ package dev.nothingisland
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -81,6 +82,9 @@ class MainActivity : ComponentActivity() {
         val s by IslandBus.settings.collectAsState()
         val overlayOk = Settings.canDrawOverlays(ctx)
         val widthCap = (resources.configuration.screenWidthDp - 8).coerceAtLeast(220)
+        val a11yOk = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+            .orEmpty().split(':').any { it.startsWith("$packageName/") }
+        val batteryOk = (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
         val listenerOk = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(packageName)
         fun edit(t: (IslandSettings) -> IslandSettings) = IslandBus.updateSettings(ctx, t)
 
@@ -120,6 +124,26 @@ class MainActivity : ComponentActivity() {
             StepRow("02", "Zugriff auf Benachrichtigungen", listenerOk) {
                 startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
             }
+            Spacer(Modifier.height(12.dp))
+            StepRow("03", "Über der Statusleiste anzeigen (Barrierefreiheit)", a11yOk) {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+            Spacer(Modifier.height(12.dp))
+            StepRow("04", "Im Hintergrund aktiv lassen (Akku-Optimierung aus)", batteryOk) {
+                runCatching {
+                    startActivity(
+                        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))
+                    )
+                }.onFailure {
+                    startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "03 legt die Island über die Symbole oben und hält die App zuverlässig im Hintergrund am Leben. Die App liest dabei keine Bildschirminhalte. Falls Android die Option ausgraut: Einstellungen > Apps > Nothing Island > ⋮ > „Eingeschränkte Einstellungen zulassen“.",
+                color = Muted,
+                fontSize = 12.sp,
+            )
 
             SectionLabel("POSITION & GRÖSSE")
             Card {
@@ -211,6 +235,20 @@ class MainActivity : ComponentActivity() {
                     edit { it.copy(expandedCorner = v.roundToInt()) }
                     IslandBus.post(previewAlert())
                 }
+                SettingSlider(
+                    label = "Höhe auf dem Bildschirm (von oben)",
+                    valueText = "${s.expandedTop} dp",
+                    value = s.expandedTop.toFloat(),
+                    range = 0f..500f,
+                ) { v ->
+                    edit { it.copy(expandedOffsetY = v.roundToInt()) }
+                    IslandBus.post(previewAlert())
+                }
+                PillButton("HÖHE WIE KLEINE PILLE", filled = false, modifier = Modifier.fillMaxWidth()) {
+                    edit { it.copy(expandedOffsetY = -1) }
+                    IslandBus.post(previewAlert())
+                }
+                Spacer(Modifier.height(8.dp))
                 Text(
                     "Gilt für neue Meldungen und für die aufgeklappte Timer-/Musik-Pille. Ist „Größe“ höher als „Rahmen wächst bis“, wächst der Rahmen nicht weiter, nur Text und Symbole. Breiter als $widthCap dp (Bildschirmbreite) geht nicht. Die „Maximale Breite“ oben gilt hier nicht, nur für die kleine Pille. Beim Verschieben siehst du eine Vorschau.",
                     color = Muted,
