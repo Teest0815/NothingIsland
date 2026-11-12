@@ -438,6 +438,7 @@ fun IslandHost() {
                                 touch++
                             },
                             onAction = { touch++ },
+                            showSeek = s.mediaSeek,
                             modifier = Modifier.requiredSize(bigW.dp, expandedH.dp),
                         ) else OngoingExpanded(
                             e = cur,
@@ -967,6 +968,20 @@ private fun TransportButton(kind: TransportIcon, sc: Float, big: Boolean, onClic
     }
 }
 
+@Composable
+private fun SeekButton(label: String, sc: Float, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size((38f * sc).dp)
+            .clip(CircleShape)
+            .background(ButtonBg)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, color = Color.White, fontFamily = FontFamily.Monospace, fontSize = (11f * sc).sp)
+    }
+}
+
 /** Aufgeklappte Musik: Cover, Titel, Fortschritt mit Zeiten (zum Spulen antippen) und Steuerung. */
 @Composable
 private fun MediaExpanded(
@@ -976,6 +991,7 @@ private fun MediaExpanded(
     sc: Float,
     onCycle: () -> Unit,
     onAction: () -> Unit,
+    showSeek: Boolean,
     modifier: Modifier,
 ) {
     val mc = e.media ?: return
@@ -1079,11 +1095,27 @@ private fun MediaExpanded(
             )
         }
 
+        // Spulen-Tasten (Podcast & Co.): aus den Aktionen der Benachrichtigung erkannt ("15 Sekunden ...").
+        val secRe = remember { Regex("(\\d{1,3})\\s*(sek|sec|s\\b)", RegexOption.IGNORE_CASE) }
+        val backWords = remember { listOf("zurück", "zurueck", "back", "rewind", "rück", "replay", "rev") }
+        val seekActs = if (showSeek) e.actions.filter { secRe.containsMatchIn(it.title) } else emptyList()
+        val backAct = seekActs.firstOrNull { a -> backWords.any { it in a.title.lowercase() } }
+        val fwdAct = seekActs.firstOrNull { it !== backAct }
+        val fallback = showSeek && seekActs.isEmpty() && e.canSkipSeconds
+        val backLabel = backAct?.let { secRe.find(it.title)?.groupValues?.get(1) } ?: "10"
+        val fwdLabel = fwdAct?.let { secRe.find(it.title)?.groupValues?.get(1) } ?: "30"
+        val showBack = backAct != null || fallback
+        val showFwd = fwdAct != null || fallback
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy((22f * sc).dp, Alignment.CenterHorizontally),
+            horizontalArrangement = Arrangement.spacedBy((14f * sc).dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (showBack) SeekButton("-$backLabel", sc) {
+                if (backAct != null) backAct.intent?.let { runCatching { it.send() } }
+                else runCatching { mc.transportControls.rewind() }
+                onAction()
+            }
             TransportButton(TransportIcon.PREV, sc, false) {
                 runCatching { mc.transportControls.skipToPrevious() }; onAction()
             }
@@ -1093,6 +1125,11 @@ private fun MediaExpanded(
             }
             TransportButton(TransportIcon.NEXT, sc, false) {
                 runCatching { mc.transportControls.skipToNext() }; onAction()
+            }
+            if (showFwd) SeekButton("+$fwdLabel", sc) {
+                if (fwdAct != null) fwdAct.intent?.let { runCatching { it.send() } }
+                else runCatching { mc.transportControls.fastForward() }
+                onAction()
             }
         }
     }

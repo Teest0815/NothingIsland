@@ -42,6 +42,8 @@ data class IslandEvent(
     val positionStamp: Long = 0,
     val durationMs: Long = 0,
     val art: ImageBitmap? = null,
+    /** Player unterstützt Vor-/Zurückspulen (FAST_FORWARD / REWIND). */
+    val canSkipSeconds: Boolean = false,
 )
 
 data class IslandSettings(
@@ -74,6 +76,8 @@ data class IslandSettings(
     val keepAlive: Boolean = true,
     /** Island auf dem Sperrbildschirm antippbar. */
     val lockTouch: Boolean = false,
+    /** Zeigt bei Podcasts & Co. Tasten zum Vor- und Zurückspulen (z. B. 15 Sek.). */
+    val mediaSeek: Boolean = true,
 ) {
     /** Tatsächlicher Abstand von oben für die große Pille. */
     val expandedTop: Int get() = if (expandedOffsetY < 0) offsetY else expandedOffsetY
@@ -206,6 +210,7 @@ object IslandBus {
             expandedOffsetY = p.getInt("expandedOffsetY", d.expandedOffsetY),
             keepAlive = p.getBoolean("keepAlive", d.keepAlive),
             lockTouch = p.getBoolean("lockTouch", d.lockTouch),
+            mediaSeek = p.getBoolean("mediaSeek", d.mediaSeek),
         )
     }
 
@@ -231,6 +236,7 @@ object IslandBus {
             .putInt("expandedOffsetY", s.expandedOffsetY)
             .putBoolean("keepAlive", s.keepAlive)
             .putBoolean("lockTouch", s.lockTouch)
+            .putBoolean("mediaSeek", s.mediaSeek)
             .apply()
     }
 }

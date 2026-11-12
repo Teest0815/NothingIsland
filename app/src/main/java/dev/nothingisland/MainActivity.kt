@@ -302,6 +302,9 @@ class MainActivity : ComponentActivity() {
                 ToggleRow("Musik, Timer & Co. dauerhaft anzeigen", s.showOngoing) { c ->
                     edit { it.copy(showOngoing = c) }
                 }
+                ToggleRow("Podcast: Vor-/Zurückspulen-Tasten (z. B. 15 Sek.)", s.mediaSeek) { c ->
+                    edit { it.copy(mediaSeek = c) }
+                }
                 ToggleRow("Auf dem Sperrbildschirm antippbar", s.lockTouch) { c ->
                     edit { it.copy(lockTouch = c) }
                 }

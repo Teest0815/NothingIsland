@@ -171,6 +171,7 @@ class IslandListenerService : NotificationListenerService() {
         var positionMs = -1L
         var durationMs = 0L
         var art: ImageBitmap? = null
+        var canSkip = false
         if (kind == Kind.MEDIA) {
             runCatching {
                 @Suppress("DEPRECATION")
@@ -189,6 +190,7 @@ class IslandListenerService : NotificationListenerService() {
                 }.getOrNull()
                 val st = mc.playbackState ?: return@runCatching
                 playing = st.state == PlaybackState.STATE_PLAYING
+                canSkip = st.actions and (PlaybackState.ACTION_FAST_FORWARD or PlaybackState.ACTION_REWIND) != 0L
                 if (st.position < 0) return@runCatching
                 if (playing) {
                     val since = SystemClock.elapsedRealtime() - st.lastPositionUpdateTime
@@ -223,6 +225,7 @@ class IslandListenerService : NotificationListenerService() {
             positionStamp = SystemClock.elapsedRealtime(),
             durationMs = durationMs,
             art = art,
+            canSkipSeconds = canSkip,
         )
     }
 
