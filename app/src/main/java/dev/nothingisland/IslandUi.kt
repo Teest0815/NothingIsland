@@ -47,6 +47,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import kotlin.math.sign
+import kotlin.math.abs
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -119,6 +126,7 @@ fun IslandHost() {
     var lastMessage by remember { mutableStateOf<IslandEvent?>(null) }
     var lastCurrent by remember { mutableStateOf<IslandEvent?>(null) }
     var reported by remember { mutableStateOf(0f to 0f) }
+    var suppressLinger by remember { mutableStateOf(false) }
 
     // Neue Meldung: aufklappen, nach X Sekunden (oder Tippen außerhalb) in die kleine Pille schrumpfen.
     LaunchedEffect(alert?.id) {
@@ -127,7 +135,8 @@ fun IslandHost() {
         try {
             delay(s.alertSeconds * 1000L)
         } finally {
-            lingering = a // bleibt noch eine Weile als Text in der kleinen Pille stehen
+            // Bleibt noch eine Weile als Text in der kleinen Pille stehen, außer sie wurde weggewischt.
+            if (suppressLinger) suppressLinger = false else lingering = a
         }
         IslandBus.dismiss()
     }
@@ -244,6 +253,23 @@ fun IslandHost() {
         spring(dampingRatio = 0.8f, stiffness = 380f),
         label = "top",
     )
+    // Wischen nach links oder rechts schließt Meldung, aufgeklappte Pille und Nachricht.
+    val swipeX = remember { Animatable(0f) }
+    val swipeScope = rememberCoroutineScope()
+    val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE
+    LaunchedEffect(mode) { swipeX.snapTo(0f) }
+    val onSwipeAway: () -> Unit = {
+        when (mode) {
+            Mode.ALERT -> {
+                suppressLinger = true
+                IslandBus.dismiss()
+            }
+            Mode.EXPANDED -> IslandBus.setExpanded(false)
+            Mode.MESSAGE -> lingering = null
+            else -> Unit
+        }
+    }
+
     // Fenster auf die Zielgröße setzen: wachsen sofort, schrumpfen erst nach der Animation.
     val slotTarget = if (circleItem != null) smallH + 6f * sc else 0f
     val topTarget = ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
@@ -273,11 +299,37 @@ fun IslandHost() {
                 .graphicsLayer {
                     scaleX = pressScale
                     scaleY = pressScale
+                    translationX = swipeX.value
+                    alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f)
                 }
                 .size(width, height)
                 .clip(shape)
                 .background(Color.Black)
                 .border(1.dp, Hairline, shape)
+                .pointerInput(swipeable) {
+                    if (!swipeable) return@pointerInput
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            val x = swipeX.value
+                            swipeScope.launch {
+                                if (abs(x) > 80.dp.toPx()) {
+                                    swipeX.animateTo(sign(x) * size.width * 0.8f, tween(160))
+                                    onSwipeAway()
+                                    swipeX.snapTo(0f)
+                                } else {
+                                    swipeX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f))
+                                }
+                            }
+                        },
+                        onDragCancel = {
+                            swipeScope.launch { swipeX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f)) }
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            swipeScope.launch { swipeX.snapTo(swipeX.value + dragAmount) }
+                        },
+                    )
+                }
                 .clickable(
                     interactionSource = press,
                     indication = null,
