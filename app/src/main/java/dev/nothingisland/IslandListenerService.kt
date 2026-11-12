@@ -3,6 +3,7 @@ package dev.nothingisland
 import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.PixelFormat
 import android.graphics.drawable.Icon
 import android.media.session.MediaController
@@ -231,14 +232,26 @@ class IslandListenerService : NotificationListenerService() {
             "app.organicmaps", "com.here.app.maps", "com.sygic.aura", "de.komoot.android",
         )
 
-        /** Nach App-Update oder Neustart: Benachrichtigungszugriff neu verbinden lassen. */
+        @Volatile
+        private var lastRebind = 0L
+
+        /**
+         * Nach App-Update, Neustart oder Beenden der App wird der Benachrichtigungszugriff auf manchen
+         * Geräten nicht neu verbunden. Das Aus- und Einschalten der Komponente zwingt Android dazu
+         * (entspricht dem manuellen Aus- und Einschalten der Berechtigung).
+         */
         fun rebind(context: Context) {
             if (instance != null) return
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastRebind < 10_000) return
+            lastRebind = now
+            val cn = ComponentName(context, IslandListenerService::class.java)
             runCatching {
-                NotificationListenerService.requestRebind(
-                    ComponentName(context, IslandListenerService::class.java)
-                )
+                val pm = context.packageManager
+                pm.setComponentEnabledSetting(cn, PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP)
+                pm.setComponentEnabledSetting(cn, PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP)
             }
+            runCatching { NotificationListenerService.requestRebind(cn) }
         }
     }
 }

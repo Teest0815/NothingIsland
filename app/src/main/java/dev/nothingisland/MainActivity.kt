@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Solange die Einstellungen offen sind, zeigt die Island sich immer (Live-Vorschau).
         IslandBus.setPreview(true)
+        A11yGuard.ensureEnabled(this)
         IslandListenerService.rebind(this)
         IslandListenerService.instance?.ensureOverlay()
         refresh++
@@ -144,6 +145,14 @@ class MainActivity : ComponentActivity() {
                 color = Muted,
                 fontSize = 12.sp,
             )
+            if (A11yGuard.isWanted(ctx) && !a11yOk) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Android hat die Barrierefreiheit für Nothing Island ausgeschaltet (das passiert, wenn die App beendet wird). Schalte sie bei 03 wieder ein. Damit die App das künftig selbst macht, einmalig am PC: adb shell pm grant dev.nothingisland android.permission.WRITE_SECURE_SETTINGS",
+                    color = NothingRed,
+                    fontSize = 12.sp,
+                )
+            }
 
             SectionLabel("POSITION & GRÖSSE")
             Card {

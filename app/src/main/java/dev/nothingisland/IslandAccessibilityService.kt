@@ -22,6 +22,7 @@ class IslandAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         IslandBus.loadPrefs(this)
+        A11yGuard.markWanted(this, true)
         val h = OverlayHost(this, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, scope)
         host = h
         if (h.show()) IslandBus.setAccessibilityOverlay(true)
@@ -32,6 +33,8 @@ class IslandAccessibilityService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     override fun onUnbind(intent: Intent?): Boolean {
+        // Wird der Dienst vom Nutzer ausgeschaltet, soll er nicht automatisch wieder eingeschaltet werden.
+        A11yGuard.markWanted(this, false)
         cleanup()
         return super.onUnbind(intent)
     }
