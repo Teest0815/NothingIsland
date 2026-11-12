@@ -305,6 +305,13 @@ class MainActivity : ComponentActivity() {
                 ToggleRow("Podcast: Vor-/Zurückspulen-Tasten (z. B. 15 Sek.)", s.mediaSeek) { c ->
                     edit { it.copy(mediaSeek = c) }
                 }
+                ToggleRow("Schnellzugriff-Panel (Lampe, Ton, WLAN ...)", s.quickPanel) { c ->
+                    edit { it.copy(quickPanel = c) }
+                    if (!c) IslandBus.setQuick(false)
+                }
+                ToggleRow("Status in der Pille (Lampe, Stumm, Hotspot ...)", s.statusPills) { c ->
+                    edit { it.copy(statusPills = c) }
+                }
                 ToggleRow("Auf dem Sperrbildschirm antippbar", s.lockTouch) { c ->
                     edit { it.copy(lockTouch = c) }
                 }

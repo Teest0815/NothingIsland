@@ -61,6 +61,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.animation.core.Animatable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -111,7 +112,7 @@ private const val BASE_EXPANDED_H = 84f
 private const val BASE_EXPANDED_ACTIONS_H = 134f
 private const val BASE_EXPANDED_MEDIA_H = 156f
 private const val BASE_IDLE_W = 92f
-private const val BASE_QUICK_H = 122f
+private const val BASE_QUICK_H = 138f
 /** Halbe Breite der kleinen Pille ohne Kamera-Lücke (links und rechts je gleich viel). */
 private const val BASE_COMPACT_SIDE = 82f
 private const val BASE_MESSAGE_SIDE = 125f
@@ -128,6 +129,30 @@ fun IslandHost() {
     val quick by IslandBus.quick.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(Unit) { QuickActions.init(ctx) }
+    val torchOn by QuickActions.torch.collectAsState()
+    LaunchedEffect(torchOn, s.statusPills) { QuickActions.syncStatus(ctx, s.statusPills) }
+    DisposableEffect(ctx) {
+        val r = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context?, i: android.content.Intent?) {
+                if (i?.action == "android.net.wifi.WIFI_AP_STATE_CHANGED") {
+                    QuickActions.hotspotOn = i.getIntExtra("wifi_state", 0) % 10 == 3
+                }
+                QuickActions.syncStatus(ctx, IslandBus.settings.value.statusPills)
+            }
+        }
+        val f = android.content.IntentFilter().apply {
+            addAction(android.media.AudioManager.RINGER_MODE_CHANGED_ACTION)
+            addAction(android.app.NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED)
+            addAction(android.content.Intent.ACTION_AIRPLANE_MODE_CHANGED)
+            addAction("android.net.wifi.WIFI_AP_STATE_CHANGED")
+        }
+        val ok = runCatching {
+            androidx.core.content.ContextCompat.registerReceiver(
+                ctx, r, f, androidx.core.content.ContextCompat.RECEIVER_EXPORTED,
+            )
+        }.isSuccess
+        onDispose { if (ok) runCatching { ctx.unregisterReceiver(r) } }
+    }
     val preview by IslandBus.preview.collectAsState()
     val ongoing = if (s.showOngoing) ongoingAll else emptyList()
 
@@ -178,7 +203,7 @@ fun IslandHost() {
     val current = ongoing.firstOrNull { it.key == primaryKey } ?: ongoing.lastOrNull()
     val mode = when {
         alert != null -> Mode.ALERT
-        quick -> Mode.QUICK
+        quick && s.quickPanel -> Mode.QUICK
         manual && current != null -> Mode.EXPANDED
         lingering != null -> Mode.MESSAGE
         current != null -> Mode.COMPACT
@@ -375,7 +400,7 @@ fun IslandHost() {
                     interactionSource = press,
                     indication = null,
                     onLongClick = {
-                        if (mode == Mode.COMPACT || mode == Mode.MESSAGE || mode == Mode.IDLE) IslandBus.setQuick(true)
+                        if (s.quickPanel && (mode == Mode.COMPACT || mode == Mode.MESSAGE || mode == Mode.IDLE)) IslandBus.setQuick(true)
                     },
                 ) {
                     when (mode) {
@@ -393,7 +418,7 @@ fun IslandHost() {
                             touch++
                         }
                         Mode.EXPANDED -> IslandBus.setExpanded(false)
-                        Mode.IDLE -> IslandBus.setQuick(true)
+                        Mode.IDLE -> if (s.quickPanel) IslandBus.setQuick(true)
                         Mode.QUICK -> IslandBus.setQuick(false)
                     }
                 },
@@ -1002,24 +1027,32 @@ private fun SeekButton(label: String, sc: Float, onClick: () -> Unit) {
 }
 
 @Composable
-private fun RowScope.QuickChip(label: String, active: Boolean, sc: Float, onClick: () -> Unit) {
-    Box(
+private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean, sc: Float, onClick: () -> Unit) {
+    Column(
         modifier = Modifier
             .weight(1f)
-            .height((38f * sc).dp)
-            .clip(RoundedCornerShape(50))
+            .height((54f * sc).dp)
+            .clip(RoundedCornerShape((16f * sc).dp))
             .background(if (active) NothingRed else ButtonBg)
             .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
+        Image(
+            bitmap = icon,
+            contentDescription = label,
+            colorFilter = ColorFilter.tint(Color.White),
+            modifier = Modifier.size((20f * sc).dp),
+        )
+        Spacer(Modifier.height((5f * sc).dp))
         Text(
-            label, color = Color.White, fontFamily = FontFamily.Monospace, fontSize = (10f * sc).sp,
-            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            label, color = if (active) Color.White else TextGray, fontFamily = FontFamily.Monospace,
+            fontSize = (8f * sc).sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
-/** Schnellzugriff: Taschenlampe, Klingelmodus, Nicht stören; WLAN, Bluetooth, Hotspot, Flugmodus öffnen die Systemeinstellung. */
+/** Schnellzugriff: Lampe, Ton, Nicht stören sind echte Schalter, der Rest öffnet die Systemeinstellung. */
 @Composable
 private fun QuickPanel(sc: Float, modifier: Modifier, onUsed: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -1036,36 +1069,44 @@ private fun QuickPanel(sc: Float, modifier: Modifier, onUsed: () -> Unit) {
     val ringerLabel = when (ringer) {
         android.media.AudioManager.RINGER_MODE_SILENT -> "STUMM"
         android.media.AudioManager.RINGER_MODE_VIBRATE -> "VIBRATION"
-        else -> "TON AN"
+        else -> "TON"
     }
     fun close() = IslandBus.setQuick(false)
+    val st = android.provider.Settings.ACTION_WIRELESS_SETTINGS
     Column(
-        modifier = modifier.padding(horizontal = (16f * sc).dp, vertical = (14f * sc).dp),
+        modifier = modifier.padding(horizontal = (14f * sc).dp, vertical = (12f * sc).dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy((8f * sc).dp)) {
-            QuickChip("LAMPE", torch, sc) { QuickActions.toggleTorch(ctx); onUsed() }
-            QuickChip(ringerLabel, ringer != android.media.AudioManager.RINGER_MODE_NORMAL, sc) {
+            QuickTile(QuickActions.icon("torch"), "LAMPE", torch, sc) { QuickActions.toggleTorch(ctx); onUsed() }
+            QuickTile(QuickActions.icon("bell"), ringerLabel, ringer != android.media.AudioManager.RINGER_MODE_NORMAL, sc) {
                 QuickActions.cycleRinger(ctx); onUsed()
             }
-            QuickChip("NICHT STÖREN", QuickActions.dndOn(ctx), sc) {
+            QuickTile(QuickActions.icon("moon"), "STÖREN", QuickActions.dndOn(ctx), sc) {
                 if (QuickActions.toggleDnd(ctx)) close() else onUsed()
+            }
+            QuickTile(QuickActions.icon("hotspot"), "HOTSPOT", QuickActions.hotspotOn, sc) {
+                QuickActions.open(ctx, "android.settings.TETHER_SETTINGS", st); close()
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy((8f * sc).dp)) {
-            QuickChip("WLAN", QuickActions.globalOn(ctx, "wifi_on"), sc) {
+            QuickTile(QuickActions.icon("airplane"), "FLUG", QuickActions.globalOn(ctx, "airplane_mode_on"), sc) {
+                QuickActions.open(ctx, android.provider.Settings.ACTION_AIRPLANE_MODE_SETTINGS); close()
+            }
+            QuickTile(QuickActions.icon("wifi"), "WLAN", QuickActions.globalOn(ctx, "wifi_on"), sc) {
                 QuickActions.open(ctx, android.provider.Settings.Panel.ACTION_INTERNET_CONNECTIVITY, android.provider.Settings.ACTION_WIFI_SETTINGS)
                 close()
             }
-            QuickChip("BLUETOOTH", QuickActions.globalOn(ctx, "bluetooth_on"), sc) {
+            QuickTile(QuickActions.icon("bluetooth"), "BT", QuickActions.globalOn(ctx, "bluetooth_on"), sc) {
                 QuickActions.open(ctx, android.provider.Settings.ACTION_BLUETOOTH_SETTINGS); close()
             }
-            QuickChip("HOTSPOT", false, sc) {
-                QuickActions.open(ctx, "android.settings.TETHER_SETTINGS", android.provider.Settings.ACTION_WIRELESS_SETTINGS)
+            QuickTile(QuickActions.icon("gear"), "ISLAND", false, sc) {
+                runCatching {
+                    ctx.startActivity(
+                        android.content.Intent(ctx, MainActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
                 close()
-            }
-            QuickChip("FLUGMODUS", QuickActions.globalOn(ctx, "airplane_mode_on"), sc) {
-                QuickActions.open(ctx, android.provider.Settings.ACTION_AIRPLANE_MODE_SETTINGS); close()
             }
         }
     }

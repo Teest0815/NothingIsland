@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /** Reihenfolge = Priorität in der kleinen Pille. */
-enum class Kind { CALL, NAVIGATION, TIMER, MEDIA, PROGRESS, OTHER }
+enum class Kind { CALL, NAVIGATION, TIMER, MEDIA, PROGRESS, STATUS, OTHER }
 
 data class IslandAction(
     val title: String,
@@ -78,6 +78,10 @@ data class IslandSettings(
     val lockTouch: Boolean = false,
     /** Zeigt bei Podcasts & Co. Tasten zum Vor- und Zurückspulen (z. B. 15 Sek.). */
     val mediaSeek: Boolean = true,
+    /** Schnellzugriff-Panel (Tippen auf Ruhe-Pille, langes Drücken auf die kleine Pille). */
+    val quickPanel: Boolean = true,
+    /** Status-Anzeigen in der Pille: Lampe, Stumm, Nicht stören, Hotspot, Flugmodus. */
+    val statusPills: Boolean = true,
 ) {
     /** Tatsächlicher Abstand von oben für die große Pille. */
     val expandedTop: Int get() = if (expandedOffsetY < 0) offsetY else expandedOffsetY
@@ -220,6 +224,8 @@ object IslandBus {
             keepAlive = p.getBoolean("keepAlive", d.keepAlive),
             lockTouch = p.getBoolean("lockTouch", d.lockTouch),
             mediaSeek = p.getBoolean("mediaSeek", d.mediaSeek),
+            quickPanel = p.getBoolean("quickPanel", d.quickPanel),
+            statusPills = p.getBoolean("statusPills", d.statusPills),
         )
     }
 
@@ -246,6 +252,8 @@ object IslandBus {
             .putBoolean("keepAlive", s.keepAlive)
             .putBoolean("lockTouch", s.lockTouch)
             .putBoolean("mediaSeek", s.mediaSeek)
+            .putBoolean("quickPanel", s.quickPanel)
+            .putBoolean("statusPills", s.statusPills)
             .apply()
     }
 }
