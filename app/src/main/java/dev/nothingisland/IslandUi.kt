@@ -128,16 +128,16 @@ fun IslandHost() {
     val quick by IslandBus.quick.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(Unit) { QuickActions.init(ctx) }
+    val preview by IslandBus.preview.collectAsState()
+    val ongoing = if (s.showOngoing) ongoingAll else emptyList()
+
+    var touch by remember { mutableIntStateOf(0) }
     LaunchedEffect(quick, touch) {
         if (quick) {
             delay(10_000)
             IslandBus.setQuick(false)
         }
     }
-    val preview by IslandBus.preview.collectAsState()
-    val ongoing = if (s.showOngoing) ongoingAll else emptyList()
-
-    var touch by remember { mutableIntStateOf(0) }
     var lastAlert by remember { mutableStateOf<IslandEvent?>(null) }
     var lingering by remember { mutableStateOf<IslandEvent?>(null) }
     var lastCircle by remember { mutableStateOf<IslandEvent?>(null) }
@@ -1002,9 +1002,10 @@ private fun SeekButton(label: String, sc: Float, onClick: () -> Unit) {
 }
 
 @Composable
-private fun QuickChip(label: String, active: Boolean, sc: Float, modifier: Modifier, onClick: () -> Unit) {
+private fun RowScope.QuickChip(label: String, active: Boolean, sc: Float, onClick: () -> Unit) {
     Box(
-        modifier = modifier
+        modifier = Modifier
+            .weight(1f)
             .height((38f * sc).dp)
             .clip(RoundedCornerShape(50))
             .background(if (active) NothingRed else ButtonBg)
@@ -1038,33 +1039,32 @@ private fun QuickPanel(sc: Float, modifier: Modifier, onUsed: () -> Unit) {
         else -> "TON AN"
     }
     fun close() = IslandBus.setQuick(false)
-    val m = Modifier.weight(1f)
     Column(
         modifier = modifier.padding(horizontal = (16f * sc).dp, vertical = (14f * sc).dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy((8f * sc).dp)) {
-            QuickChip("LAMPE", torch, sc, m) { QuickActions.toggleTorch(ctx); onUsed() }
-            QuickChip(ringerLabel, ringer != android.media.AudioManager.RINGER_MODE_NORMAL, sc, m) {
+            QuickChip("LAMPE", torch, sc) { QuickActions.toggleTorch(ctx); onUsed() }
+            QuickChip(ringerLabel, ringer != android.media.AudioManager.RINGER_MODE_NORMAL, sc) {
                 QuickActions.cycleRinger(ctx); onUsed()
             }
-            QuickChip("NICHT STÖREN", QuickActions.dndOn(ctx), sc, m) {
+            QuickChip("NICHT STÖREN", QuickActions.dndOn(ctx), sc) {
                 if (QuickActions.toggleDnd(ctx)) close() else onUsed()
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy((8f * sc).dp)) {
-            QuickChip("WLAN", QuickActions.globalOn(ctx, "wifi_on"), sc, m) {
+            QuickChip("WLAN", QuickActions.globalOn(ctx, "wifi_on"), sc) {
                 QuickActions.open(ctx, android.provider.Settings.Panel.ACTION_INTERNET_CONNECTIVITY, android.provider.Settings.ACTION_WIFI_SETTINGS)
                 close()
             }
-            QuickChip("BLUETOOTH", QuickActions.globalOn(ctx, "bluetooth_on"), sc, m) {
+            QuickChip("BLUETOOTH", QuickActions.globalOn(ctx, "bluetooth_on"), sc) {
                 QuickActions.open(ctx, android.provider.Settings.ACTION_BLUETOOTH_SETTINGS); close()
             }
-            QuickChip("HOTSPOT", false, sc, m) {
+            QuickChip("HOTSPOT", false, sc) {
                 QuickActions.open(ctx, "android.settings.TETHER_SETTINGS", android.provider.Settings.ACTION_WIRELESS_SETTINGS)
                 close()
             }
-            QuickChip("FLUGMODUS", QuickActions.globalOn(ctx, "airplane_mode_on"), sc, m) {
+            QuickChip("FLUGMODUS", QuickActions.globalOn(ctx, "airplane_mode_on"), sc) {
                 QuickActions.open(ctx, android.provider.Settings.ACTION_AIRPLANE_MODE_SETTINGS); close()
             }
         }
