@@ -23,6 +23,7 @@ class IslandAccessibilityService : AccessibilityService() {
         super.onServiceConnected()
         IslandBus.loadPrefs(this)
         A11yGuard.markWanted(this, true)
+        KeepAliveService.start(this)
         val h = OverlayHost(this, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, scope)
         host = h
         if (h.show()) IslandBus.setAccessibilityOverlay(true)

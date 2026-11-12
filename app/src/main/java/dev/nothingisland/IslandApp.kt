@@ -14,6 +14,7 @@ class IslandApp : Application() {
         super.onCreate()
         IslandBus.loadPrefs(this)
         A11yGuard.ensureEnabled(this)
+        KeepAliveService.start(this)
         // Etwas warten: Meist bindet Android den Benachrichtigungszugriff selbst. Wenn nicht, erzwingen wir es.
         Handler(Looper.getMainLooper()).postDelayed({ IslandListenerService.rebind(this) }, 3_000)
     }

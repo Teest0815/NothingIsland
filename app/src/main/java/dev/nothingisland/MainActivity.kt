@@ -66,6 +66,7 @@ class MainActivity : ComponentActivity() {
         // Solange die Einstellungen offen sind, zeigt die Island sich immer (Live-Vorschau).
         IslandBus.setPreview(true)
         A11yGuard.ensureEnabled(this)
+        KeepAliveService.start(this)
         IslandListenerService.rebind(this)
         IslandListenerService.instance?.ensureOverlay()
         refresh++
@@ -271,6 +272,10 @@ class MainActivity : ComponentActivity() {
                 ToggleRow("Ruhe-Pille anzeigen", s.idleVisible) { c -> edit { it.copy(idleVisible = c) } }
                 ToggleRow("Musik, Timer & Co. dauerhaft anzeigen", s.showOngoing) { c ->
                     edit { it.copy(showOngoing = c) }
+                }
+                ToggleRow("Im Hintergrund aktiv halten (stille Benachrichtigung)", s.keepAlive) { c ->
+                    edit { it.copy(keepAlive = c) }
+                    if (c) KeepAliveService.start(ctx) else KeepAliveService.stop(ctx)
                 }
                 SettingSlider(
                     label = "Neue Meldung sichtbar für",

@@ -61,6 +61,7 @@ class IslandListenerService : NotificationListenerService() {
     override fun onListenerConnected() {
         super.onListenerConnected()
         connected = true
+        KeepAliveService.start(this)
         showOverlay()
         // Bereits laufende Aktivitäten (Musik, Timer ...) sofort übernehmen.
         runCatching { activeNotifications?.forEach { handle(it, allowAlert = false) } }
