@@ -156,8 +156,17 @@ object IslandBus {
         _primaryKey.value = key
     }
 
+    /** Schnellzugriff-Panel (Taschenlampe, Stumm ...). */
+    private val _quick = MutableStateFlow(false)
+    val quick: StateFlow<Boolean> = _quick.asStateFlow()
+
+    fun setQuick(value: Boolean) {
+        _quick.value = value
+    }
+
     /** Tippen außerhalb der Island: aufgeklappte Pille und Meldung wieder verkleinern. */
     fun collapse() {
+        _quick.value = false
         _expanded.value = false
         _current.value = null
     }

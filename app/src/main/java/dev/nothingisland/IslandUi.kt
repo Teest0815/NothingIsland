@@ -28,6 +28,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -101,7 +102,7 @@ private val TextGray = Color(0xFF9A9A9A)
 private val Hairline = Color(0xFF2A2A2A)
 private val ButtonBg = Color(0xFF1C1C1C)
 
-private enum class Mode { IDLE, COMPACT, MESSAGE, ALERT, EXPANDED }
+private enum class Mode { IDLE, COMPACT, MESSAGE, ALERT, EXPANDED, QUICK }
 
 /** Reserve um die Pille, damit Überschwingen der Feder nicht abgeschnitten wird. */
 private const val WINDOW_MARGIN = 24f
@@ -110,11 +111,13 @@ private const val BASE_EXPANDED_H = 84f
 private const val BASE_EXPANDED_ACTIONS_H = 134f
 private const val BASE_EXPANDED_MEDIA_H = 156f
 private const val BASE_IDLE_W = 92f
+private const val BASE_QUICK_H = 122f
 /** Halbe Breite der kleinen Pille ohne Kamera-Lücke (links und rechts je gleich viel). */
 private const val BASE_COMPACT_SIDE = 82f
 private const val BASE_MESSAGE_SIDE = 125f
 private const val BASE_SMALL_H = 30f
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun IslandHost() {
     val s by IslandBus.settings.collectAsState()
@@ -122,6 +125,15 @@ fun IslandHost() {
     val ongoingAll by IslandBus.ongoing.collectAsState()
     val primaryKey by IslandBus.primaryKey.collectAsState()
     val manual by IslandBus.expanded.collectAsState()
+    val quick by IslandBus.quick.collectAsState()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) { QuickActions.init(ctx) }
+    LaunchedEffect(quick, touch) {
+        if (quick) {
+            delay(10_000)
+            IslandBus.setQuick(false)
+        }
+    }
     val preview by IslandBus.preview.collectAsState()
     val ongoing = if (s.showOngoing) ongoingAll else emptyList()
 
@@ -166,6 +178,7 @@ fun IslandHost() {
     val current = ongoing.firstOrNull { it.key == primaryKey } ?: ongoing.lastOrNull()
     val mode = when {
         alert != null -> Mode.ALERT
+        quick -> Mode.QUICK
         manual && current != null -> Mode.EXPANDED
         lingering != null -> Mode.MESSAGE
         current != null -> Mode.COMPACT
@@ -219,6 +232,7 @@ fun IslandHost() {
         Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH
         Mode.ALERT -> BASE_ALERT_H * fsc
         Mode.EXPANDED -> expandedH
+        Mode.QUICK -> BASE_QUICK_H * fsc
     }
     val targetCorner = when (mode) {
         Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH / 2f * s.smallRoundness
@@ -226,7 +240,7 @@ fun IslandHost() {
     }
 
     val motion = spring<Dp>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
-    val growing = mode == Mode.ALERT || mode == Mode.EXPANDED
+    val growing = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK
     val widthSpec = spring<Dp>(
         dampingRatio = if (growing) 0.66f else 0.88f,
         stiffness = if (growing) 380f else 520f,
@@ -266,7 +280,7 @@ fun IslandHost() {
     // Wischen nach links oder rechts schließt Meldung, aufgeklappte Pille und Nachricht.
     val swipeX = remember { Animatable(0f) }
     val swipeScope = rememberCoroutineScope()
-    val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE
+    val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || mode == Mode.QUICK
     LaunchedEffect(mode) { swipeX.snapTo(0f) }
     val onSwipeAway: () -> Unit = {
         when (mode) {
@@ -275,6 +289,7 @@ fun IslandHost() {
                 IslandBus.dismiss()
             }
             Mode.EXPANDED -> IslandBus.setExpanded(false)
+            Mode.QUICK -> IslandBus.setQuick(false)
             Mode.MESSAGE -> lingering = null
             else -> Unit
         }
@@ -356,10 +371,12 @@ fun IslandHost() {
                         },
                     )
                 }
-                .clickable(
+                .combinedClickable(
                     interactionSource = press,
                     indication = null,
-                    enabled = mode != Mode.IDLE,
+                    onLongClick = {
+                        if (mode == Mode.COMPACT || mode == Mode.MESSAGE || mode == Mode.IDLE) IslandBus.setQuick(true)
+                    },
                 ) {
                     when (mode) {
                         Mode.ALERT -> {
@@ -376,7 +393,8 @@ fun IslandHost() {
                             touch++
                         }
                         Mode.EXPANDED -> IslandBus.setExpanded(false)
-                        Mode.IDLE -> Unit
+                        Mode.IDLE -> IslandBus.setQuick(true)
+                        Mode.QUICK -> IslandBus.setQuick(false)
                     }
                 },
             contentAlignment = Alignment.Center,
@@ -398,7 +416,7 @@ fun IslandHost() {
                             sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
                         )
                     }
-                    val toBig = targetState.first == Mode.ALERT || targetState.first == Mode.EXPANDED
+                    val toBig = targetState.first == Mode.ALERT || targetState.first == Mode.EXPANDED || targetState.first == Mode.QUICK
                     val delay = if (toBig) 120 else 70
                     ContentTransform(
                         targetContentEnter = fadeIn(tween(240, delayMillis = delay)) +
@@ -417,6 +435,7 @@ fun IslandHost() {
             ) { st ->
                 when (st.first) {
                     Mode.IDLE -> IdleDots(sc)
+                    Mode.QUICK -> QuickPanel(bsc, Modifier.requiredSize(bigW.dp, (BASE_QUICK_H * fsc).dp)) { touch++ }
                     Mode.COMPACT -> shownCurrent?.let {
                         CompactContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(compactW.dp, smallH.dp))
                     }
@@ -982,6 +1001,76 @@ private fun SeekButton(label: String, sc: Float, onClick: () -> Unit) {
     }
 }
 
+@Composable
+private fun QuickChip(label: String, active: Boolean, sc: Float, modifier: Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .height((38f * sc).dp)
+            .clip(RoundedCornerShape(50))
+            .background(if (active) NothingRed else ButtonBg)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label, color = Color.White, fontFamily = FontFamily.Monospace, fontSize = (10f * sc).sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** Schnellzugriff: Taschenlampe, Klingelmodus, Nicht stören; WLAN, Bluetooth, Hotspot, Flugmodus öffnen die Systemeinstellung. */
+@Composable
+private fun QuickPanel(sc: Float, modifier: Modifier, onUsed: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val torch by QuickActions.torch.collectAsState()
+    var tick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(400)
+            tick++
+        }
+    }
+    @Suppress("UNUSED_EXPRESSION") tick
+    val ringer = QuickActions.ringerMode(ctx)
+    val ringerLabel = when (ringer) {
+        android.media.AudioManager.RINGER_MODE_SILENT -> "STUMM"
+        android.media.AudioManager.RINGER_MODE_VIBRATE -> "VIBRATION"
+        else -> "TON AN"
+    }
+    fun close() = IslandBus.setQuick(false)
+    val m = Modifier.weight(1f)
+    Column(
+        modifier = modifier.padding(horizontal = (16f * sc).dp, vertical = (14f * sc).dp),
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy((8f * sc).dp)) {
+            QuickChip("LAMPE", torch, sc, m) { QuickActions.toggleTorch(ctx); onUsed() }
+            QuickChip(ringerLabel, ringer != android.media.AudioManager.RINGER_MODE_NORMAL, sc, m) {
+                QuickActions.cycleRinger(ctx); onUsed()
+            }
+            QuickChip("NICHT STÖREN", QuickActions.dndOn(ctx), sc, m) {
+                if (QuickActions.toggleDnd(ctx)) close() else onUsed()
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy((8f * sc).dp)) {
+            QuickChip("WLAN", QuickActions.globalOn(ctx, "wifi_on"), sc, m) {
+                QuickActions.open(ctx, android.provider.Settings.Panel.ACTION_INTERNET_CONNECTIVITY, android.provider.Settings.ACTION_WIFI_SETTINGS)
+                close()
+            }
+            QuickChip("BLUETOOTH", QuickActions.globalOn(ctx, "bluetooth_on"), sc, m) {
+                QuickActions.open(ctx, android.provider.Settings.ACTION_BLUETOOTH_SETTINGS); close()
+            }
+            QuickChip("HOTSPOT", false, sc, m) {
+                QuickActions.open(ctx, "android.settings.TETHER_SETTINGS", android.provider.Settings.ACTION_WIRELESS_SETTINGS)
+                close()
+            }
+            QuickChip("FLUGMODUS", QuickActions.globalOn(ctx, "airplane_mode_on"), sc, m) {
+                QuickActions.open(ctx, android.provider.Settings.ACTION_AIRPLANE_MODE_SETTINGS); close()
+            }
+        }
+    }
+}
+
 /** Aufgeklappte Musik: Cover, Titel, Fortschritt mit Zeiten (zum Spulen antippen) und Steuerung. */
 @Composable
 private fun MediaExpanded(
@@ -1102,8 +1191,9 @@ private fun MediaExpanded(
         val backAct = seekActs.firstOrNull { a -> backWords.any { it in a.title.lowercase() } }
         val fwdAct = seekActs.firstOrNull { it !== backAct }
         val fallback = showSeek && seekActs.isEmpty() && e.canSkipSeconds
-        val backLabel = backAct?.let { secRe.find(it.title)?.groupValues?.get(1) } ?: "10"
-        val fwdLabel = fwdAct?.let { secRe.find(it.title)?.groupValues?.get(1) } ?: "30"
+        // Ohne erkennbare Sekundenzahl (z. B. ArchiveTune) kein erfundener Wert, nur Pfeile.
+        val backLabel = backAct?.let { secRe.find(it.title)?.groupValues?.get(1) }?.let { "-$it" } ?: "«"
+        val fwdLabel = fwdAct?.let { secRe.find(it.title)?.groupValues?.get(1) }?.let { "+$it" } ?: "»"
         val showBack = backAct != null || fallback
         val showFwd = fwdAct != null || fallback
         Row(
@@ -1111,7 +1201,7 @@ private fun MediaExpanded(
             horizontalArrangement = Arrangement.spacedBy((14f * sc).dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            if (showBack) SeekButton("-$backLabel", sc) {
+            if (showBack) SeekButton(backLabel, sc) {
                 if (backAct != null) backAct.intent?.let { runCatching { it.send() } }
                 else runCatching { mc.transportControls.rewind() }
                 onAction()
@@ -1126,7 +1216,7 @@ private fun MediaExpanded(
             TransportButton(TransportIcon.NEXT, sc, false) {
                 runCatching { mc.transportControls.skipToNext() }; onAction()
             }
-            if (showFwd) SeekButton("+$fwdLabel", sc) {
+            if (showFwd) SeekButton(fwdLabel, sc) {
                 if (fwdAct != null) fwdAct.intent?.let { runCatching { it.send() } }
                 else runCatching { mc.transportControls.fastForward() }
                 onAction()
