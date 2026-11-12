@@ -318,8 +318,8 @@ object QuickActions {
 
     private fun setStatus(
         enabled: Boolean, key: String, on: Boolean, title: String, text: String, icon: String,
-        timer: Boolean, actionTitle: String?, action: () -> Unit,
-        right: String? = null, countDownTo: Long? = null,
+        timer: Boolean, actionTitle: String?,
+        right: String? = null, countDownTo: Long? = null, action: () -> Unit = {},
     ) {
         val busKey = "status:$key"
         if (!enabled || !on) {
@@ -374,22 +374,23 @@ object QuickActions {
         val bt = btDevices.values.lastOrNull()
         setStatus(
             st.statusEnabled("bluetooth"), "bluetooth", bt != null, bt?.first?.uppercase() ?: "", "Verbunden", "bluetooth", false,
-            "EINSTELLUNGEN", { open(app, Settings.ACTION_BLUETOOTH_SETTINGS) },
+            "EINSTELLUNGEN",
             right = bt?.second?.takeIf { it >= 0 }?.let { "$it %" },
+            action = { open(app, Settings.ACTION_BLUETOOTH_SETTINGS) },
         )
 
-        setStatus(st.statusEnabled("mic"), "mic", micActive, "MIKROFON", "Wird verwendet", "mic", true, null, {})
+        setStatus(st.statusEnabled("mic"), "mic", micActive, "MIKROFON", "Wird verwendet", "mic", true, null)
         setStatus(
             st.statusEnabled("camera"), "camera", camUnavailable.isNotEmpty() && !_torch.value,
-            "KAMERA", "Wird verwendet", "camera", true, null, {},
+            "KAMERA", "Wird verwendet", "camera", true, null,
         )
         setStatus(
             st.statusEnabled("powersave"), "powersave", powerSave(app), "ENERGIESPARMODUS", "Aktiv", "battery", false,
-            "EINSTELLUNGEN", { open(app, Settings.ACTION_BATTERY_SAVER_SETTINGS) },
+            "EINSTELLUNGEN", action = { open(app, Settings.ACTION_BATTERY_SAVER_SETTINGS) },
         )
         setStatus(
             st.statusEnabled("location"), "location", locationOn(app), "STANDORT", "Aktiv", "pin", false,
-            "EINSTELLUNGEN", { open(app, Settings.ACTION_LOCATION_SOURCE_SETTINGS) },
+            "EINSTELLUNGEN", action = { open(app, Settings.ACTION_LOCATION_SOURCE_SETTINGS) },
         )
 
         // Wecker: in den letzten 10 Minuten vor dem Klingeln als Countdown.
@@ -400,7 +401,7 @@ object QuickActions {
         setStatus(
             st.statusEnabled("alarm"), "alarm", soon, "WECKER",
             if (next != null) SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(next)) else "", "alarm",
-            false, "WECKER", { open(app, AlarmClock.ACTION_SHOW_ALARMS) }, countDownTo = next,
+            false, "WECKER", countDownTo = next, action = { open(app, AlarmClock.ACTION_SHOW_ALARMS) },
         )
     }
 
