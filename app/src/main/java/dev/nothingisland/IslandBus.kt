@@ -90,6 +90,18 @@ object IslandBus {
         _windowSize.value = Triple(width, height, span)
     }
 
+    private val _touchRect = MutableStateFlow(floatArrayOf(0f, 0f, 1f, 1f))
+
+    /** Berührbarer Bereich (links, oben, Breite, Höhe) in dp relativ zum Overlay-Fenster. */
+    val touchRect: StateFlow<FloatArray> = _touchRect.asStateFlow()
+
+    fun setTouchRect(left: Float, top: Float, width: Float, height: Float) {
+        val c = _touchRect.value
+        if (c[0] != left || c[1] != top || c[2] != width || c[3] != height) {
+            _touchRect.value = floatArrayOf(left, top, width, height)
+        }
+    }
+
     private val _settings = MutableStateFlow(IslandSettings())
     val settings: StateFlow<IslandSettings> = _settings.asStateFlow()
 

@@ -170,6 +170,7 @@ fun IslandHost() {
         SideEffect {
             reported = Triple(1f, 1f, 1f)
             IslandBus.setWindowSize(1f, 1f, 1f)
+            IslandBus.setTouchRect(0f, 0f, 1f, 1f)
         }
         return
     }
@@ -277,30 +278,28 @@ fun IslandHost() {
     // rechte Kante und die Höhe ändern sich. So gibt es beim Auf- und Zuklappen keinen seitlichen Versatz.
     // Wachsen passiert sofort, Schrumpfen erst nach der Animation.
     val slotMax = smallH + 6f * sc
-    // Ruhezustand: schmales Fenster (kleine Hitbox, Wischen für die Benachrichtigungsleiste bleibt frei).
-    // Aufgeklappt: breites Fenster. Die linke Kante bleibt während der Animation fest.
-    val rowSmall = maxOf(compactW, messageW) + 2f * slotMax
+    // Das sichtbare Fenster hat immer dieselbe Breite (kein seitlicher Versatz beim Auf- und Zuklappen)
+    // und nimmt selbst keine Touches an. Ein unsichtbares, passgenaues Touch-Fenster reicht sie durch.
     val rowBig = maxOf(bigW, compactW, messageW) + 2f * slotMax
-    val spanTarget = minOf((if (growing) rowBig else rowSmall) + 2f * WINDOW_MARGIN, screenW.toFloat())
+    val span = minOf(rowBig + 2f * WINDOW_MARGIN, screenW.toFloat())
     val slotTarget = if (circleItem != null) slotMax else 0f
     val topTarget = ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
-    val span = if (reported.third > 0f) maxOf(spanTarget, reported.third) else spanTarget
-    val winW = minOf(span / 2f + (targetW + 2f * slotTarget) / 2f + WINDOW_MARGIN, span)
     val winH = topTarget + targetH + WINDOW_MARGIN
-    LaunchedEffect(winW, winH, spanTarget) {
-        val gs = maxOf(spanTarget, reported.third)
-        val gw = minOf(maxOf(winW, reported.first), gs)
+    LaunchedEffect(winH, span) {
         val gh = maxOf(winH, reported.second)
-        if (gw != reported.first || gh != reported.second || gs != reported.third) {
-            reported = Triple(gw, gh, gs)
-            IslandBus.setWindowSize(gw, gh, gs)
+        if (span != reported.first || gh != reported.second) {
+            reported = Triple(span, gh, span)
+            IslandBus.setWindowSize(span, gh, span)
         }
-        if (gw != winW || gh != winH || gs != spanTarget) {
+        if (gh != winH) {
             delay(520)
-            val fw = minOf(spanTarget / 2f + (targetW + 2f * slotTarget) / 2f + WINDOW_MARGIN, spanTarget)
-            reported = Triple(fw, winH, spanTarget)
-            IslandBus.setWindowSize(fw, winH, spanTarget)
+            reported = Triple(span, winH, span)
+            IslandBus.setWindowSize(span, winH, span)
         }
+    }
+    val rowW = targetW + 2f * slotTarget
+    SideEffect {
+        IslandBus.setTouchRect(span / 2f - rowW / 2f - 4f, topTarget - 4f, rowW + 8f, targetH + 8f)
     }
     val shape = RoundedCornerShape(corner)
 
