@@ -98,17 +98,27 @@ class IslandListenerService : NotificationListenerService() {
         val n = sbn.notification
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
 
-        val kind = classify(n, sbn.isOngoing, sbn.packageName)
+        // App-Regeln: STUMM = ganz ignorieren, LEISE = ohne Aufklappen, LIVE = laufende Meldung als Live-Aktivität.
+        val rule = IslandBus.settings.value.ruleFor(sbn.packageName)
+        if (rule == "MUTE") {
+            IslandBus.removeOngoing(sbn.key)
+            return
+        }
+
+        var kind = classify(n, sbn.isOngoing, sbn.packageName)
+        if (kind == null && rule == "LIVE" && sbn.isOngoing) kind = Kind.PROGRESS
         if (kind != null) {
             val event = buildEvent(sbn, kind)
             if (event.title.isNotBlank() || event.text.isNotBlank() || event.chronoBase != null) {
-                IslandBus.upsertOngoing(event)
+                val isNew = IslandBus.upsertOngoing(event)
+                // Eingehender Anruf (klingelt noch): Pille sofort aufklappen, damit Annehmen/Ablehnen erreichbar ist.
+                if (isNew && allowAlert && kind == Kind.CALL && event.chronoBase == null) IslandBus.setExpanded(true)
             }
             return
         }
         if (sbn.isOngoing || !allowAlert) return
 
-        val event = buildEvent(sbn, Kind.OTHER)
+        val event = buildEvent(sbn, Kind.OTHER).copy(quiet = rule == "QUIET")
         if (event.title.isBlank() && event.text.isBlank()) return
         IslandBus.post(event)
     }
@@ -120,10 +130,13 @@ class IslandListenerService : NotificationListenerService() {
         if (template.endsWith("MediaStyle") || n.category == Notification.CATEGORY_TRANSPORT) {
             return Kind.MEDIA
         }
+        // Anrufe und klingelnde Wecker zählen auch dann, wenn sie nicht als "laufend" markiert sind.
+        if (n.category == Notification.CATEGORY_CALL) return Kind.CALL
+        if (n.category == Notification.CATEGORY_ALARM && (ongoing || n.fullScreenIntent != null)) return Kind.TIMER
         if (!ongoing) return null
         return when {
-            n.category == Notification.CATEGORY_CALL -> Kind.CALL
             n.category == "navigation" || pkg in NAV_PACKAGES -> Kind.NAVIGATION
+            pkg in LIVE_PACKAGES -> Kind.PROGRESS
             ex.getBoolean(Notification.EXTRA_SHOW_CHRONOMETER) -> Kind.TIMER
             n.category == Notification.CATEGORY_ALARM || n.category == "stopwatch" -> Kind.TIMER
             ex.getInt(Notification.EXTRA_PROGRESS_MAX) > 0 ||
@@ -150,7 +163,16 @@ class IslandListenerService : NotificationListenerService() {
             ex.getInt(Notification.EXTRA_PROGRESS).toFloat() / max
         } else null
 
+        // Direktantwort (Messenger): erste Aktion mit freiem Texteingabefeld.
+        var reply: IslandReply? = null
+        n.actions.orEmpty().firstOrNull { a -> a.remoteInputs?.any { it.allowFreeFormInput } == true }?.let { a ->
+            val ri = a.remoteInputs?.firstOrNull { it.allowFreeFormInput }
+            val pi = a.actionIntent
+            if (ri != null && pi != null) reply = IslandReply(pi, ri)
+        }
+
         val actions = n.actions.orEmpty()
+            .filter { a -> a.remoteInputs.isNullOrEmpty() }
             .take(5)
             .mapNotNull { a ->
                 val pi = a.actionIntent ?: return@mapNotNull null
@@ -226,6 +248,7 @@ class IslandListenerService : NotificationListenerService() {
             durationMs = durationMs,
             art = art,
             canSkipSeconds = canSkip,
+            reply = reply,
         )
     }
 
@@ -260,6 +283,14 @@ class IslandListenerService : NotificationListenerService() {
         private val NAV_PACKAGES = setOf(
             "com.google.android.apps.maps", "com.waze", "net.osmand", "net.osmand.plus",
             "app.organicmaps", "com.here.app.maps", "com.sygic.aura", "de.komoot.android",
+        )
+
+        /** Lieferdienste, Fahrdienste und Co.: laufende Meldung wird als Live-Aktivität gezeigt. */
+        private val LIVE_PACKAGES = setOf(
+            "com.ubercab", "com.ubercab.eats", "de.lieferando.android", "com.takeaway.android", "com.deliveroo.orderapp",
+            "com.wolt.android", "ee.mtakso.client", "com.bolt.android", "de.flaschenpost.app", "com.gorillas.android",
+            "com.dhl.paket", "de.dhl.paket", "com.dpd.android", "com.flixbus.app", "de.bahn.dbnav", "com.lyft.android",
+            "com.grubhub.android", "com.application.zomato", "com.global.foodpanda.android",
         )
 
         @Volatile

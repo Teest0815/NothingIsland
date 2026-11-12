@@ -97,11 +97,14 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-val NothingRed = Color(0xFFD71921)
-private val DotGray = Color(0xFF3A3A3A)
-private val TextGray = Color(0xFF9A9A9A)
-private val Hairline = Color(0xFF2A2A2A)
-private val ButtonBg = Color(0xFF1C1C1C)
+val NothingRed: Color get() = IslandTheme.accent
+private val DotGray: Color get() = IslandTheme.dotGray
+private val TextGray: Color get() = IslandTheme.textGray
+private val Hairline: Color get() = IslandTheme.hairline
+private val ButtonBg: Color get() = IslandTheme.buttonBg
+private val Fg: Color get() = IslandTheme.fg
+private val Bg: Color get() = IslandTheme.bg
+private val Mono: FontFamily get() = IslandTheme.font
 
 private enum class Mode { IDLE, COMPACT, MESSAGE, ALERT, EXPANDED, QUICK }
 
@@ -112,17 +115,25 @@ private const val BASE_EXPANDED_H = 84f
 private const val BASE_EXPANDED_ACTIONS_H = 134f
 private const val BASE_EXPANDED_MEDIA_H = 156f
 private const val BASE_IDLE_W = 92f
-private const val BASE_QUICK_H = 150f
 /** Halbe Breite der kleinen Pille ohne Kamera-Lücke (links und rechts je gleich viel). */
 private const val BASE_COMPACT_SIDE = 82f
 private const val BASE_MESSAGE_SIDE = 125f
 private const val BASE_SMALL_H = 30f
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+/** Setzt das Theme und baut die Island bei Theme-Wechsel neu auf. */
 @Composable
 fun IslandHost() {
+    val st by IslandBus.settings.collectAsState()
+    IslandTheme.apply(st)
+    androidx.compose.runtime.key(IslandTheme.signature) { IslandHostBody() }
+}
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun IslandHostBody() {
     val s by IslandBus.settings.collectAsState()
-    val alert by IslandBus.current.collectAsState()
+    val alertRaw by IslandBus.current.collectAsState()
+    val alert = alertRaw?.takeUnless { it.quiet }
     val ongoingAll by IslandBus.ongoing.collectAsState()
     val primaryKey by IslandBus.primaryKey.collectAsState()
     val manual by IslandBus.expanded.collectAsState()
@@ -131,11 +142,25 @@ fun IslandHost() {
     LaunchedEffect(Unit) { QuickActions.init(ctx) }
     val torchOn by QuickActions.torch.collectAsState()
     LaunchedEffect(torchOn, s.statusPills, s.statusOff) { QuickActions.syncStatus(ctx, s) }
+    // Wecker-Countdown und Zustände ohne eigenes Signal regelmäßig prüfen.
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            QuickActions.syncStatus(ctx, IslandBus.settings.value)
+        }
+    }
     DisposableEffect(ctx) {
         val r = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: android.content.Context?, i: android.content.Intent?) {
-                if (i?.action == "android.net.wifi.WIFI_AP_STATE_CHANGED") {
-                    QuickActions.hotspotOn = i.getIntExtra("wifi_state", 0) % 10 == 3
+                when (i?.action) {
+                    "android.net.wifi.WIFI_AP_STATE_CHANGED" ->
+                        QuickActions.hotspotOn = i.getIntExtra("wifi_state", 0) % 10 == 3
+                    android.content.Intent.ACTION_BATTERY_CHANGED ->
+                        QuickActions.onBattery(ctx, i, IslandBus.settings.value)
+                    android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED,
+                    android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED,
+                    android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED ->
+                        QuickActions.onBluetooth(ctx, i)
                 }
                 QuickActions.syncStatus(ctx, IslandBus.settings.value)
             }
@@ -145,6 +170,12 @@ fun IslandHost() {
             addAction(android.app.NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED)
             addAction(android.content.Intent.ACTION_AIRPLANE_MODE_CHANGED)
             addAction("android.net.wifi.WIFI_AP_STATE_CHANGED")
+            addAction(android.content.Intent.ACTION_BATTERY_CHANGED)
+            addAction(android.os.PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+            addAction("android.location.MODE_CHANGED")
+            addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction(android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED)
         }
         val ok = runCatching {
             androidx.core.content.ContextCompat.registerReceiver(
@@ -173,6 +204,14 @@ fun IslandHost() {
     val appear = remember { Animatable(1f) }
     var suppressLinger by remember { mutableStateOf(false) }
 
+    // Leise Meldungen (App-Regel) gehen direkt in die kleine Pille.
+    LaunchedEffect(alertRaw?.id) {
+        val a = alertRaw ?: return@LaunchedEffect
+        if (a.quiet) {
+            lingering = a
+            IslandBus.dismiss()
+        }
+    }
     // Neue Meldung: aufklappen, nach X Sekunden (oder Tippen außerhalb) in die kleine Pille schrumpfen.
     LaunchedEffect(alert?.id) {
         val a = alert ?: return@LaunchedEffect
@@ -231,6 +270,13 @@ fun IslandHost() {
     }
     val shownCurrent = current ?: lastCurrent
 
+    // Haptik: kurzes Vibrieren, wenn die Pille aufklappt.
+    var prevMode by remember { mutableStateOf(mode) }
+    LaunchedEffect(mode) {
+        val big = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK
+        if (s.haptics && big && prevMode != mode) QuickActions.haptic(ctx, s.hapticLevel)
+        prevMode = mode
+    }
     val sc = s.scale
     val gap = s.cameraGap.toFloat()
     val screenW = LocalConfiguration.current.screenWidthDp
@@ -240,6 +286,11 @@ fun IslandHost() {
     // Aufgeklappt gilt nur die eigene Breite (begrenzt durch den Bildschirm), nicht die "Maximale Breite".
     val bigW = minOf(s.expandedWidth.toFloat(), screenW - 8f)
     val hasActions = current?.actions?.isNotEmpty() == true
+    val quickKeys = remember(s.quickTiles) {
+        s.quickTiles.split(',').mapNotNull { QuickActions.tile(it) }.take(12)
+    }
+    val quickRows = ((quickKeys.size + 3) / 4).coerceIn(1, 3)
+    val quickBaseH = quickRows * 54f + (quickRows - 1) * 10f + 28f
     val isMedia = current?.kind == Kind.MEDIA && current.media != null
     val expandedH = (if (isMedia) BASE_EXPANDED_MEDIA_H else if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H) * fsc
     val idleW = BASE_IDLE_W * sc * s.widthFactor
@@ -257,7 +308,7 @@ fun IslandHost() {
         Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH
         Mode.ALERT -> BASE_ALERT_H * fsc
         Mode.EXPANDED -> expandedH
-        Mode.QUICK -> BASE_QUICK_H * fsc
+        Mode.QUICK -> quickBaseH * fsc
     }
     val targetCorner = when (mode) {
         Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH / 2f * s.smallRoundness
@@ -365,7 +416,7 @@ fun IslandHost() {
                 }
                 .size(width, height)
                 .clip(shape)
-                .background(Color.Black)
+                .background(Bg)
                 .border(1.dp, Hairline, shape)
                 .pointerInput(mode) {
                     if (!swipeable) return@pointerInput
@@ -460,15 +511,26 @@ fun IslandHost() {
             ) { st ->
                 when (st.first) {
                     Mode.IDLE -> IdleDots(sc)
-                    Mode.QUICK -> QuickPanel(bsc, Modifier.requiredSize(bigW.dp, (BASE_QUICK_H * fsc).dp)) { touch++ }
+                    Mode.QUICK -> QuickPanel(quickKeys, bsc, Modifier.requiredSize(bigW.dp, (quickBaseH * fsc).dp)) { touch++ }
                     Mode.COMPACT -> shownCurrent?.let {
-                        CompactContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(compactW.dp, smallH.dp))
+                        CompactContent(it, sc, gap, s.iconTextGap.toFloat(), s.equalizer, Modifier.requiredSize(compactW.dp, smallH.dp))
                     }
                     Mode.MESSAGE -> (lingering ?: lastMessage)?.let {
                         MessageContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(messageW.dp, smallH.dp))
                     }
                     Mode.ALERT -> (alert ?: lastAlert)?.let {
-                        AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp))
+                        AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp)) {
+                            // Antworten: kleines Eingabefenster öffnen, die Meldung verschwindet.
+                            runCatching {
+                                ctx.startActivity(
+                                    android.content.Intent(ctx, ReplyActivity::class.java)
+                                        .putExtra("id", it.id)
+                                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }
+                            suppressLinger = true
+                            IslandBus.dismiss()
+                        }
                     }
                     Mode.EXPANDED -> shownCurrent?.let { cur ->
                         if (cur.kind == Kind.MEDIA && cur.media != null) MediaExpanded(
@@ -483,6 +545,7 @@ fun IslandHost() {
                             },
                             onAction = { touch++ },
                             showSeek = s.mediaSeek,
+                            eq = s.equalizer,
                             modifier = Modifier.requiredSize(bigW.dp, expandedH.dp),
                         ) else OngoingExpanded(
                             e = cur,
@@ -565,11 +628,11 @@ private fun SmallIcon(icon: ImageBitmap?, size: Dp) {
         Image(
             bitmap = icon,
             contentDescription = null,
-            colorFilter = ColorFilter.tint(Color.White),
+            colorFilter = ColorFilter.tint(Fg),
             modifier = Modifier.size(size),
         )
     } else {
-        Box(Modifier.size(size / 2).clip(CircleShape).background(Color.White))
+        Box(Modifier.size(size / 2).clip(CircleShape).background(Fg))
     }
 }
 
@@ -605,7 +668,7 @@ private fun SplitRow(
 
 /** Links Name (bei Navigation nur die Entfernung), rechts Zeit (bei Navigation der Abbiege-Pfeil). */
 @Composable
-private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float, modifier: Modifier) {
+private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float, eq: Boolean, modifier: Modifier) {
     val nav = e.kind == Kind.NAVIGATION
     SplitRow(
         sc = sc,
@@ -616,8 +679,8 @@ private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float
             SmallIcon(e.icon, (14f * sc).dp)
             Text(
                 text = if (nav) navDistance(e) else e.title.ifBlank { e.app },
-                color = Color.White,
-                fontFamily = if (nav) FontFamily.Monospace else FontFamily.Default,
+                color = Fg,
+                fontFamily = if (nav) Mono else FontFamily.Default,
                 fontWeight = if (nav) FontWeight.Medium else FontWeight.Normal,
                 fontSize = (if (nav) 12f else 11f).let { (it * sc).sp },
                 maxLines = 1,
@@ -629,11 +692,25 @@ private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float
             val turn = if (nav) navTurn(e) else Turn.NONE
             when {
                 nav && turn != Turn.NONE -> TurnArrow(turn, (16f * sc).dp)
-                e.chronoBase != null -> Chrono(e, (12f * sc).sp)
+                e.chronoBase != null || (e.kind == Kind.MEDIA && e.rightText != null) -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy((6f * sc).dp),
+                ) {
+                    if (eq && e.kind == Kind.MEDIA) Equalizer(e.playing || e.chronoBase != null, sc)
+                    if (e.chronoBase != null) Chrono(e, (12f * sc).sp)
+                    else Text(
+                        text = e.rightText ?: "",
+                        color = Fg,
+                        fontFamily = Mono,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = (12f * sc).sp,
+                        maxLines = 1,
+                    )
+                }
                 e.rightText != null -> Text(
                     text = e.rightText,
-                    color = Color.White,
-                    fontFamily = FontFamily.Monospace,
+                    color = Fg,
+                    fontFamily = Mono,
                     fontWeight = FontWeight.Medium,
                     fontSize = (12f * sc).sp,
                     maxLines = 1,
@@ -672,7 +749,7 @@ private fun navTurn(e: IslandEvent): Turn {
 }
 
 @Composable
-private fun TurnArrow(turn: Turn, size: Dp, color: Color = Color.White) {
+private fun TurnArrow(turn: Turn, size: Dp, color: Color = Fg) {
     Canvas(Modifier.size(size)) {
         val w = this.size.width
         val style = Stroke(width = w * 0.11f, cap = StrokeCap.Round, join = StrokeJoin.Round)
@@ -705,6 +782,33 @@ private fun TurnArrow(turn: Turn, size: Dp, color: Color = Color.White) {
 }
 
 @Composable
+private fun Equalizer(playing: Boolean, sc: Float) {
+    val t = rememberInfiniteTransition(label = "eq")
+    val periods = intArrayOf(520, 380, 610, 450)
+    Row(
+        modifier = Modifier.height((12f * sc).dp),
+        horizontalArrangement = Arrangement.spacedBy((2f * sc).dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        periods.forEachIndexed { i, p ->
+            val h by t.animateFloat(
+                initialValue = 0.25f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(tween(p, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+                label = "bar$i",
+            )
+            Box(
+                Modifier
+                    .width((2.5f * sc).dp)
+                    .fillMaxHeight(if (playing) h else 0.2f)
+                    .clip(RoundedCornerShape(50))
+                    .background(NothingRed),
+            )
+        }
+    }
+}
+
+@Composable
 private fun LivePulse(sc: Float) {
     val t = rememberInfiniteTransition(label = "pulse")
     val a by t.animateFloat(
@@ -729,7 +833,7 @@ private fun MessageContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float
             SmallIcon(e.icon, (14f * sc).dp)
             Text(
                 text = e.title.ifBlank { e.app },
-                color = Color.White,
+                color = Fg,
                 fontSize = (11f * sc).sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -756,7 +860,7 @@ private fun CircleBubble(e: IslandEvent, sc: Float, size: Float, onClick: () -> 
         modifier = Modifier
             .requiredSize(size.dp)
             .clip(CircleShape)
-            .background(Color.Black)
+            .background(Bg)
             .border(1.dp, Hairline, CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -779,7 +883,7 @@ private fun Chrono(
     e: IslandEvent,
     size: TextUnit,
     modifier: Modifier = Modifier,
-    color: Color = Color.White,
+    color: Color = Fg,
 ) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(e.chronoBase) {
@@ -793,7 +897,7 @@ private fun Chrono(
     Text(
         text = formatClock(ms),
         color = color,
-        fontFamily = FontFamily.Monospace,
+        fontFamily = Mono,
         fontWeight = FontWeight.Medium,
         fontSize = size,
         maxLines = 1,
@@ -803,7 +907,7 @@ private fun Chrono(
 
 /** Aufgeklappte Meldung bei neuer Benachrichtigung. */
 @Composable
-private fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier) {
+private fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, onReply: () -> Unit) {
     Row(
         modifier = modifier.padding(horizontal = (18f * sc).dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -814,7 +918,7 @@ private fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier) {
                 Image(
                     bitmap = it,
                     contentDescription = null,
-                    colorFilter = ColorFilter.tint(Color.White),
+                    colorFilter = ColorFilter.tint(Fg),
                     modifier = Modifier.size((20f * sc).dp),
                 )
             }
@@ -825,7 +929,7 @@ private fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier) {
             if (event.title.isNotBlank()) {
                 Text(
                     text = event.title,
-                    color = Color.White,
+                    color = Fg,
                     fontSize = (14f * sc).sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -842,6 +946,24 @@ private fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier) {
                 )
             }
         }
+        if (event.reply != null) {
+            Spacer(Modifier.width((10f * sc).dp))
+            Box(
+                modifier = Modifier
+                    .size((36f * sc).dp)
+                    .clip(CircleShape)
+                    .background(ButtonBg)
+                    .clickable(onClick = onReply),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    bitmap = QuickActions.icon("reply"),
+                    contentDescription = "Antworten",
+                    colorFilter = ColorFilter.tint(Fg),
+                    modifier = Modifier.size((16f * sc).dp),
+                )
+            }
+        }
     }
 }
 
@@ -850,7 +972,7 @@ private fun AppLabel(app: String, sc: Float) {
     Text(
         text = app.uppercase(),
         color = NothingRed,
-        fontFamily = FontFamily.Monospace,
+        fontFamily = Mono,
         fontSize = (10f * sc).sp,
         letterSpacing = 1.6.sp,
         maxLines = 1,
@@ -883,7 +1005,7 @@ private fun OngoingExpanded(
                         Image(
                             bitmap = it,
                             contentDescription = null,
-                            colorFilter = ColorFilter.tint(Color.White),
+                            colorFilter = ColorFilter.tint(Fg),
                             modifier = Modifier.size((20f * sc).dp),
                         )
                     }
@@ -906,7 +1028,7 @@ private fun OngoingExpanded(
                         if (e.title.isNotBlank()) {
                             Text(
                                 text = e.title,
-                                color = Color.White,
+                                color = Fg,
                                 fontSize = (14f * sc).sp,
                                 fontWeight = FontWeight.Medium,
                                 maxLines = 1,
@@ -928,7 +1050,7 @@ private fun OngoingExpanded(
                     Text(
                         text = "${index + 1}/$count",
                         color = NothingRed,
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = Mono,
                         fontSize = (11f * sc).sp,
                         modifier = Modifier
                             .clip(RoundedCornerShape(50))
@@ -983,11 +1105,11 @@ private fun TransportButton(kind: TransportIcon, sc: Float, big: Boolean, onClic
         modifier = Modifier
             .size(d.dp)
             .clip(CircleShape)
-            .background(if (big) Color.White else ButtonBg)
+            .background(if (big) Fg else ButtonBg)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        val tint = if (big) Color.Black else Color.White
+        val tint = if (big) Bg else Fg
         Canvas(Modifier.size((d * 0.42f).dp)) {
             val w = size.width
             val h = size.height
@@ -1022,7 +1144,7 @@ private fun SeekButton(label: String, sc: Float, onClick: () -> Unit) {
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = Color.White, fontFamily = FontFamily.Monospace, fontSize = (11f * sc).sp)
+        Text(label, color = Fg, fontFamily = Mono, fontSize = (11f * sc).sp)
     }
 }
 
@@ -1041,23 +1163,23 @@ private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean
         Image(
             bitmap = icon,
             contentDescription = label,
-            colorFilter = ColorFilter.tint(Color.White),
+            colorFilter = ColorFilter.tint(Fg),
             modifier = Modifier.size((20f * sc).dp),
         )
         Spacer(Modifier.height((5f * sc).dp))
         Text(
-            label, color = if (active) Color.White else TextGray, fontFamily = FontFamily.Monospace,
+            label, color = if (active) Fg else TextGray, fontFamily = Mono,
             fontSize = (8f * sc).sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
 }
 
-/** Schnellzugriff: Lampe, Ton, Nicht stören sind echte Schalter, der Rest öffnet die Systemeinstellung. */
+/** Schnellzugriff: Kacheln nach Auswahl und Reihenfolge aus den Einstellungen, vier pro Reihe. */
 @Composable
-private fun QuickPanel(sc: Float, modifier: Modifier, onUsed: () -> Unit) {
+private fun QuickPanel(tiles: List<QuickTile>, sc: Float, modifier: Modifier, onUsed: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val torch by QuickActions.torch.collectAsState()
     var tick by remember { mutableIntStateOf(0) }
+    val torch by QuickActions.torch.collectAsState()
     LaunchedEffect(Unit) {
         while (true) {
             delay(400)
@@ -1065,48 +1187,19 @@ private fun QuickPanel(sc: Float, modifier: Modifier, onUsed: () -> Unit) {
         }
     }
     @Suppress("UNUSED_EXPRESSION") tick
-    val ringer = QuickActions.ringerMode(ctx)
-    val ringerLabel = when (ringer) {
-        android.media.AudioManager.RINGER_MODE_SILENT -> "STUMM"
-        android.media.AudioManager.RINGER_MODE_VIBRATE -> "VIBRATION"
-        else -> "TON"
-    }
-    fun close() = IslandBus.setQuick(false)
-    val st = android.provider.Settings.ACTION_WIRELESS_SETTINGS
+    @Suppress("UNUSED_EXPRESSION") torch
     Column(
         modifier = modifier.padding(horizontal = (14f * sc).dp, vertical = (14f * sc).dp),
         verticalArrangement = Arrangement.spacedBy((10f * sc).dp),
     ) {
-        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy((10f * sc).dp)) {
-            QuickTile(QuickActions.icon("torch"), "LAMPE", torch, sc) { QuickActions.toggleTorch(ctx); onUsed() }
-            QuickTile(QuickActions.icon("bell"), ringerLabel, ringer != android.media.AudioManager.RINGER_MODE_NORMAL, sc) {
-                QuickActions.cycleRinger(ctx); onUsed()
-            }
-            QuickTile(QuickActions.icon("moon"), "STÖREN", QuickActions.dndOn(ctx), sc) {
-                if (QuickActions.toggleDnd(ctx)) close() else onUsed()
-            }
-            QuickTile(QuickActions.icon("hotspot"), "HOTSPOT", QuickActions.hotspotOn, sc) {
-                QuickActions.open(ctx, "android.settings.TETHER_SETTINGS", st); close()
-            }
-        }
-        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy((10f * sc).dp)) {
-            QuickTile(QuickActions.icon("airplane"), "FLUG", QuickActions.globalOn(ctx, "airplane_mode_on"), sc) {
-                QuickActions.open(ctx, android.provider.Settings.ACTION_AIRPLANE_MODE_SETTINGS); close()
-            }
-            QuickTile(QuickActions.icon("wifi"), "WLAN", QuickActions.globalOn(ctx, "wifi_on"), sc) {
-                QuickActions.open(ctx, android.provider.Settings.Panel.ACTION_INTERNET_CONNECTIVITY, android.provider.Settings.ACTION_WIFI_SETTINGS)
-                close()
-            }
-            QuickTile(QuickActions.icon("bluetooth"), "BT", QuickActions.globalOn(ctx, "bluetooth_on"), sc) {
-                QuickActions.open(ctx, android.provider.Settings.ACTION_BLUETOOTH_SETTINGS); close()
-            }
-            QuickTile(QuickActions.icon("gear"), "ISLAND", false, sc) {
-                runCatching {
-                    ctx.startActivity(
-                        android.content.Intent(ctx, MainActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
+        tiles.chunked(4).forEach { row ->
+            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy((10f * sc).dp)) {
+                row.forEach { t ->
+                    QuickTile(QuickActions.icon(t.icon), t.label(ctx), t.active(ctx), sc) {
+                        if (t.click(ctx)) IslandBus.setQuick(false) else onUsed()
+                    }
                 }
-                close()
+                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
@@ -1122,6 +1215,7 @@ private fun MediaExpanded(
     onCycle: () -> Unit,
     onAction: () -> Unit,
     showSeek: Boolean,
+    eq: Boolean,
     modifier: Modifier,
 ) {
     val mc = e.media ?: return
@@ -1159,7 +1253,7 @@ private fun MediaExpanded(
                     e.icon?.let {
                         Image(
                             bitmap = it, contentDescription = null,
-                            colorFilter = ColorFilter.tint(Color.White),
+                            colorFilter = ColorFilter.tint(Fg),
                             modifier = Modifier.size((20f * sc).dp),
                         )
                     }
@@ -1169,7 +1263,7 @@ private fun MediaExpanded(
             Column(modifier = Modifier.weight(1f)) {
                 AppLabel(e.app, sc)
                 Text(
-                    text = e.title, color = Color.White, fontSize = (14f * sc).sp,
+                    text = e.title, color = Fg, fontSize = (14f * sc).sp,
                     fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 if (e.text.isNotBlank()) {
@@ -1179,11 +1273,12 @@ private fun MediaExpanded(
                     )
                 }
             }
+            if (eq) Equalizer(e.playing, sc)
             if (count > 1) {
                 Text(
                     text = "${index + 1}/$count",
                     color = NothingRed,
-                    fontFamily = FontFamily.Monospace,
+                    fontFamily = Mono,
                     fontSize = (11f * sc).sp,
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
@@ -1194,7 +1289,7 @@ private fun MediaExpanded(
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(mediaTime(pos), color = TextGray, fontFamily = FontFamily.Monospace, fontSize = (10f * sc).sp)
+            Text(mediaTime(pos), color = TextGray, fontFamily = Mono, fontSize = (10f * sc).sp)
             Spacer(Modifier.width((8f * sc).dp))
             Box(
                 Modifier
@@ -1221,7 +1316,7 @@ private fun MediaExpanded(
             Spacer(Modifier.width((8f * sc).dp))
             Text(
                 if (dur > 0) mediaTime(dur) else "--:--",
-                color = TextGray, fontFamily = FontFamily.Monospace, fontSize = (10f * sc).sp,
+                color = TextGray, fontFamily = Mono, fontSize = (10f * sc).sp,
             )
         }
 
@@ -1294,14 +1389,14 @@ private fun ActionButton(a: IslandAction, sc: Float, onUsed: () -> Unit) {
             Image(
                 bitmap = a.icon,
                 contentDescription = a.title,
-                colorFilter = ColorFilter.tint(Color.White),
+                colorFilter = ColorFilter.tint(Fg),
                 modifier = Modifier.size((20f * sc).dp),
             )
         } else {
             Text(
                 text = a.title.uppercase(),
-                color = Color.White,
-                fontFamily = FontFamily.Monospace,
+                color = Fg,
+                fontFamily = Mono,
                 fontSize = (11f * sc).sp,
                 letterSpacing = 1.sp,
                 maxLines = 1,

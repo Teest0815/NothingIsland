@@ -1,17 +1,22 @@
 package dev.nothingisland
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,9 +28,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -38,26 +46,51 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import java.util.Locale
 import kotlin.math.roundToInt
 
 private val CardBorder = Color(0xFF2A2A2A)
 private val Muted = Color(0xFF9A9A9A)
 
+private val TABS = listOf("START", "LAYOUT", "FUNKTION", "DESIGN", "APPS")
+
+private val STATUS_TYPES = listOf(
+    "torch" to "Taschenlampe",
+    "ringer" to "Stumm / Vibration",
+    "dnd" to "Nicht stören",
+    "hotspot" to "Hotspot",
+    "airplane" to "Flugmodus",
+    "bluetooth" to "Bluetooth verbunden (Kopfhörer, Watch)",
+    "charging" to "Laden (beim Anstecken)",
+    "lowbattery" to "Akku schwach",
+    "mic" to "Mikrofon wird verwendet",
+    "camera" to "Kamera wird verwendet",
+    "powersave" to "Energiesparmodus",
+    "location" to "Standort an",
+    "alarm" to "Wecker (10 Min. vorher)",
+)
+
 class MainActivity : ComponentActivity() {
 
     // Wird in onResume erhöht, damit der Permission-Status nach Rückkehr aus den Settings neu gelesen wird.
     private var refresh by mutableIntStateOf(0)
+
+    private val btPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,318 +117,485 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun SettingsScreen(refreshKey: Int) {
         @Suppress("UNUSED_VARIABLE") val key = refreshKey
-        val ctx = this@MainActivity
         val s by IslandBus.settings.collectAsState()
+        IslandTheme.apply(s)
+        androidx.compose.runtime.key(IslandTheme.signature) {
+            var tab by rememberSaveable { mutableIntStateOf(0) }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black)
+                    .statusBarsPadding(),
+            ) {
+                Spacer(Modifier.height(72.dp)) // Platz, damit die Island oben nicht den Titel verdeckt
+                Text(
+                    "NOTHING ISLAND",
+                    color = Color.White,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    letterSpacing = 3.sp,
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+                Spacer(Modifier.height(14.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TABS.forEachIndexed { i, name -> Chip(name, tab == i) { tab = i } }
+                }
+                Spacer(Modifier.height(4.dp))
+                if (tab == 4) {
+                    AppRulesTab(s)
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 24.dp),
+                    ) {
+                        when (tab) {
+                            0 -> StartTab()
+                            1 -> LayoutTab(s)
+                            2 -> FunctionTab(s)
+                            else -> DesignTab(s)
+                        }
+                        Spacer(Modifier.height(48.dp))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun edit(t: (IslandSettings) -> IslandSettings) = IslandBus.updateSettings(this, t)
+
+    // ---------------------------------------------------------------- START
+
+    @Composable
+    private fun StartTab() {
+        val ctx = this@MainActivity
         val overlayOk = Settings.canDrawOverlays(ctx)
-        val widthCap = (resources.configuration.screenWidthDp - 8).coerceAtLeast(220)
         val a11yOk = Settings.Secure.getString(contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
             .orEmpty().split(':').any { it.startsWith("$packageName/") }
         val batteryOk = (getSystemService(POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(packageName)
         val listenerOk = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(packageName)
-        fun edit(t: (IslandSettings) -> IslandSettings) = IslandBus.updateSettings(ctx, t)
+        val btOk = Build.VERSION.SDK_INT < 31 ||
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .statusBarsPadding()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
-        ) {
-            Spacer(Modifier.height(72.dp)) // Platz, damit die Island oben nicht den Titel verdeckt
-            Text(
-                "NOTHING\nISLAND",
-                color = Color.White,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                fontSize = 34.sp,
-                letterSpacing = 3.sp,
-                lineHeight = 38.sp,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Dynamic Island im Nothing-Stil",
-                color = Muted,
-                fontFamily = FontFamily.Monospace,
-                fontSize = 12.sp,
-            )
-
-            var crash by remember { mutableStateOf(CrashLog.read(ctx)) }
-            crash?.let { text ->
-                SectionLabel("LETZTER ABSTURZ")
-                Card {
-                    Text(
-                        text.take(1500),
-                        color = Muted,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 10.sp,
-                        modifier = Modifier.padding(vertical = 8.dp),
-                    )
-                }
-                Spacer(Modifier.height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PillButton("KOPIEREN", filled = true, modifier = Modifier.weight(1f)) {
-                        (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
-                            .setPrimaryClip(ClipData.newPlainText("Absturz", text))
-                    }
-                    PillButton("LÖSCHEN", filled = false, modifier = Modifier.weight(1f)) {
-                        CrashLog.clear(ctx)
-                        crash = null
-                    }
-                }
-            }
-
-            SectionLabel("SETUP")
-            StepRow("01", "Über anderen Apps anzeigen", overlayOk) {
-                startActivity(
-                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+        var crash by remember { mutableStateOf(CrashLog.read(ctx)) }
+        crash?.let { text ->
+            SectionLabel("LETZTER ABSTURZ")
+            Card {
+                Text(
+                    text.take(1500),
+                    color = Muted,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(vertical = 8.dp),
                 )
-            }
-            Spacer(Modifier.height(12.dp))
-            StepRow("02", "Zugriff auf Benachrichtigungen", listenerOk) {
-                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-            }
-            Spacer(Modifier.height(12.dp))
-            StepRow("03", "Über der Statusleiste anzeigen (Barrierefreiheit)", a11yOk) {
-                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            }
-            Spacer(Modifier.height(12.dp))
-            StepRow("04", "Im Hintergrund aktiv lassen (Akku-Optimierung aus)", batteryOk) {
-                runCatching {
-                    startActivity(
-                        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))
-                    )
-                }.onFailure {
-                    startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                }
             }
             Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillButton("KOPIEREN", filled = true, modifier = Modifier.weight(1f)) {
+                    (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
+                        .setPrimaryClip(ClipData.newPlainText("Absturz", text))
+                }
+                PillButton("LÖSCHEN", filled = false, modifier = Modifier.weight(1f)) {
+                    CrashLog.clear(ctx)
+                    crash = null
+                }
+            }
+        }
+
+        SectionLabel("SETUP")
+        StepRow("01", "Über anderen Apps anzeigen", overlayOk) {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        }
+        Spacer(Modifier.height(12.dp))
+        StepRow("02", "Zugriff auf Benachrichtigungen", listenerOk) {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }
+        Spacer(Modifier.height(12.dp))
+        StepRow("03", "Über der Statusleiste anzeigen (Barrierefreiheit)", a11yOk) {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        Spacer(Modifier.height(12.dp))
+        StepRow("04", "Im Hintergrund aktiv lassen (Akku-Optimierung aus)", batteryOk) {
+            runCatching {
+                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+            }.onFailure {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
+        }
+        if (Build.VERSION.SDK_INT >= 31) {
+            Spacer(Modifier.height(12.dp))
+            StepRow("05", "Bluetooth-Namen lesen (Kopfhörer-Anzeige)", btOk) {
+                btPermission.launch(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "03 legt die Island über die Symbole oben und hält die App zuverlässig im Hintergrund am Leben. Die App liest dabei keine Bildschirminhalte. Falls Android die Option ausgraut: Einstellungen > Apps > Nothing Island > ⋮ > „Eingeschränkte Einstellungen zulassen“.",
+            color = Muted,
+            fontSize = 12.sp,
+        )
+        if (A11yGuard.isWanted(ctx) && !a11yOk) {
+            Spacer(Modifier.height(8.dp))
             Text(
-                "03 legt die Island über die Symbole oben und hält die App zuverlässig im Hintergrund am Leben. Die App liest dabei keine Bildschirminhalte. Falls Android die Option ausgraut: Einstellungen > Apps > Nothing Island > ⋮ > „Eingeschränkte Einstellungen zulassen“.",
-                color = Muted,
+                "Android hat die Barrierefreiheit für Nothing Island ausgeschaltet (das passiert, wenn die App beendet wird). Schalte sie bei 03 wieder ein. Damit die App das künftig selbst macht, einmalig am PC: adb shell pm grant dev.nothingisland android.permission.WRITE_SECURE_SETTINGS",
+                color = NothingRed,
                 fontSize = 12.sp,
             )
-            if (A11yGuard.isWanted(ctx) && !a11yOk) {
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Android hat die Barrierefreiheit für Nothing Island ausgeschaltet (das passiert, wenn die App beendet wird). Schalte sie bei 03 wieder ein. Damit die App das künftig selbst macht, einmalig am PC: adb shell pm grant dev.nothingisland android.permission.WRITE_SECURE_SETTINGS",
-                    color = NothingRed,
-                    fontSize = 12.sp,
-                )
-            }
+        }
 
-            SectionLabel("POSITION & GRÖSSE")
-            Card {
-                SettingSlider(
-                    label = "Horizontal",
-                    valueText = "${s.offsetX} dp",
-                    value = s.offsetX.toFloat(),
-                    range = -150f..150f,
-                ) { v -> edit { it.copy(offsetX = v.roundToInt()) } }
-                SettingSlider(
-                    label = "Abstand von oben",
-                    valueText = "${s.offsetY} dp",
-                    value = s.offsetY.toFloat(),
-                    range = 0f..300f,
-                ) { v -> edit { it.copy(offsetY = v.roundToInt()) } }
-                SettingSlider(
-                    label = "Größe",
-                    valueText = "${(s.scale * 100).roundToInt()} %",
-                    value = s.scale,
-                    range = 0.7f..1.5f,
-                ) { v -> edit { it.copy(scale = (v * 20f).roundToInt() / 20f) } }
-                SettingSlider(
-                    label = "Breite der kleinen Pille",
-                    valueText = "${(s.widthFactor * 100).roundToInt()} %",
-                    value = s.widthFactor,
-                    range = 0.8f..1.8f,
-                ) { v -> edit { it.copy(widthFactor = (v * 20f).roundToInt() / 20f) } }
-                SettingSlider(
-                    label = "Maximale Breite (kleine Pille)",
-                    valueText = "${s.maxWidth} dp",
-                    value = s.maxWidth.toFloat(),
-                    range = 140f..480f,
-                ) { v -> edit { it.copy(maxWidth = v.roundToInt()) } }
-                SettingSlider(
-                    label = "Kamera-Lücke (Mitte bleibt frei)",
-                    valueText = "${s.cameraGap} dp",
-                    value = s.cameraGap.toFloat(),
-                    range = 0f..100f,
-                ) { v -> edit { it.copy(cameraGap = v.roundToInt()) } }
-                SettingSlider(
-                    label = "Abrundung der kleinen Pille",
-                    valueText = "${(s.smallRoundness * 100).roundToInt()} %",
-                    value = s.smallRoundness,
-                    range = 0.2f..1f,
-                ) { v -> edit { it.copy(smallRoundness = (v * 20f).roundToInt() / 20f) } }
-                SettingSlider(
-                    label = "Abstand Symbol → Text (links)",
-                    valueText = "${s.iconTextGap} dp",
-                    value = s.iconTextGap.toFloat(),
-                    range = 0f..24f,
-                ) { v -> edit { it.copy(iconTextGap = v.roundToInt()) } }
+        SectionLabel("TESTEN")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PillButton("MELDUNG", filled = true, modifier = Modifier.weight(1f)) {
+                IslandBus.post(IslandEvent(app = "Nothing Island", title = "Test-Benachrichtigung", text = "So sieht deine Island aus."))
             }
-
-            SectionLabel("AUFGEKLAPPTE PILLE")
-            Card {
-                SettingSlider(
-                    label = "Größe",
-                    valueText = "${(s.expandedScale * 100).roundToInt()} %",
-                    value = s.expandedScale,
-                    range = 0.7f..2f,
-                ) { v ->
-                    edit { it.copy(expandedScale = (v * 20f).roundToInt() / 20f) }
-                    IslandBus.post(previewAlert())
-                }
-                SettingSlider(
-                    label = "Rahmen wächst bis",
-                    valueText = "${(s.expandedFrameMax * 100).roundToInt()} %",
-                    value = s.expandedFrameMax,
-                    range = 0.7f..2f,
-                ) { v ->
-                    edit { it.copy(expandedFrameMax = (v * 20f).roundToInt() / 20f) }
-                    IslandBus.post(previewAlert())
-                }
-                SettingSlider(
-                    label = "Breite",
-                    valueText = "${minOf(s.expandedWidth, widthCap)} dp",
-                    value = s.expandedWidth.toFloat(),
-                    range = 200f..widthCap.toFloat(),
-                ) { v ->
-                    edit { it.copy(expandedWidth = v.roundToInt()) }
-                    IslandBus.post(previewAlert())
-                }
-                SettingSlider(
-                    label = "Abrundung der Ecken",
-                    valueText = "${s.expandedCorner} dp",
-                    value = s.expandedCorner.toFloat(),
-                    range = 0f..60f,
-                ) { v ->
-                    edit { it.copy(expandedCorner = v.roundToInt()) }
-                    IslandBus.post(previewAlert())
-                }
-                SettingSlider(
-                    label = "Höhe auf dem Bildschirm (von oben)",
-                    valueText = "${s.expandedTop} dp",
-                    value = s.expandedTop.toFloat(),
-                    range = 0f..500f,
-                ) { v ->
-                    edit { it.copy(expandedOffsetY = v.roundToInt()) }
-                    IslandBus.post(previewAlert())
-                }
-                PillButton("HÖHE WIE KLEINE PILLE", filled = false, modifier = Modifier.fillMaxWidth()) {
-                    edit { it.copy(expandedOffsetY = -1) }
-                    IslandBus.post(previewAlert())
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Gilt für neue Meldungen und für die aufgeklappte Timer-/Musik-Pille. Ist „Größe“ höher als „Rahmen wächst bis“, wächst der Rahmen nicht weiter, nur Text und Symbole. Breiter als $widthCap dp (Bildschirmbreite) geht nicht. Die „Maximale Breite“ oben gilt hier nicht, nur für die kleine Pille. Beim Verschieben siehst du eine Vorschau.",
-                    color = Muted,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
+            PillButton("TIMER", filled = false, modifier = Modifier.weight(1f)) {
+                val left = 5 * 60_000L
+                IslandBus.upsertOngoing(demoTimer(System.currentTimeMillis() + left, left))
             }
+            PillButton("MUSIK", filled = false, modifier = Modifier.weight(1f)) { IslandBus.upsertOngoing(demoMusic()) }
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PillButton("NAVI", filled = false, modifier = Modifier.weight(1f)) { IslandBus.upsertOngoing(demoNav()) }
+            PillButton("LEEREN", filled = false, modifier = Modifier.weight(1f)) {
+                IslandBus.removeOngoing("demo-timer")
+                IslandBus.removeOngoing("demo-music")
+                IslandBus.removeOngoing("demo-nav")
+            }
+            PillButton("PANEL", filled = false, modifier = Modifier.weight(1f)) { IslandBus.setQuick(true) }
+        }
+        Spacer(Modifier.height(12.dp))
+        Text(
+            "Tipp: Tippe auf die kleine Pille, um sie aufzuklappen. Dort findest du die Buttons der App (Pause, Stopp ...). Tippen auf die Ruhe-Pille oder langes Drücken auf die kleine Pille öffnet den Schnellzugriff.",
+            color = Muted,
+            fontSize = 12.sp,
+        )
+    }
 
-            SectionLabel("VERHALTEN")
-            Card {
-                ToggleRow("Ruhe-Pille anzeigen", s.idleVisible) { c -> edit { it.copy(idleVisible = c) } }
-                ToggleRow("Musik, Timer & Co. dauerhaft anzeigen", s.showOngoing) { c ->
-                    edit { it.copy(showOngoing = c) }
+    // ---------------------------------------------------------------- LAYOUT
+
+    @Composable
+    private fun LayoutTab(s: IslandSettings) {
+        val widthCap = (resources.configuration.screenWidthDp - 8).coerceAtLeast(220)
+        SectionLabel("POSITION & GRÖSSE")
+        Card {
+            SettingSlider("Horizontal", "${s.offsetX} dp", s.offsetX.toFloat(), -150f..150f) { v -> edit { it.copy(offsetX = v.roundToInt()) } }
+            SettingSlider("Abstand von oben", "${s.offsetY} dp", s.offsetY.toFloat(), 0f..300f) { v -> edit { it.copy(offsetY = v.roundToInt()) } }
+            SettingSlider("Größe", "${(s.scale * 100).roundToInt()} %", s.scale, 0.7f..1.5f) { v -> edit { it.copy(scale = (v * 20f).roundToInt() / 20f) } }
+            SettingSlider("Breite der kleinen Pille", "${(s.widthFactor * 100).roundToInt()} %", s.widthFactor, 0.8f..1.8f) { v -> edit { it.copy(widthFactor = (v * 20f).roundToInt() / 20f) } }
+            SettingSlider("Maximale Breite (kleine Pille)", "${s.maxWidth} dp", s.maxWidth.toFloat(), 140f..480f) { v -> edit { it.copy(maxWidth = v.roundToInt()) } }
+            SettingSlider("Kamera-Lücke (Mitte bleibt frei)", "${s.cameraGap} dp", s.cameraGap.toFloat(), 0f..100f) { v -> edit { it.copy(cameraGap = v.roundToInt()) } }
+            SettingSlider("Abrundung der kleinen Pille", "${(s.smallRoundness * 100).roundToInt()} %", s.smallRoundness, 0.2f..1f) { v -> edit { it.copy(smallRoundness = (v * 20f).roundToInt() / 20f) } }
+            SettingSlider("Abstand Symbol → Text (links)", "${s.iconTextGap} dp", s.iconTextGap.toFloat(), 0f..24f) { v -> edit { it.copy(iconTextGap = v.roundToInt()) } }
+        }
+
+        SectionLabel("AUFGEKLAPPTE PILLE")
+        Card {
+            SettingSlider("Größe", "${(s.expandedScale * 100).roundToInt()} %", s.expandedScale, 0.7f..2f) { v ->
+                edit { it.copy(expandedScale = (v * 20f).roundToInt() / 20f) }
+                IslandBus.post(previewAlert())
+            }
+            SettingSlider("Rahmen wächst bis", "${(s.expandedFrameMax * 100).roundToInt()} %", s.expandedFrameMax, 0.7f..2f) { v ->
+                edit { it.copy(expandedFrameMax = (v * 20f).roundToInt() / 20f) }
+                IslandBus.post(previewAlert())
+            }
+            SettingSlider("Breite", "${minOf(s.expandedWidth, widthCap)} dp", s.expandedWidth.toFloat(), 200f..widthCap.toFloat()) { v ->
+                edit { it.copy(expandedWidth = v.roundToInt()) }
+                IslandBus.post(previewAlert())
+            }
+            SettingSlider("Abrundung der Ecken", "${s.expandedCorner} dp", s.expandedCorner.toFloat(), 0f..60f) { v ->
+                edit { it.copy(expandedCorner = v.roundToInt()) }
+                IslandBus.post(previewAlert())
+            }
+            SettingSlider("Höhe auf dem Bildschirm (von oben)", "${s.expandedTop} dp", s.expandedTop.toFloat(), 0f..500f) { v ->
+                edit { it.copy(expandedOffsetY = v.roundToInt()) }
+                IslandBus.post(previewAlert())
+            }
+            PillButton("HÖHE WIE KLEINE PILLE", filled = false, modifier = Modifier.fillMaxWidth()) {
+                edit { it.copy(expandedOffsetY = -1) }
+                IslandBus.post(previewAlert())
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Gilt für neue Meldungen, die aufgeklappte Aktivität und das Schnellzugriff-Panel. Ist „Größe“ höher als „Rahmen wächst bis“, wächst der Rahmen nicht weiter, nur Text und Symbole. Breiter als $widthCap dp (Bildschirmbreite) geht nicht. Die „Maximale Breite“ gilt hier nicht. Beim Verschieben siehst du eine Vorschau.",
+                color = Muted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        PillButton("ALLES ZURÜCKSETZEN", filled = false, modifier = Modifier.fillMaxWidth()) { edit { IslandSettings() } }
+    }
+
+    // ---------------------------------------------------------------- FUNKTION
+
+    @Composable
+    private fun FunctionTab(s: IslandSettings) {
+        val ctx = this@MainActivity
+        SectionLabel("ALLGEMEIN")
+        Card {
+            ToggleRow("Ruhe-Pille anzeigen", s.idleVisible) { c -> edit { it.copy(idleVisible = c) } }
+            ToggleRow("Musik, Timer & Co. dauerhaft anzeigen", s.showOngoing) { c -> edit { it.copy(showOngoing = c) } }
+            ToggleRow("Auf dem Sperrbildschirm antippbar", s.lockTouch) { c -> edit { it.copy(lockTouch = c) } }
+            ToggleRow("Im Hintergrund aktiv halten (stille Benachrichtigung)", s.keepAlive) { c ->
+                edit { it.copy(keepAlive = c) }
+                if (c) KeepAliveService.start(ctx) else KeepAliveService.stop(ctx)
+            }
+            SettingSlider("Neue Meldung sichtbar für", "${s.alertSeconds} s", s.alertSeconds.toFloat(), 2f..15f) { v -> edit { it.copy(alertSeconds = v.roundToInt()) } }
+        }
+
+        SectionLabel("MUSIK")
+        Card {
+            ToggleRow("Equalizer-Balken bei laufender Musik", s.equalizer) { c -> edit { it.copy(equalizer = c) } }
+            ToggleRow("Podcast: Vor-/Zurückspulen-Tasten", s.mediaSeek) { c -> edit { it.copy(mediaSeek = c) } }
+        }
+
+        SectionLabel("HAPTIK")
+        Card {
+            ToggleRow("Kurz vibrieren beim Aufklappen", s.haptics) { c ->
+                edit { it.copy(haptics = c) }
+                if (c) QuickActions.haptic(ctx, s.hapticLevel)
+            }
+            SettingSlider(
+                "Stärke",
+                when (s.hapticLevel) { 1 -> "LEICHT"; 3 -> "STARK"; else -> "MITTEL" },
+                s.hapticLevel.toFloat(),
+                1f..3f,
+            ) { v ->
+                val lv = v.roundToInt().coerceIn(1, 3)
+                if (lv != s.hapticLevel) {
+                    edit { it.copy(hapticLevel = lv) }
+                    QuickActions.haptic(ctx, lv)
                 }
-                ToggleRow("Podcast: Vor-/Zurückspulen-Tasten (z. B. 15 Sek.)", s.mediaSeek) { c ->
-                    edit { it.copy(mediaSeek = c) }
-                }
-                ToggleRow("Schnellzugriff-Panel (Lampe, Ton, WLAN ...)", s.quickPanel) { c ->
-                    edit { it.copy(quickPanel = c) }
-                    if (!c) IslandBus.setQuick(false)
-                }
-                ToggleRow("Status in der Pille (Lampe, Stumm, Hotspot ...)", s.statusPills) { c ->
-                    edit { it.copy(statusPills = c) }
-                }
-                var statusOpen by remember { mutableStateOf(false) }
-                Text(
-                    text = if (statusOpen) "▴  Auswahl der Status-Anzeigen" else "▾  Auswahl der Status-Anzeigen",
-                    color = if (s.statusPills) NothingRed else Color(0xFF777777),
-                    fontSize = 13.sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { statusOpen = !statusOpen }
-                        .padding(vertical = 8.dp),
-                )
-                if (statusOpen) {
-                    listOf(
-                        "torch" to "Taschenlampe",
-                        "ringer" to "Stumm / Vibration",
-                        "dnd" to "Nicht stören",
-                        "hotspot" to "Hotspot",
-                        "airplane" to "Flugmodus",
-                    ).forEach { (key, name) ->
-                        Box(Modifier.padding(start = 12.dp)) {
-                            ToggleRow(name, s.statusEnabled(key) || (!s.statusPills && key !in s.statusOff.split(','))) { c ->
-                                edit {
-                                    val off = it.statusOff.split(',').filter { k -> k.isNotBlank() && k != key }.toMutableList()
-                                    if (!c) off.add(key)
-                                    it.copy(statusOff = off.joinToString(","))
-                                }
-                            }
+            }
+        }
+
+        SectionLabel("STATUS-ANZEIGEN")
+        Card {
+            ToggleRow("Status in der Pille anzeigen", s.statusPills) { c -> edit { it.copy(statusPills = c) } }
+            Text(
+                "Die Pille zeigt es, solange es aktiv ist. Wähle, was angezeigt wird:",
+                color = Muted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+            STATUS_TYPES.forEach { (key, name) ->
+                Box(Modifier.padding(start = 12.dp)) {
+                    ToggleRow(name, key !in s.statusOff.split(',')) { c ->
+                        edit {
+                            val off = it.statusOff.split(',').filter { k -> k.isNotBlank() && k != key }.toMutableList()
+                            if (!c) off.add(key)
+                            it.copy(statusOff = off.joinToString(","))
                         }
                     }
                 }
-                ToggleRow("Auf dem Sperrbildschirm antippbar", s.lockTouch) { c ->
-                    edit { it.copy(lockTouch = c) }
-                }
-                ToggleRow("Im Hintergrund aktiv halten (stille Benachrichtigung)", s.keepAlive) { c ->
-                    edit { it.copy(keepAlive = c) }
-                    if (c) KeepAliveService.start(ctx) else KeepAliveService.stop(ctx)
-                }
-                SettingSlider(
-                    label = "Neue Meldung sichtbar für",
-                    valueText = "${s.alertSeconds} s",
-                    value = s.alertSeconds.toFloat(),
-                    range = 2f..15f,
-                ) { v -> edit { it.copy(alertSeconds = v.roundToInt()) } }
             }
+        }
 
-            SectionLabel("TESTEN")
+        SectionLabel("SCHNELLZUGRIFF")
+        Card {
+            ToggleRow("Schnellzugriff-Panel aktivieren", s.quickPanel) { c ->
+                edit { it.copy(quickPanel = c) }
+                if (!c) IslandBus.setQuick(false)
+            }
+            Text(
+                "Öffnet sich durch Tippen auf die Ruhe-Pille oder langes Drücken auf die kleine Pille. Bis zu 12 Kacheln, vier pro Reihe.",
+                color = Muted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            TileEditor(s)
+            Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PillButton("MELDUNG", filled = true, modifier = Modifier.weight(1f)) {
-                    IslandBus.post(
-                        IslandEvent(
-                            app = "Nothing Island",
-                            title = "Test-Benachrichtigung",
-                            text = "So sieht deine Island aus.",
-                        )
-                    )
-                }
-                PillButton("TIMER", filled = false, modifier = Modifier.weight(1f)) {
-                    val left = 5 * 60_000L
-                    IslandBus.upsertOngoing(demoTimer(System.currentTimeMillis() + left, left))
-                }
-                PillButton("MUSIK", filled = false, modifier = Modifier.weight(1f)) {
-                    IslandBus.upsertOngoing(demoMusic())
+                PillButton("PANEL ÖFFNEN", filled = true, modifier = Modifier.weight(1f)) { IslandBus.setQuick(true) }
+                PillButton("STANDARD", filled = false, modifier = Modifier.weight(1f)) {
+                    edit { it.copy(quickTiles = IslandSettings().quickTiles) }
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PillButton("NAVI", filled = false, modifier = Modifier.weight(1f)) {
-                    IslandBus.upsertOngoing(demoNav())
+            Spacer(Modifier.height(8.dp))
+        }
+    }
+
+    @Composable
+    private fun TileEditor(s: IslandSettings) {
+        val sel = s.quickTiles.split(',').filter { QuickActions.tile(it) != null }
+        fun set(list: List<String>) = edit { it.copy(quickTiles = list.joinToString(",")) }
+        sel.forEachIndexed { i, key ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("${i + 1}", color = NothingRed, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(end = 10.dp))
+                Text(QuickActions.tile(key)?.name ?: key, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                MiniButton("▲", i > 0) { set(sel.toMutableList().also { l -> l.add(i - 1, l.removeAt(i)) }) }
+                MiniButton("▼", i < sel.size - 1) { set(sel.toMutableList().also { l -> l.add(i + 1, l.removeAt(i)) }) }
+                MiniButton("✕", true) { set(sel.filter { it != key }) }
+            }
+        }
+        val free = QuickActions.tiles.filter { it.key !in sel }
+        if (free.isNotEmpty() && sel.size < 12) {
+            Spacer(Modifier.height(6.dp))
+            Text("Hinzufügen", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+            free.forEach { t ->
+                Text(
+                    "+  ${t.name}",
+                    color = NothingRed,
+                    fontSize = 14.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { set(sel + t.key) }
+                        .padding(vertical = 8.dp),
+                )
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- DESIGN
+
+    @Composable
+    private fun DesignTab(s: IslandSettings) {
+        SectionLabel("FARBSCHEMA")
+        val presets = IslandTheme.presets
+        (presets.map { it.first to it } + ("custom" to Triple("custom", "EIGEN", Color.Gray))).chunked(4).forEach { row ->
+            Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { (id, p) ->
+                    val selected = s.theme == id
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable {
+                                edit { it.copy(theme = id) }
+                                IslandBus.post(previewAlert())
+                            }
+                            .padding(vertical = 6.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        val swatch = if (id == "custom") {
+                            Modifier.background(
+                                Brush.sweepGradient(
+                                    listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red),
+                                ),
+                            )
+                        } else Modifier.background(p.third)
+                        Box(
+                            Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .then(swatch)
+                                .border(if (selected) 3.dp else 1.dp, if (selected) Color.White else CardBorder, CircleShape),
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            p.second,
+                            color = if (selected) Color.White else Muted,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 9.sp,
+                            maxLines = 1,
+                        )
+                    }
                 }
-                PillButton("LEEREN", filled = false, modifier = Modifier.weight(1f)) {
-                    IslandBus.removeOngoing("demo-timer")
-                    IslandBus.removeOngoing("demo-music")
-                    IslandBus.removeOngoing("demo-nav")
+                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+
+        if (s.theme == "custom") {
+            Card {
+                SettingSlider("Akzentfarbe", "${s.themeHue.roundToInt()}°", s.themeHue, 0f..359f) { v ->
+                    edit { it.copy(themeHue = v) }
                 }
-                PillButton("ZURÜCKSETZEN", filled = false, modifier = Modifier.weight(1f)) {
-                    edit { IslandSettings() }
+                Text("Hintergrund", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp, bottom = 8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
+                    listOf("SCHWARZ", "GRAPHIT", "WEISS").forEachIndexed { i, n ->
+                        Chip(n, s.themeBg == i) { edit { it.copy(themeBg = i) } }
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))
+        }
+
+        SectionLabel("SCHRIFT")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("MONO", "SANS", "SERIF").forEachIndexed { i, n ->
+                Chip(n, s.themeFont == i) { edit { it.copy(themeFont = i) } }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+        PillButton("VORSCHAU ZEIGEN", filled = true, modifier = Modifier.fillMaxWidth()) { IslandBus.post(previewAlert()) }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "Das Farbschema gilt für die Island, das Schnellzugriff-Panel und das Antwort-Fenster. Die Vorschau siehst du oben in der Island.",
+            color = Muted,
+            fontSize = 12.sp,
+        )
+    }
+
+    // ---------------------------------------------------------------- APPS
+
+    @Composable
+    private fun AppRulesTab(s: IslandSettings) {
+        val ctx = this@MainActivity
+        val apps = remember {
+            val pm = packageManager
+            val i = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            pm.queryIntentActivities(i, 0)
+                .map { it.loadLabel(pm).toString() to it.activityInfo.packageName }
+                .filter { it.second != packageName }
+                .distinctBy { it.second }
+        }
+        var query by remember { mutableStateOf("") }
+        val shown = remember(query, s.appRules, apps) {
+            apps.filter { query.isBlank() || it.first.contains(query, ignoreCase = true) }
+                .sortedWith(compareBy({ s.ruleFor(it.second).isEmpty() }, { it.first.lowercase() }))
+        }
+        Column(Modifier.fillMaxSize().padding(horizontal = 24.dp)) {
             Text(
-                "Tipp: Tippe auf die kleine Pille, um sie aufzuklappen. Dort findest du die Buttons der App (Pause, Stopp ...).",
+                "Tippe auf die Regel einer App, um sie zu wechseln:\nSTANDARD · LEISE (nur kleine Pille, kein Aufklappen) · STUMM (nie anzeigen) · LIVE (laufende Meldung als Live-Aktivität, z. B. Lieferdienst)",
                 color = Muted,
                 fontSize = 12.sp,
+                modifier = Modifier.padding(top = 12.dp, bottom = 12.dp),
             )
-            Spacer(Modifier.height(48.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(50))
+                    .border(1.dp, CardBorder, RoundedCornerShape(50))
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+            ) {
+                if (query.isEmpty()) Text("App suchen …", color = Muted, fontSize = 14.sp)
+                BasicTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                    cursorBrush = SolidColor(NothingRed),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            LazyColumn(Modifier.weight(1f)) {
+                items(shown, key = { it.second }) { (label, pkg) ->
+                    val rule = s.ruleFor(pkg)
+                    val next = when (rule) { "" -> "QUIET"; "QUIET" -> "MUTE"; "MUTE" -> "LIVE"; else -> "" }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(label, color = Color.White, fontSize = 14.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                        Chip(
+                            when (rule) { "QUIET" -> "LEISE"; "MUTE" -> "STUMM"; "LIVE" -> "LIVE"; else -> "STANDARD" },
+                            rule.isNotEmpty(),
+                        ) { edit { it.withRule(pkg, next) } }
+                    }
+                }
+                item { Spacer(Modifier.height(48.dp)) }
+            }
         }
     }
 
@@ -421,6 +621,43 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
+}
+
+
+@Composable
+private fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(50)
+    Box(
+        modifier = Modifier
+            .clip(shape)
+            .then(if (selected) Modifier.background(NothingRed) else Modifier.border(1.dp, CardBorder, shape))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            color = if (selected) Color.White else Muted,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            fontSize = 11.sp,
+            letterSpacing = 1.sp,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun MiniButton(text: String, enabled: Boolean, onClick: () -> Unit) {
+    Text(
+        text,
+        color = if (enabled) Color.White else Color(0xFF444444),
+        fontSize = 15.sp,
+        modifier = Modifier
+            .clip(CircleShape)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    )
 }
 
 // ------------------------------------------------------------------ UI-Bausteine

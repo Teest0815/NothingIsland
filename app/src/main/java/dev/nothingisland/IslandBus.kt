@@ -18,6 +18,12 @@ data class IslandAction(
     val onClick: (() -> Unit)? = null,
 )
 
+/** Direktantwort einer Benachrichtigung (RemoteInput). */
+class IslandReply(
+    val action: PendingIntent,
+    val remoteInput: android.app.RemoteInput,
+)
+
 data class IslandEvent(
     val id: Long = System.nanoTime(),
     val key: String = "",
@@ -35,6 +41,10 @@ data class IslandEvent(
     val progress: Float? = null,
     /** Feststehender Text rechts in der kleinen Pille, z. B. die Zeit bei pausierter Musik. */
     val rightText: String? = null,
+    /** Leise Meldung: geht direkt in die kleine Pille, ohne aufzuklappen. */
+    val quiet: Boolean = false,
+    /** Antwort-Möglichkeit (Messenger). */
+    val reply: IslandReply? = null,
     /** Musik: Steuerung, Zustand und Metadaten. */
     val media: android.media.session.MediaController? = null,
     val playing: Boolean = false,
@@ -83,8 +93,40 @@ data class IslandSettings(
     /** Status-Anzeigen in der Pille: Lampe, Stumm, Nicht stören, Hotspot, Flugmodus. */
     val statusPills: Boolean = true,
     /** Ausgeschaltete Status-Arten, kommagetrennt (torch, ringer, dnd, hotspot, airplane). */
-    val statusOff: String = "",
+    val statusOff: String = "location",
+    /** Kurzes Vibrieren beim Aufklappen. */
+    val haptics: Boolean = true,
+    /** 1 = leicht, 2 = mittel, 3 = stark. */
+    val hapticLevel: Int = 2,
+    /** Equalizer-Balken bei laufender Musik. */
+    val equalizer: Boolean = true,
+    /** Reihenfolge der Schnellzugriff-Kacheln. */
+    val quickTiles: String = "torch,ringer,dnd,hotspot,airplane,wifi,bluetooth,app",
+    /** App-Regeln: "paket=REGEL,paket=REGEL" mit MUTE, QUIET oder LIVE. */
+    val appRules: String = "",
+    /** nothing, white, midnight, mint, amber, violet oder custom. */
+    val theme: String = "nothing",
+    val themeHue: Float = 0f,
+    /** Nur bei custom: 0 schwarz, 1 graphit, 2 weiß. */
+    val themeBg: Int = 0,
+    /** 0 Monospace, 1 Sans, 2 Serif. */
+    val themeFont: Int = 0,
 ) {
+    fun ruleFor(pkg: String): String {
+        if (appRules.isEmpty()) return ""
+        for (part in appRules.split(',')) {
+            val i = part.lastIndexOf('=')
+            if (i > 0 && part.substring(0, i) == pkg) return part.substring(i + 1)
+        }
+        return ""
+    }
+
+    fun withRule(pkg: String, rule: String): IslandSettings {
+        val list = appRules.split(',').filter { it.isNotBlank() && it.substringBeforeLast('=') != pkg }.toMutableList()
+        if (rule.isNotEmpty()) list.add("$pkg=$rule")
+        return copy(appRules = list.joinToString(","))
+    }
+
     fun statusEnabled(key: String): Boolean = statusPills && key !in statusOff.split(',')
 
     /** Tatsächlicher Abstand von oben für die große Pille. */
@@ -180,7 +222,16 @@ object IslandBus {
     }
 
     // ---- Kurzzeit-Meldungen (neue Benachrichtigungen) ----
+    /** Zuletzt gezeigte Ereignisse, damit die Antwort-Ansicht sie per ID findet. */
+    private val recent = LinkedHashMap<Long, IslandEvent>()
+
+    fun eventById(id: Long): IslandEvent? = synchronized(recent) { recent[id] }
+
     fun post(event: IslandEvent) {
+        if (event.reply != null) synchronized(recent) {
+            recent[event.id] = event
+            while (recent.size > 20) recent.remove(recent.keys.first())
+        }
         _current.value = event
     }
 
@@ -189,7 +240,7 @@ object IslandBus {
     }
 
     // ---- Dauerhafte Aktivitäten (Musik, Timer, Anruf, Downloads ...) ----
-    fun upsertOngoing(event: IslandEvent) {
+    fun upsertOngoing(event: IslandEvent): Boolean {
         val isNew = _ongoing.value.none { it.key == event.key }
         _ongoing.update { list ->
             val idx = list.indexOfFirst { it.key == event.key }
@@ -197,6 +248,7 @@ object IslandBus {
         }
         // Neue Aktivität übernimmt die große Pille, die bisherige wandert in den Kreis.
         if (isNew) _primaryKey.value = event.key
+        return isNew
     }
 
     fun removeOngoing(key: String) {
@@ -231,6 +283,15 @@ object IslandBus {
             quickPanel = p.getBoolean("quickPanel", d.quickPanel),
             statusPills = p.getBoolean("statusPills", d.statusPills),
             statusOff = p.getString("statusOff", d.statusOff) ?: "",
+            haptics = p.getBoolean("haptics", d.haptics),
+            hapticLevel = p.getInt("hapticLevel", d.hapticLevel),
+            equalizer = p.getBoolean("equalizer", d.equalizer),
+            quickTiles = p.getString("quickTiles", d.quickTiles) ?: d.quickTiles,
+            appRules = p.getString("appRules", d.appRules) ?: "",
+            theme = p.getString("theme", d.theme) ?: d.theme,
+            themeHue = p.getFloat("themeHue", d.themeHue),
+            themeBg = p.getInt("themeBg", d.themeBg),
+            themeFont = p.getInt("themeFont", d.themeFont),
         )
     }
 
@@ -260,6 +321,15 @@ object IslandBus {
             .putBoolean("quickPanel", s.quickPanel)
             .putBoolean("statusPills", s.statusPills)
             .putString("statusOff", s.statusOff)
+            .putBoolean("haptics", s.haptics)
+            .putInt("hapticLevel", s.hapticLevel)
+            .putBoolean("equalizer", s.equalizer)
+            .putString("quickTiles", s.quickTiles)
+            .putString("appRules", s.appRules)
+            .putString("theme", s.theme)
+            .putFloat("themeHue", s.themeHue)
+            .putInt("themeBg", s.themeBg)
+            .putInt("themeFont", s.themeFont)
             .apply()
     }
 }
