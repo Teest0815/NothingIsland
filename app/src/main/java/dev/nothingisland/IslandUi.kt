@@ -265,7 +265,7 @@ fun IslandHost() {
     val shape = RoundedCornerShape(corner)
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-    Row(modifier = Modifier.padding(top = topPad), verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier = Modifier.padding(top = maxOf(topPad, 0.dp)), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.width(slot))
 
         Box(
