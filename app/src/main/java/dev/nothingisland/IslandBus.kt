@@ -65,6 +65,8 @@ data class IslandSettings(
     val expandedOffsetY: Int = -1,
     /** Stiller Vordergrund-Dienst, damit die App beim Wegwischen nicht beendet wird. */
     val keepAlive: Boolean = true,
+    /** Island auf dem Sperrbildschirm antippbar. */
+    val lockTouch: Boolean = false,
 ) {
     /** Tatsächlicher Abstand von oben für die große Pille. */
     val expandedTop: Int get() = if (expandedOffsetY < 0) offsetY else expandedOffsetY
@@ -196,6 +198,7 @@ object IslandBus {
             expandedFrameMax = p.getFloat("expandedFrameMax", d.expandedFrameMax),
             expandedOffsetY = p.getInt("expandedOffsetY", d.expandedOffsetY),
             keepAlive = p.getBoolean("keepAlive", d.keepAlive),
+            lockTouch = p.getBoolean("lockTouch", d.lockTouch),
         )
     }
 
@@ -220,6 +223,7 @@ object IslandBus {
             .putFloat("expandedFrameMax", s.expandedFrameMax)
             .putInt("expandedOffsetY", s.expandedOffsetY)
             .putBoolean("keepAlive", s.keepAlive)
+            .putBoolean("lockTouch", s.lockTouch)
             .apply()
     }
 }

@@ -360,6 +360,7 @@ fun IslandHost() {
                     when (mode) {
                         Mode.ALERT -> {
                             runCatching { alert?.action?.send() }
+                            suppressLinger = true // App öffnet sich: Meldung verschwindet direkt, nicht in die kleine Pille
                             IslandBus.dismiss()
                         }
                         Mode.MESSAGE -> {

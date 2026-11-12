@@ -302,6 +302,9 @@ class MainActivity : ComponentActivity() {
                 ToggleRow("Musik, Timer & Co. dauerhaft anzeigen", s.showOngoing) { c ->
                     edit { it.copy(showOngoing = c) }
                 }
+                ToggleRow("Auf dem Sperrbildschirm antippbar", s.lockTouch) { c ->
+                    edit { it.copy(lockTouch = c) }
+                }
                 ToggleRow("Im Hintergrund aktiv halten (stille Benachrichtigung)", s.keepAlive) { c ->
                     edit { it.copy(keepAlive = c) }
                     if (c) KeepAliveService.start(ctx) else KeepAliveService.stop(ctx)

@@ -193,7 +193,7 @@ class OverlayHost(
         val tp = touchParams ?: return
         val tv = touchView ?: return
         val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
-        val locked = km?.isKeyguardLocked == true
+        val locked = km?.isKeyguardLocked == true && !IslandBus.settings.value.lockTouch
         val has = tp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE != 0
         if (locked == has) return
         tp.flags = if (locked) tp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
