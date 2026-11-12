@@ -35,6 +35,13 @@ data class IslandEvent(
     val progress: Float? = null,
     /** Feststehender Text rechts in der kleinen Pille, z. B. die Zeit bei pausierter Musik. */
     val rightText: String? = null,
+    /** Musik: Steuerung, Zustand und Metadaten. */
+    val media: android.media.session.MediaController? = null,
+    val playing: Boolean = false,
+    val positionMs: Long = -1,
+    val positionStamp: Long = 0,
+    val durationMs: Long = 0,
+    val art: ImageBitmap? = null,
 )
 
 data class IslandSettings(

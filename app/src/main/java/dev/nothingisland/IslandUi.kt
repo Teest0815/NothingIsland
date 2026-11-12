@@ -22,6 +22,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import android.os.SystemClock
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -106,6 +108,7 @@ private const val WINDOW_MARGIN = 24f
 private const val BASE_ALERT_H = 84f
 private const val BASE_EXPANDED_H = 84f
 private const val BASE_EXPANDED_ACTIONS_H = 134f
+private const val BASE_EXPANDED_MEDIA_H = 156f
 private const val BASE_IDLE_W = 92f
 /** Halbe Breite der kleinen Pille ohne Kamera-Lücke (links und rechts je gleich viel). */
 private const val BASE_COMPACT_SIDE = 82f
@@ -199,7 +202,8 @@ fun IslandHost() {
     // Aufgeklappt gilt nur die eigene Breite (begrenzt durch den Bildschirm), nicht die "Maximale Breite".
     val bigW = minOf(s.expandedWidth.toFloat(), screenW - 8f)
     val hasActions = current?.actions?.isNotEmpty() == true
-    val expandedH = (if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H) * fsc
+    val isMedia = current?.kind == Kind.MEDIA && current.media != null
+    val expandedH = (if (isMedia) BASE_EXPANDED_MEDIA_H else if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H) * fsc
     val idleW = BASE_IDLE_W * sc * s.widthFactor
     val compactW = minOf(2f * BASE_COMPACT_SIDE * sc * s.widthFactor + gap, limit)
     val messageW = minOf(2f * BASE_MESSAGE_SIDE * sc * s.widthFactor + gap, limit)
@@ -423,7 +427,19 @@ fun IslandHost() {
                         AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp))
                     }
                     Mode.EXPANDED -> shownCurrent?.let { cur ->
-                        OngoingExpanded(
+                        if (cur.kind == Kind.MEDIA && cur.media != null) MediaExpanded(
+                            e = cur,
+                            count = ongoing.size,
+                            index = ongoing.indexOf(cur).coerceAtLeast(0),
+                            sc = bsc,
+                            onCycle = {
+                                val i = ongoing.indexOf(cur)
+                                IslandBus.setPrimary(ongoing[(i + 1) % ongoing.size].key)
+                                touch++
+                            },
+                            onAction = { touch++ },
+                            modifier = Modifier.requiredSize(bigW.dp, expandedH.dp),
+                        ) else OngoingExpanded(
                             e = cur,
                             count = ongoing.size,
                             index = ongoing.indexOf(cur).coerceAtLeast(0),
@@ -902,6 +918,181 @@ private fun OngoingExpanded(
                         .fillMaxHeight()
                         .background(NothingRed),
                 )
+            }
+        }
+    }
+}
+
+private fun mediaTime(ms: Long): String {
+    val t = ms.coerceAtLeast(0) / 1000
+    return if (t >= 3600) String.format(java.util.Locale.ROOT, "%d:%02d:%02d", t / 3600, (t % 3600) / 60, t % 60)
+    else String.format(java.util.Locale.ROOT, "%d:%02d", t / 60, t % 60)
+}
+
+private enum class TransportIcon { PLAY, PAUSE, PREV, NEXT }
+
+@Composable
+private fun TransportButton(kind: TransportIcon, sc: Float, big: Boolean, onClick: () -> Unit) {
+    val d = (if (big) 52f else 40f) * sc
+    Box(
+        modifier = Modifier
+            .size(d.dp)
+            .clip(CircleShape)
+            .background(if (big) Color.White else ButtonBg)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        val tint = if (big) Color.Black else Color.White
+        Canvas(Modifier.size((d * 0.42f).dp)) {
+            val w = size.width
+            val h = size.height
+            when (kind) {
+                TransportIcon.PLAY -> drawPath(
+                    Path().apply { moveTo(w * 0.15f, 0f); lineTo(w, h / 2f); lineTo(w * 0.15f, h); close() }, tint,
+                )
+                TransportIcon.PAUSE -> {
+                    drawRect(tint, Offset(w * 0.1f, 0f), androidx.compose.ui.geometry.Size(w * 0.30f, h))
+                    drawRect(tint, Offset(w * 0.6f, 0f), androidx.compose.ui.geometry.Size(w * 0.30f, h))
+                }
+                TransportIcon.NEXT -> {
+                    drawPath(Path().apply { moveTo(0f, 0f); lineTo(w * 0.78f, h / 2f); lineTo(0f, h); close() }, tint)
+                    drawRect(tint, Offset(w * 0.82f, 0f), androidx.compose.ui.geometry.Size(w * 0.18f, h))
+                }
+                TransportIcon.PREV -> {
+                    drawPath(Path().apply { moveTo(w, 0f); lineTo(w * 0.22f, h / 2f); lineTo(w, h); close() }, tint)
+                    drawRect(tint, Offset(0f, 0f), androidx.compose.ui.geometry.Size(w * 0.18f, h))
+                }
+            }
+        }
+    }
+}
+
+/** Aufgeklappte Musik: Cover, Titel, Fortschritt mit Zeiten (zum Spulen antippen) und Steuerung. */
+@Composable
+private fun MediaExpanded(
+    e: IslandEvent,
+    count: Int,
+    index: Int,
+    sc: Float,
+    onCycle: () -> Unit,
+    onAction: () -> Unit,
+    modifier: Modifier,
+) {
+    val mc = e.media ?: return
+    var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
+    var base by remember(e.positionMs, e.positionStamp) { mutableStateOf(e.positionMs to e.positionStamp) }
+    LaunchedEffect(e.playing) {
+        while (e.playing) {
+            delay(250)
+            now = SystemClock.elapsedRealtime()
+        }
+    }
+    val dur = e.durationMs
+    val raw = if (base.first < 0) 0L else base.first + (if (e.playing) (now - base.second) else 0L)
+    val pos = if (dur > 0) raw.coerceIn(0L, dur) else raw.coerceAtLeast(0L)
+    val frac = if (dur > 0) pos.toFloat() / dur else 0f
+
+    Column(
+        modifier = modifier.padding(horizontal = (18f * sc).dp, vertical = (12f * sc).dp),
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size((50f * sc).dp).clip(RoundedCornerShape((12f * sc).dp)).background(ButtonBg),
+            ) {
+                if (e.art != null) {
+                    Image(
+                        bitmap = e.art,
+                        contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    DotRing(Modifier.fillMaxSize())
+                    e.icon?.let {
+                        Image(
+                            bitmap = it, contentDescription = null,
+                            colorFilter = ColorFilter.tint(Color.White),
+                            modifier = Modifier.size((20f * sc).dp),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.width((12f * sc).dp))
+            Column(modifier = Modifier.weight(1f)) {
+                AppLabel(e.app, sc)
+                Text(
+                    text = e.title, color = Color.White, fontSize = (14f * sc).sp,
+                    fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                if (e.text.isNotBlank()) {
+                    Text(
+                        text = e.text, color = TextGray, fontSize = (12f * sc).sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            if (count > 1) {
+                Text(
+                    text = "${index + 1}/$count",
+                    color = NothingRed,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = (11f * sc).sp,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .clickable(onClick = onCycle)
+                        .padding(horizontal = (8f * sc).dp, vertical = (6f * sc).dp),
+                )
+            }
+        }
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(mediaTime(pos), color = TextGray, fontFamily = FontFamily.Monospace, fontSize = (10f * sc).sp)
+            Spacer(Modifier.width((8f * sc).dp))
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height((22f * sc).dp)
+                    .pointerInput(mc, dur) {
+                        if (dur <= 0) return@pointerInput
+                        detectTapGestures { o ->
+                            val target = (o.x / size.width).coerceIn(0f, 1f) * dur
+                            runCatching { mc.transportControls.seekTo(target.toLong()) }
+                            base = target.toLong() to SystemClock.elapsedRealtime()
+                            now = SystemClock.elapsedRealtime()
+                            onAction()
+                        }
+                    },
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Box(Modifier.fillMaxWidth().height((3f * sc).dp).clip(RoundedCornerShape(50)).background(DotGray))
+                Box(
+                    Modifier.fillMaxWidth(frac.coerceIn(0f, 1f)).height((3f * sc).dp)
+                        .clip(RoundedCornerShape(50)).background(NothingRed),
+                )
+            }
+            Spacer(Modifier.width((8f * sc).dp))
+            Text(
+                if (dur > 0) mediaTime(dur) else "--:--",
+                color = TextGray, fontFamily = FontFamily.Monospace, fontSize = (10f * sc).sp,
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy((22f * sc).dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TransportButton(TransportIcon.PREV, sc, false) {
+                runCatching { mc.transportControls.skipToPrevious() }; onAction()
+            }
+            TransportButton(if (e.playing) TransportIcon.PAUSE else TransportIcon.PLAY, sc, true) {
+                runCatching { if (e.playing) mc.transportControls.pause() else mc.transportControls.play() }
+                onAction()
+            }
+            TransportButton(TransportIcon.NEXT, sc, false) {
+                runCatching { mc.transportControls.skipToNext() }; onAction()
             }
         }
     }

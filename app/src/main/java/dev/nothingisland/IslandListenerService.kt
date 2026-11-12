@@ -4,6 +4,7 @@ import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.graphics.drawable.Icon
 import android.media.session.MediaController
@@ -165,19 +166,38 @@ class IslandListenerService : NotificationListenerService() {
         var rightText: String? = null
 
         // Musik: Abspielposition aus der Media-Session lesen (läuft live weiter, pausiert = fester Wert).
+        var controller: MediaController? = null
+        var playing = false
+        var positionMs = -1L
+        var durationMs = 0L
+        var art: ImageBitmap? = null
         if (kind == Kind.MEDIA) {
             runCatching {
                 @Suppress("DEPRECATION")
                 val token = ex.getParcelable<MediaSession.Token>(Notification.EXTRA_MEDIA_SESSION)
                     ?: return@runCatching
-                val st = MediaController(this, token).playbackState ?: return@runCatching
+                val mc = MediaController(this, token)
+                controller = mc
+                mc.metadata?.let { md ->
+                    durationMs = md.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION)
+                    val bmp = md.getBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART)
+                        ?: md.getBitmap(android.media.MediaMetadata.METADATA_KEY_ART)
+                    art = bmp?.let { Bitmap.createScaledBitmap(it, 160, 160, true).asImageBitmap() }
+                }
+                if (art == null) art = runCatching {
+                    n.getLargeIcon()?.loadDrawable(this)?.toBitmap(160, 160)?.asImageBitmap()
+                }.getOrNull()
+                val st = mc.playbackState ?: return@runCatching
+                playing = st.state == PlaybackState.STATE_PLAYING
                 if (st.position < 0) return@runCatching
-                if (st.state == PlaybackState.STATE_PLAYING) {
+                if (playing) {
                     val since = SystemClock.elapsedRealtime() - st.lastPositionUpdateTime
                     val pos = st.position + (since * st.playbackSpeed).toLong()
+                    positionMs = pos
                     chronoBase = System.currentTimeMillis() - pos
                     countDown = false
                 } else {
+                    positionMs = st.position
                     chronoBase = null
                     rightText = mediaClock(st.position)
                 }
@@ -197,6 +217,12 @@ class IslandListenerService : NotificationListenerService() {
             countDown = countDown,
             progress = progress,
             rightText = rightText,
+            media = controller,
+            playing = playing,
+            positionMs = positionMs,
+            positionStamp = SystemClock.elapsedRealtime(),
+            durationMs = durationMs,
+            art = art,
         )
     }
 
