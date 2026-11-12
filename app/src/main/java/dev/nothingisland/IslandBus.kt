@@ -82,7 +82,11 @@ data class IslandSettings(
     val quickPanel: Boolean = true,
     /** Status-Anzeigen in der Pille: Lampe, Stumm, Nicht stören, Hotspot, Flugmodus. */
     val statusPills: Boolean = true,
+    /** Ausgeschaltete Status-Arten, kommagetrennt (torch, ringer, dnd, hotspot, airplane). */
+    val statusOff: String = "",
 ) {
+    fun statusEnabled(key: String): Boolean = statusPills && key !in statusOff.split(',')
+
     /** Tatsächlicher Abstand von oben für die große Pille. */
     val expandedTop: Int get() = if (expandedOffsetY < 0) offsetY else expandedOffsetY
 
@@ -226,6 +230,7 @@ object IslandBus {
             mediaSeek = p.getBoolean("mediaSeek", d.mediaSeek),
             quickPanel = p.getBoolean("quickPanel", d.quickPanel),
             statusPills = p.getBoolean("statusPills", d.statusPills),
+            statusOff = p.getString("statusOff", d.statusOff) ?: "",
         )
     }
 
@@ -254,6 +259,7 @@ object IslandBus {
             .putBoolean("mediaSeek", s.mediaSeek)
             .putBoolean("quickPanel", s.quickPanel)
             .putBoolean("statusPills", s.statusPills)
+            .putString("statusOff", s.statusOff)
             .apply()
     }
 }

@@ -112,7 +112,7 @@ private const val BASE_EXPANDED_H = 84f
 private const val BASE_EXPANDED_ACTIONS_H = 134f
 private const val BASE_EXPANDED_MEDIA_H = 156f
 private const val BASE_IDLE_W = 92f
-private const val BASE_QUICK_H = 138f
+private const val BASE_QUICK_H = 150f
 /** Halbe Breite der kleinen Pille ohne Kamera-Lücke (links und rechts je gleich viel). */
 private const val BASE_COMPACT_SIDE = 82f
 private const val BASE_MESSAGE_SIDE = 125f
@@ -130,14 +130,14 @@ fun IslandHost() {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(Unit) { QuickActions.init(ctx) }
     val torchOn by QuickActions.torch.collectAsState()
-    LaunchedEffect(torchOn, s.statusPills) { QuickActions.syncStatus(ctx, s.statusPills) }
+    LaunchedEffect(torchOn, s.statusPills, s.statusOff) { QuickActions.syncStatus(ctx, s) }
     DisposableEffect(ctx) {
         val r = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: android.content.Context?, i: android.content.Intent?) {
                 if (i?.action == "android.net.wifi.WIFI_AP_STATE_CHANGED") {
                     QuickActions.hotspotOn = i.getIntExtra("wifi_state", 0) % 10 == 3
                 }
-                QuickActions.syncStatus(ctx, IslandBus.settings.value.statusPills)
+                QuickActions.syncStatus(ctx, IslandBus.settings.value)
             }
         }
         val f = android.content.IntentFilter().apply {
@@ -1031,8 +1031,8 @@ private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean
     Column(
         modifier = Modifier
             .weight(1f)
-            .height((54f * sc).dp)
-            .clip(RoundedCornerShape((16f * sc).dp))
+            .fillMaxHeight()
+            .clip(RoundedCornerShape((14f * sc).dp))
             .background(if (active) NothingRed else ButtonBg)
             .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1074,10 +1074,10 @@ private fun QuickPanel(sc: Float, modifier: Modifier, onUsed: () -> Unit) {
     fun close() = IslandBus.setQuick(false)
     val st = android.provider.Settings.ACTION_WIRELESS_SETTINGS
     Column(
-        modifier = modifier.padding(horizontal = (14f * sc).dp, vertical = (12f * sc).dp),
-        verticalArrangement = Arrangement.SpaceBetween,
+        modifier = modifier.padding(horizontal = (14f * sc).dp, vertical = (14f * sc).dp),
+        verticalArrangement = Arrangement.spacedBy((10f * sc).dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy((8f * sc).dp)) {
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy((10f * sc).dp)) {
             QuickTile(QuickActions.icon("torch"), "LAMPE", torch, sc) { QuickActions.toggleTorch(ctx); onUsed() }
             QuickTile(QuickActions.icon("bell"), ringerLabel, ringer != android.media.AudioManager.RINGER_MODE_NORMAL, sc) {
                 QuickActions.cycleRinger(ctx); onUsed()
@@ -1089,7 +1089,7 @@ private fun QuickPanel(sc: Float, modifier: Modifier, onUsed: () -> Unit) {
                 QuickActions.open(ctx, "android.settings.TETHER_SETTINGS", st); close()
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy((8f * sc).dp)) {
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy((10f * sc).dp)) {
             QuickTile(QuickActions.icon("airplane"), "FLUG", QuickActions.globalOn(ctx, "airplane_mode_on"), sc) {
                 QuickActions.open(ctx, android.provider.Settings.ACTION_AIRPLANE_MODE_SETTINGS); close()
             }

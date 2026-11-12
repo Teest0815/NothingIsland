@@ -312,6 +312,35 @@ class MainActivity : ComponentActivity() {
                 ToggleRow("Status in der Pille (Lampe, Stumm, Hotspot ...)", s.statusPills) { c ->
                     edit { it.copy(statusPills = c) }
                 }
+                var statusOpen by remember { mutableStateOf(false) }
+                Text(
+                    text = if (statusOpen) "▴  Auswahl der Status-Anzeigen" else "▾  Auswahl der Status-Anzeigen",
+                    color = if (s.statusPills) NothingRed else Color(0xFF777777),
+                    fontSize = 13.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { statusOpen = !statusOpen }
+                        .padding(vertical = 8.dp),
+                )
+                if (statusOpen) {
+                    listOf(
+                        "torch" to "Taschenlampe",
+                        "ringer" to "Stumm / Vibration",
+                        "dnd" to "Nicht stören",
+                        "hotspot" to "Hotspot",
+                        "airplane" to "Flugmodus",
+                    ).forEach { (key, name) ->
+                        Box(Modifier.padding(start = 12.dp)) {
+                            ToggleRow(name, s.statusEnabled(key) || (!s.statusPills && key !in s.statusOff.split(','))) { c ->
+                                edit {
+                                    val off = it.statusOff.split(',').filter { k -> k.isNotBlank() && k != key }.toMutableList()
+                                    if (!c) off.add(key)
+                                    it.copy(statusOff = off.joinToString(","))
+                                }
+                            }
+                        }
+                    }
+                }
                 ToggleRow("Auf dem Sperrbildschirm antippbar", s.lockTouch) { c ->
                     edit { it.copy(lockTouch = c) }
                 }

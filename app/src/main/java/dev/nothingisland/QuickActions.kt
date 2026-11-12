@@ -144,21 +144,21 @@ object QuickActions {
     }
 
     /** Gleicht die Status-Anzeigen mit dem Systemzustand ab. */
-    fun syncStatus(ctx: Context, enabled: Boolean) {
+    fun syncStatus(ctx: Context, st: IslandSettings) {
         val app = ctx.applicationContext
-        setStatus(app, enabled, "torch", _torch.value, "TASCHENLAMPE", "AN", "torch", true, "AUS") { toggleTorch(app) }
+        setStatus(app, st.statusEnabled("torch"), "torch", _torch.value, "TASCHENLAMPE", "AN", "torch", true, "AUS") { toggleTorch(app) }
         val ringer = ringerMode(app)
         val silent = ringer == AudioManager.RINGER_MODE_SILENT
         val vib = ringer == AudioManager.RINGER_MODE_VIBRATE
         setStatus(
-            app, enabled, "ringer", silent || vib, if (silent) "STUMM" else "VIBRATION",
+            app, st.statusEnabled("ringer"), "ringer", silent || vib, if (silent) "STUMM" else "VIBRATION",
             if (silent) "Ton ist aus" else "Nur Vibration", "bell", false, "TON AN",
         ) { runCatching { (app.getSystemService(Context.AUDIO_SERVICE) as AudioManager).ringerMode = AudioManager.RINGER_MODE_NORMAL } }
-        setStatus(app, enabled, "dnd", dndOn(app), "NICHT STÖREN", "Aktiv", "moon", false, "AUS") { toggleDnd(app) }
-        setStatus(app, enabled, "hotspot", hotspotOn, "HOTSPOT", "Aktiv", "hotspot", true, "EINSTELLUNGEN") {
+        setStatus(app, st.statusEnabled("dnd"), "dnd", dndOn(app), "NICHT STÖREN", "Aktiv", "moon", false, "AUS") { toggleDnd(app) }
+        setStatus(app, st.statusEnabled("hotspot"), "hotspot", hotspotOn, "HOTSPOT", "Aktiv", "hotspot", true, "EINSTELLUNGEN") {
             open(app, "android.settings.TETHER_SETTINGS", Settings.ACTION_WIRELESS_SETTINGS)
         }
-        setStatus(app, enabled, "airplane", globalOn(app, "airplane_mode_on"), "FLUGMODUS", "Aktiv", "airplane", false, "EINSTELLUNGEN") {
+        setStatus(app, st.statusEnabled("airplane"), "airplane", globalOn(app, "airplane_mode_on"), "FLUGMODUS", "Aktiv", "airplane", false, "EINSTELLUNGEN") {
             open(app, Settings.ACTION_AIRPLANE_MODE_SETTINGS)
         }
     }
