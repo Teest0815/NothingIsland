@@ -12,6 +12,7 @@ import android.provider.Settings
 class IslandApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        CrashLog.install(this)
         IslandBus.loadPrefs(this)
         A11yGuard.ensureEnabled(this)
         KeepAliveService.start(this)
@@ -55,5 +56,30 @@ object A11yGuard {
             )
             Settings.Secure.putString(cr, Settings.Secure.ACCESSIBILITY_ENABLED, "1")
         }
+    }
+}
+
+/** Speichert den letzten Absturz, damit er in der App angezeigt und kopiert werden kann. */
+object CrashLog {
+    private const val FILE = "last_crash.txt"
+
+    fun install(context: Context) {
+        val app = context.applicationContext
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+            runCatching {
+                val sw = java.io.StringWriter()
+                error.printStackTrace(java.io.PrintWriter(sw))
+                java.io.File(app.filesDir, FILE).writeText("${java.util.Date()}\nThread: ${thread.name}\n$sw")
+            }
+            previous?.uncaughtException(thread, error)
+        }
+    }
+
+    fun read(context: Context): String? =
+        java.io.File(context.filesDir, FILE).takeIf { it.exists() }?.readText()
+
+    fun clear(context: Context) {
+        runCatching { java.io.File(context.filesDir, FILE).delete() }
     }
 }

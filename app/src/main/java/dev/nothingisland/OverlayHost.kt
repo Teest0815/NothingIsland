@@ -21,6 +21,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /** Lifecycle-Owner, damit Compose außerhalb einer Activity (im Service-Overlay) laufen kann. */
@@ -81,9 +82,11 @@ class OverlayHost(
             setContent { IslandHost() }
         }
 
+        val d0 = context.resources.displayMetrics.density
+        val (w0, h0) = IslandBus.windowSize.value
         val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            (w0 * d0).toInt().coerceAtLeast(1),
+            (h0 * d0).toInt().coerceAtLeast(1),
             windowType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -113,7 +116,10 @@ class OverlayHost(
         overlay = view
         params = lp
         owner = lifecycleOwner
-        layoutJob = scope.launch { IslandBus.settings.collect { applyPosition(it) } }
+        layoutJob = scope.launch {
+            combine(IslandBus.settings, IslandBus.windowSize) { st, size -> st to size }
+                .collect { (st, size) -> applyLayout(st, size) }
+        }
         return true
     }
 
@@ -128,12 +134,14 @@ class OverlayHost(
         windowManager = null
     }
 
-    private fun applyPosition(s: IslandSettings) {
+    private fun applyLayout(s: IslandSettings, size: Pair<Float, Float>) {
         val p = params ?: return
         val v = overlay ?: return
         val d = context.resources.displayMetrics.density
         p.x = (s.offsetX * d).toInt()
         p.y = (s.windowTop * d).toInt()
+        p.width = (size.first * d).toInt().coerceAtLeast(1)
+        p.height = (size.second * d).toInt().coerceAtLeast(1)
         runCatching { windowManager?.updateViewLayout(v, p) }
     }
 }

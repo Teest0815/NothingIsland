@@ -83,7 +83,7 @@ class IslandListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         showOverlay() // falls die Berechtigung erst nach dem Verbinden erteilt wurde
-        handle(sbn, allowAlert = true)
+        runCatching { handle(sbn, allowAlert = true) }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
@@ -244,7 +244,7 @@ class IslandListenerService : NotificationListenerService() {
         fun rebind(context: Context) {
             if (instance != null) return
             val now = SystemClock.elapsedRealtime()
-            if (now - lastRebind < 10_000) return
+            if (now - lastRebind < 60_000) return
             lastRebind = now
             val cn = ComponentName(context, IslandListenerService::class.java)
             runCatching {

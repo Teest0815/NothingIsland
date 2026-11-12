@@ -10,7 +10,6 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 
 /**
  * Vordergrund-Dienst mit stiller, minimaler Benachrichtigung. Er sorgt dafür, dass Android den
@@ -23,10 +22,16 @@ class KeepAliveService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         IslandBus.loadPrefs(this)
-        if (!IslandBus.settings.value.keepAlive) {
+        // Sofort in den Vordergrund. Schlägt das fehl (z. B. Start aus dem Hintergrund verboten), beenden wir den Dienst still.
+        val ok = runCatching { enterForeground() }.isSuccess
+        if (!ok || !IslandBus.settings.value.keepAlive) {
             stopSelf()
             return START_NOT_STICKY
         }
+        return START_STICKY
+    }
+
+    private fun enterForeground() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL, "Hintergrund-Betrieb", NotificationManager.IMPORTANCE_MIN).apply {
@@ -46,18 +51,11 @@ class KeepAliveService : Service() {
             .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
-        runCatching {
-            if (Build.VERSION.SDK_INT >= 34) {
-                startForeground(ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-            } else {
-                startForeground(ID, notification)
-            }
-        }.onFailure {
-            stopSelf()
-            return START_NOT_STICKY
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(ID, notification)
         }
-        IslandListenerService.rebind(this)
-        return START_STICKY
     }
 
     companion object {
@@ -68,9 +66,9 @@ class KeepAliveService : Service() {
         fun start(context: Context) {
             IslandBus.loadPrefs(context)
             if (!IslandBus.settings.value.keepAlive) return
-            runCatching {
-                ContextCompat.startForegroundService(context, Intent(context, KeepAliveService::class.java))
-            }
+            // Bewusst startService statt startForegroundService: Das verlangt kein sofortiges startForeground
+            // und führt nicht zum Absturz, falls Android den Vordergrund-Start verweigert.
+            runCatching { context.startService(Intent(context, KeepAliveService::class.java)) }
         }
 
         fun stop(context: Context) {

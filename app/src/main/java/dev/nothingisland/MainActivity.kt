@@ -1,5 +1,7 @@
 package dev.nothingisland
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -34,6 +36,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -115,6 +119,31 @@ class MainActivity : ComponentActivity() {
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
             )
+
+            var crash by remember { mutableStateOf(CrashLog.read(ctx)) }
+            crash?.let { text ->
+                SectionLabel("LETZTER ABSTURZ")
+                Card {
+                    Text(
+                        text.take(1500),
+                        color = Muted,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PillButton("KOPIEREN", filled = true, modifier = Modifier.weight(1f)) {
+                        (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
+                            .setPrimaryClip(ClipData.newPlainText("Absturz", text))
+                    }
+                    PillButton("LÖSCHEN", filled = false, modifier = Modifier.weight(1f)) {
+                        CrashLog.clear(ctx)
+                        crash = null
+                    }
+                }
+            }
 
             SectionLabel("SETUP")
             StepRow("01", "Über anderen Apps anzeigen", overlayOk) {

@@ -91,6 +91,8 @@ private val ButtonBg = Color(0xFF1C1C1C)
 
 private enum class Mode { IDLE, COMPACT, MESSAGE, ALERT, EXPANDED }
 
+/** Reserve um die Pille, damit Überschwingen der Feder nicht abgeschnitten wird. */
+private const val WINDOW_MARGIN = 24f
 private const val BASE_ALERT_H = 84f
 private const val BASE_EXPANDED_H = 84f
 private const val BASE_EXPANDED_ACTIONS_H = 134f
@@ -116,6 +118,7 @@ fun IslandHost() {
     var lastCircle by remember { mutableStateOf<IslandEvent?>(null) }
     var lastMessage by remember { mutableStateOf<IslandEvent?>(null) }
     var lastCurrent by remember { mutableStateOf<IslandEvent?>(null) }
+    var reported by remember { mutableStateOf(0f to 0f) }
 
     // Neue Meldung: aufklappen, nach X Sekunden (oder Tippen außerhalb) in die kleine Pille schrumpfen.
     LaunchedEffect(alert?.id) {
@@ -151,7 +154,13 @@ fun IslandHost() {
         current != null -> Mode.COMPACT
         else -> Mode.IDLE
     }
-    if (mode == Mode.IDLE && !s.idleVisible && !preview) return
+    if (mode == Mode.IDLE && !s.idleVisible && !preview) {
+        SideEffect {
+            reported = 1f to 1f
+            IslandBus.setWindowSize(1f, 1f)
+        }
+        return
+    }
 
     // Zweite Aktivität als Kreis neben der Pille (wie bei Apple).
     val circleItem = when (mode) {
@@ -235,8 +244,27 @@ fun IslandHost() {
         spring(dampingRatio = 0.8f, stiffness = 380f),
         label = "top",
     )
+    // Fenster auf die Zielgröße setzen: wachsen sofort, schrumpfen erst nach der Animation.
+    val slotTarget = if (circleItem != null) smallH + 6f * sc else 0f
+    val topTarget = ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
+    val winW = minOf(targetW + 2f * slotTarget + 2f * WINDOW_MARGIN, screenW.toFloat())
+    val winH = topTarget + targetH + WINDOW_MARGIN
+    LaunchedEffect(winW, winH) {
+        val gw = maxOf(winW, reported.first)
+        val gh = maxOf(winH, reported.second)
+        if (gw != reported.first || gh != reported.second) {
+            reported = gw to gh
+            IslandBus.setWindowSize(gw, gh)
+        }
+        if (gw != winW || gh != winH) {
+            delay(520)
+            reported = winW to winH
+            IslandBus.setWindowSize(winW, winH)
+        }
+    }
     val shape = RoundedCornerShape(corner)
 
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
     Row(modifier = Modifier.padding(top = topPad), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.width(slot))
 
@@ -346,6 +374,7 @@ fun IslandHost() {
                 }
             }
         }
+    }
     }
 }
 
