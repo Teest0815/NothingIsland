@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -125,7 +126,9 @@ fun IslandHost() {
     var lastCircle by remember { mutableStateOf<IslandEvent?>(null) }
     var lastMessage by remember { mutableStateOf<IslandEvent?>(null) }
     var lastCurrent by remember { mutableStateOf<IslandEvent?>(null) }
-    var reported by remember { mutableStateOf(0f to 0f) }
+    var reported by remember { mutableStateOf(Triple(0f, 0f, 0f)) }
+    var snapNext by remember { mutableStateOf(false) }
+    val appear = remember { Animatable(1f) }
     var suppressLinger by remember { mutableStateOf(false) }
 
     // Neue Meldung: aufklappen, nach X Sekunden (oder Tippen außerhalb) in die kleine Pille schrumpfen.
@@ -165,8 +168,8 @@ fun IslandHost() {
     }
     if (mode == Mode.IDLE && !s.idleVisible && !preview) {
         SideEffect {
-            reported = 1f to 1f
-            IslandBus.setWindowSize(1f, 1f)
+            reported = Triple(1f, 1f, 1f)
+            IslandBus.setWindowSize(1f, 1f, 1f)
         }
         return
     }
@@ -225,9 +228,9 @@ fun IslandHost() {
         dampingRatio = if (growing) 0.74f else 0.92f,
         stiffness = if (growing) 460f else 620f,
     )
-    val width by animateDpAsState(targetW.dp, widthSpec, label = "w")
-    val height by animateDpAsState(targetH.dp, heightSpec, label = "h")
-    val corner by animateDpAsState(targetCorner.dp, motion, label = "c")
+    val width by animateDpAsState(targetW.dp, if (snapNext) snap<Dp>() else widthSpec, label = "w")
+    val height by animateDpAsState(targetH.dp, if (snapNext) snap<Dp>() else heightSpec, label = "h")
+    val corner by animateDpAsState(targetCorner.dp, if (snapNext) snap<Dp>() else motion, label = "c")
     // Gleich großer freier Platz links und rechts, damit die Pille mittig (über der Kamera) bleibt.
     val slot by animateDpAsState(
         if (circleItem != null) (smallH + 6f * sc).dp else 0.dp,
@@ -250,7 +253,7 @@ fun IslandHost() {
     // Große Pille kann auf anderer Höhe sitzen als die kleine: Abstand im Layout, weich animiert.
     val topPad by animateDpAsState(
         ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).dp,
-        spring(dampingRatio = 0.8f, stiffness = 380f),
+        if (snapNext) snap<Dp>() else spring<Dp>(dampingRatio = 0.8f, stiffness = 380f),
         label = "top",
     )
     // Wischen nach links oder rechts schließt Meldung, aufgeklappte Pille und Nachricht.
@@ -270,43 +273,50 @@ fun IslandHost() {
         }
     }
 
-    // Fenster auf die Zielgröße setzen: wachsen sofort, schrumpfen erst nach der Animation.
-    val slotTarget = if (circleItem != null) smallH + 6f * sc else 0f
+    // Fenster: Die linke Kante hängt an einer festen Breite ("span") um die Bildschirmmitte, nur die
+    // rechte Kante und die Höhe ändern sich. So gibt es beim Auf- und Zuklappen keinen seitlichen Versatz.
+    // Wachsen passiert sofort, Schrumpfen erst nach der Animation.
+    val slotMax = smallH + 6f * sc
+    val rowMax = maxOf(bigW, compactW, messageW) + 2f * slotMax
+    val span = minOf(rowMax + 2f * WINDOW_MARGIN, screenW.toFloat())
+    val slotTarget = if (circleItem != null) slotMax else 0f
     val topTarget = ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
-    val winW = minOf(targetW + 2f * slotTarget + 2f * WINDOW_MARGIN, screenW.toFloat())
+    val winW = minOf(span / 2f + (targetW + 2f * slotTarget) / 2f + WINDOW_MARGIN, span)
     val winH = topTarget + targetH + WINDOW_MARGIN
-    LaunchedEffect(winW, winH) {
-        val gw = maxOf(winW, reported.first)
+    LaunchedEffect(winW, winH, span) {
+        val gw = minOf(maxOf(winW, reported.first), span)
         val gh = maxOf(winH, reported.second)
-        if (gw != reported.first || gh != reported.second) {
-            reported = gw to gh
-            IslandBus.setWindowSize(gw, gh)
+        if (gw != reported.first || gh != reported.second || span != reported.third) {
+            reported = Triple(gw, gh, span)
+            IslandBus.setWindowSize(gw, gh, span)
         }
         if (gw != winW || gh != winH) {
             delay(520)
-            reported = winW to winH
-            IslandBus.setWindowSize(winW, winH)
+            reported = Triple(winW, winH, span)
+            IslandBus.setWindowSize(winW, winH, span)
         }
     }
     val shape = RoundedCornerShape(corner)
 
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+    Box(Modifier.fillMaxSize().wrapContentSize(Alignment.TopStart, unbounded = true)) {
+    Box(Modifier.width(span.dp), contentAlignment = Alignment.TopCenter) {
     Row(modifier = Modifier.padding(top = maxOf(topPad, 0.dp)), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.width(slot))
 
         Box(
             modifier = Modifier
                 .graphicsLayer {
-                    scaleX = pressScale
-                    scaleY = pressScale
+                    val pop = 0.9f + 0.1f * appear.value
+                    scaleX = pressScale * pop
+                    scaleY = pressScale * pop
                     translationX = swipeX.value
-                    alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f)
+                    alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value
                 }
                 .size(width, height)
                 .clip(shape)
                 .background(Color.Black)
                 .border(1.dp, Hairline, shape)
-                .pointerInput(swipeable) {
+                .pointerInput(mode) {
                     if (!swipeable) return@pointerInput
                     detectHorizontalDragGestures(
                         onDragEnd = {
@@ -314,8 +324,13 @@ fun IslandHost() {
                             swipeScope.launch {
                                 if (abs(x) > 80.dp.toPx()) {
                                     swipeX.animateTo(sign(x) * size.width * 0.8f, tween(160))
+                                    // Die kleine Pille erscheint direkt an ihrem Platz und wächst nicht aus der Mitte.
+                                    snapNext = true
+                                    appear.snapTo(0f)
                                     onSwipeAway()
                                     swipeX.snapTo(0f)
+                                    appear.animateTo(1f, tween(260))
+                                    snapNext = false
                                 } else {
                                     swipeX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f))
                                 }
@@ -426,6 +441,7 @@ fun IslandHost() {
                 }
             }
         }
+    }
     }
     }
 }

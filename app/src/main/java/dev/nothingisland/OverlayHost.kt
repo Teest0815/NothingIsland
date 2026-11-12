@@ -83,7 +83,7 @@ class OverlayHost(
         }
 
         val d0 = context.resources.displayMetrics.density
-        val (w0, h0) = IslandBus.windowSize.value
+        val (w0, h0, sp0) = IslandBus.windowSize.value
         val lp = WindowManager.LayoutParams(
             (w0 * d0).toInt().coerceAtLeast(1),
             (h0 * d0).toInt().coerceAtLeast(1),
@@ -96,14 +96,15 @@ class OverlayHost(
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            // Links verankert: Beim Größenwechsel bewegt sich nur die rechte Kante, nichts springt seitlich.
+            gravity = Gravity.TOP or Gravity.START
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 layoutInDisplayCutoutMode =
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             }
             val s = IslandBus.settings.value
             val d = context.resources.displayMetrics.density
-            x = (s.offsetX * d).toInt()
+            x = leftPx(s.offsetX, sp0)
             y = (s.windowTop * d).toInt()
         }
 
@@ -134,11 +135,17 @@ class OverlayHost(
         windowManager = null
     }
 
-    private fun applyLayout(s: IslandSettings, size: Pair<Float, Float>) {
+    /** Linke Fensterkante so, dass die Mitte des "span"-Bereichs auf der Bildschirmmitte (plus Versatz) liegt. */
+    private fun leftPx(offsetX: Int, spanDp: Float): Int {
+        val dm = context.resources.displayMetrics
+        return (dm.widthPixels / 2f + offsetX * dm.density - spanDp * dm.density / 2f).toInt()
+    }
+
+    private fun applyLayout(s: IslandSettings, size: Triple<Float, Float, Float>) {
         val p = params ?: return
         val v = overlay ?: return
         val d = context.resources.displayMetrics.density
-        p.x = (s.offsetX * d).toInt()
+        p.x = leftPx(s.offsetX, size.third)
         p.y = (s.windowTop * d).toInt()
         p.width = (size.first * d).toInt().coerceAtLeast(1)
         p.height = (size.second * d).toInt().coerceAtLeast(1)

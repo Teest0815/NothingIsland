@@ -81,11 +81,13 @@ object IslandBus {
      * Größe des Overlay-Fensters in dp. Das Fenster wird nur bei Zustandswechseln angepasst und nicht
      * bei jedem Animationsschritt, das hält die Animationen flüssig.
      */
-    private val _windowSize = MutableStateFlow(1f to 1f)
-    val windowSize: StateFlow<Pair<Float, Float>> = _windowSize.asStateFlow()
+    private val _windowSize = MutableStateFlow(Triple(1f, 1f, 1f))
 
-    fun setWindowSize(width: Float, height: Float) {
-        _windowSize.value = width to height
+    /** Breite, Höhe und "span" (feste Gesamtbreite um die Bildschirmmitte, an der die linke Kante hängt). */
+    val windowSize: StateFlow<Triple<Float, Float, Float>> = _windowSize.asStateFlow()
+
+    fun setWindowSize(width: Float, height: Float, span: Float) {
+        _windowSize.value = Triple(width, height, span)
     }
 
     private val _settings = MutableStateFlow(IslandSettings())
