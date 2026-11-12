@@ -277,23 +277,29 @@ fun IslandHost() {
     // rechte Kante und die Höhe ändern sich. So gibt es beim Auf- und Zuklappen keinen seitlichen Versatz.
     // Wachsen passiert sofort, Schrumpfen erst nach der Animation.
     val slotMax = smallH + 6f * sc
-    val rowMax = maxOf(bigW, compactW, messageW) + 2f * slotMax
-    val span = minOf(rowMax + 2f * WINDOW_MARGIN, screenW.toFloat())
+    // Ruhezustand: schmales Fenster (kleine Hitbox, Wischen für die Benachrichtigungsleiste bleibt frei).
+    // Aufgeklappt: breites Fenster. Die linke Kante bleibt während der Animation fest.
+    val rowSmall = maxOf(compactW, messageW) + 2f * slotMax
+    val rowBig = maxOf(bigW, compactW, messageW) + 2f * slotMax
+    val spanTarget = minOf((if (growing) rowBig else rowSmall) + 2f * WINDOW_MARGIN, screenW.toFloat())
     val slotTarget = if (circleItem != null) slotMax else 0f
     val topTarget = ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
+    val span = if (reported.third > 0f) maxOf(spanTarget, reported.third) else spanTarget
     val winW = minOf(span / 2f + (targetW + 2f * slotTarget) / 2f + WINDOW_MARGIN, span)
     val winH = topTarget + targetH + WINDOW_MARGIN
-    LaunchedEffect(winW, winH, span) {
-        val gw = minOf(maxOf(winW, reported.first), span)
+    LaunchedEffect(winW, winH, spanTarget) {
+        val gs = maxOf(spanTarget, reported.third)
+        val gw = minOf(maxOf(winW, reported.first), gs)
         val gh = maxOf(winH, reported.second)
-        if (gw != reported.first || gh != reported.second || span != reported.third) {
-            reported = Triple(gw, gh, span)
-            IslandBus.setWindowSize(gw, gh, span)
+        if (gw != reported.first || gh != reported.second || gs != reported.third) {
+            reported = Triple(gw, gh, gs)
+            IslandBus.setWindowSize(gw, gh, gs)
         }
-        if (gw != winW || gh != winH) {
+        if (gw != winW || gh != winH || gs != spanTarget) {
             delay(520)
-            reported = Triple(winW, winH, span)
-            IslandBus.setWindowSize(winW, winH, span)
+            val fw = minOf(spanTarget / 2f + (targetW + 2f * slotTarget) / 2f + WINDOW_MARGIN, spanTarget)
+            reported = Triple(fw, winH, spanTarget)
+            IslandBus.setWindowSize(fw, winH, spanTarget)
         }
     }
     val shape = RoundedCornerShape(corner)
