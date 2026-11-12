@@ -1,5 +1,9 @@
 package dev.nothingisland
 
+import android.app.KeyguardManager
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Build
@@ -63,6 +67,7 @@ class OverlayHost(
     private var owner: OverlayOwner? = null
     private var layoutJob: Job? = null
     private var touchView: View? = null
+    private var lockReceiver: BroadcastReceiver? = null
     private var touchParams: WindowManager.LayoutParams? = null
 
     val isShown: Boolean get() = overlay != null
@@ -146,6 +151,20 @@ class OverlayHost(
         if (runCatching { wm.addView(tv, tp) }.isSuccess) {
             touchView = tv
             touchParams = tp
+            updateLockState()
+        }
+        // Auf dem Sperrbildschirm ist die Island nicht antippbar.
+        val rc = object : BroadcastReceiver() {
+            override fun onReceive(c: Context?, i: Intent?) = updateLockState()
+        }
+        runCatching {
+            val f = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_USER_PRESENT)
+            }
+            context.registerReceiver(rc, f)
+            lockReceiver = rc
         }
         layoutJob = scope.launch {
             combine(IslandBus.settings, IslandBus.windowSize, IslandBus.touchRect) { st, size, r -> Triple(st, size, r) }
@@ -157,6 +176,8 @@ class OverlayHost(
     fun remove() {
         layoutJob?.cancel()
         layoutJob = null
+        lockReceiver?.let { r -> runCatching { context.unregisterReceiver(r) } }
+        lockReceiver = null
         touchView?.let { v -> runCatching { windowManager?.removeView(v) } }
         touchView = null
         touchParams = null
@@ -166,6 +187,18 @@ class OverlayHost(
         params = null
         owner = null
         windowManager = null
+    }
+
+    private fun updateLockState() {
+        val tp = touchParams ?: return
+        val tv = touchView ?: return
+        val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        val locked = km?.isKeyguardLocked == true
+        val has = tp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE != 0
+        if (locked == has) return
+        tp.flags = if (locked) tp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        else tp.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        runCatching { windowManager?.updateViewLayout(tv, tp) }
     }
 
     /** Linke Fensterkante so, dass die Mitte des "span"-Bereichs auf der Bildschirmmitte (plus Versatz) liegt. */
@@ -183,6 +216,7 @@ class OverlayHost(
         p.width = (size.first * d).toInt().coerceAtLeast(1)
         p.height = (size.second * d).toInt().coerceAtLeast(1)
         runCatching { windowManager?.updateViewLayout(v, p) }
+        updateLockState()
         val tp = touchParams
         val tv = touchView
         if (tp != null && tv != null) {

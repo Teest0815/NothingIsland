@@ -7,6 +7,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -375,9 +377,23 @@ fun IslandHost() {
             contentAlignment = Alignment.Center,
         ) {
             AnimatedContent(
-                targetState = mode,
+                targetState = mode to (if (mode == Mode.COMPACT) current?.key else null),
                 transitionSpec = {
-                    val toBig = targetState == Mode.ALERT || targetState == Mode.EXPANDED
+                    val swap = initialState.first == Mode.COMPACT && targetState.first == Mode.COMPACT
+                    if (swap) {
+                        // Tausch mit dem Kreis: neuer Inhalt kommt vom Kreis her, alter wandert dorthin.
+                        return@AnimatedContent ContentTransform(
+                            targetContentEnter = fadeIn(tween(260, delayMillis = 60)) +
+                                slideInHorizontally(tween(340, easing = FastOutSlowInEasing)) { it / 2 } +
+                                scaleIn(tween(340, easing = FastOutSlowInEasing), initialScale = 0.7f),
+                            initialContentExit = fadeOut(tween(180)) +
+                                slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { it / 2 } +
+                                scaleOut(tween(300), targetScale = 0.6f),
+                            targetContentZIndex = 0f,
+                            sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
+                        )
+                    }
+                    val toBig = targetState.first == Mode.ALERT || targetState.first == Mode.EXPANDED
                     val delay = if (toBig) 120 else 70
                     ContentTransform(
                         targetContentEnter = fadeIn(tween(240, delayMillis = delay)) +
@@ -393,8 +409,8 @@ fun IslandHost() {
                 },
                 contentAlignment = Alignment.Center,
                 label = "mode",
-            ) { m ->
-                when (m) {
+            ) { st ->
+                when (st.first) {
                     Mode.IDLE -> IdleDots(sc)
                     Mode.COMPACT -> shownCurrent?.let {
                         CompactContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(compactW.dp, smallH.dp))
@@ -437,10 +453,28 @@ fun IslandHost() {
                             scaleY = circleScale.coerceAtLeast(0f)
                         },
                     ) {
-                        CircleBubble(c, sc, smallH) {
-                            lingering = null
-                            IslandBus.setPrimary(c.key)
-                            touch++
+                        AnimatedContent(
+                            targetState = c,
+                            contentKey = { it.key },
+                            transitionSpec = {
+                                ContentTransform(
+                                    targetContentEnter = fadeIn(tween(240, delayMillis = 60)) +
+                                        slideInHorizontally(tween(340, easing = FastOutSlowInEasing)) { -it * 2 } +
+                                        scaleIn(tween(340), initialScale = 0.5f),
+                                    initialContentExit = fadeOut(tween(160)) +
+                                        slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it * 2 } +
+                                        scaleOut(tween(300), targetScale = 0.5f),
+                                    targetContentZIndex = 0f,
+                                    sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
+                                )
+                            },
+                            label = "circleSwap",
+                        ) { cc ->
+                            CircleBubble(cc, sc, smallH) {
+                                lingering = null
+                                IslandBus.setPrimary(cc.key)
+                                touch++
+                            }
                         }
                     }
                 }
