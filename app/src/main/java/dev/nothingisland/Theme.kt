@@ -13,7 +13,7 @@ object IslandTheme {
 
     val textGray: Color get() = lerp(bg, fg, 0.6f)
     val dotGray: Color get() = lerp(bg, fg, 0.22f)
-    val hairline: Color get() = lerp(bg, fg, 0.14f)
+    val hairline: Color get() = lerp(bg, fg, 0.20f)
     val buttonBg: Color get() = lerp(bg, fg, 0.10f)
 
     /** Name, Akzentfarbe, Hintergrund für die Auswahl in den Einstellungen. */

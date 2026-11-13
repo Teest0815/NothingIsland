@@ -274,11 +274,29 @@ object QuickActions {
     }
 
     /** Verarbeitet Bluetooth-Verbindungen (ACL und Adapter-Zustand). */
-    fun onBluetooth(ctx: Context, i: Intent) {
+    fun onBluetooth(ctx: Context, i: Intent, st: IslandSettings) {
         val dev = IntentCompat.getParcelableExtra(i, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
         when (i.action) {
             BluetoothDevice.ACTION_ACL_CONNECTED ->
-                if (dev != null) btDevices[dev.address] = deviceName(dev) to deviceBattery(dev)
+                if (dev != null) {
+                    val isNew = dev.address !in btDevices
+                    btDevices[dev.address] = deviceName(dev) to deviceBattery(dev)
+                    if (isNew && st.statusEnabled("bluetooth")) {
+                        // Akkustand kommt oft erst kurz nach dem Verbinden: kurz warten, dann kurz anzeigen.
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            val name = deviceName(dev)
+                            val batt = deviceBattery(dev)
+                            btDevices[dev.address] = name to batt
+                            IslandBus.post(
+                                IslandEvent(
+                                    app = "BLUETOOTH", title = name.uppercase(),
+                                    text = if (batt >= 0) "$batt %" else "Verbunden",
+                                    icon = icon("bluetooth"), quiet = true,
+                                ),
+                            )
+                        }, 1500)
+                    }
+                }
             BluetoothDevice.ACTION_ACL_DISCONNECTED -> if (dev != null) btDevices.remove(dev.address)
             android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED ->
                 if (i.getIntExtra(android.bluetooth.BluetoothAdapter.EXTRA_STATE, 0) != android.bluetooth.BluetoothAdapter.STATE_ON) btDevices.clear()
@@ -298,7 +316,7 @@ object QuickActions {
         if (prev != null && !prev && plugged && st.statusEnabled("charging")) {
             IslandBus.post(
                 IslandEvent(
-                    app = "AKKU", title = "LÄDT · $pct %", text = "Ladegerät verbunden", icon = icon("charge"),
+                    app = "AKKU", title = "LÄDT", text = "$pct %", icon = icon("charge"), quiet = true,
                 ),
             )
         }
@@ -370,14 +388,6 @@ object QuickActions {
         setStatus(st.statusEnabled("airplane"), "airplane", globalOn(app, "airplane_mode_on"), "FLUGMODUS", "Aktiv", "airplane", false, "EINSTELLUNGEN") {
             open(app, Settings.ACTION_AIRPLANE_MODE_SETTINGS)
         }
-
-        val bt = btDevices.values.lastOrNull()
-        setStatus(
-            st.statusEnabled("bluetooth"), "bluetooth", bt != null, bt?.first?.uppercase() ?: "", "Verbunden", "bluetooth", false,
-            "EINSTELLUNGEN",
-            right = bt?.second?.takeIf { it >= 0 }?.let { "$it %" },
-            action = { open(app, Settings.ACTION_BLUETOOTH_SETTINGS) },
-        )
 
         setStatus(st.statusEnabled("mic"), "mic", micActive, "MIKROFON", "Wird verwendet", "mic", true, null)
         setStatus(

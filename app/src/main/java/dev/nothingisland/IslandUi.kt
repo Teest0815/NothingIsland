@@ -160,7 +160,7 @@ private fun IslandHostBody() {
                     android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED,
                     android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED,
                     android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED ->
-                        QuickActions.onBluetooth(ctx, i)
+                        QuickActions.onBluetooth(ctx, i, IslandBus.settings.value)
                 }
                 QuickActions.syncStatus(ctx, IslandBus.settings.value)
             }
