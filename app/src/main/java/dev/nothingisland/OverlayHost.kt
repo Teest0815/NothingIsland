@@ -218,9 +218,12 @@ class OverlayHost(
             }
             setContent { ReplyBar() }
         }
+        // Feste Fenstergröße (Endhöhe): Das Aufklappen passiert nur im Inneren, das Fenster wird nie umgebaut.
+        val sc = s.scale * s.expandedScale
+        val fsc = s.scale * minOf(s.expandedScale, s.expandedFrameMax)
         val lp = WindowManager.LayoutParams(
             ((bigW + 24f) * d).toInt(),
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            ((84f * fsc + 62f * sc + 24f) * d).toInt(),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or

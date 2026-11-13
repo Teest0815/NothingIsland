@@ -254,11 +254,9 @@ private fun IslandHostBody() {
     }
     // Beim Antworten zeichnet das eigene Eingabefenster; die Pille tritt zurück.
     if ((mode == Mode.IDLE && !s.idleVisible && !preview) || replying) {
-        SideEffect {
-            reported = Triple(1f, 1f, 1f)
-            IslandBus.setWindowSize(1f, 1f, 1f)
-            IslandBus.setTouchRect(0f, 0f, 1f, 1f)
-        }
+        // Das Fenster behält seine Größe (nur die Touch-Fläche schrumpft): Ein Größenwechsel beim Zurückkehren
+        // ließ die kleine Pille kurz nach links oder rechts springen.
+        SideEffect { IslandBus.setTouchRect(0f, 0f, 1f, 1f) }
         return
     }
 
