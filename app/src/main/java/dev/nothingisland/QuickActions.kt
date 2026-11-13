@@ -248,6 +248,19 @@ object QuickActions {
     private fun deviceName(d: BluetoothDevice?): String =
         runCatching { d?.name }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Bluetooth-Gerät"
 
+    /** Kopfhörer melden links, Case und rechts einzeln: als "11/34/43" (ohne Beschriftung). Sonst ein Wert. */
+    private fun deviceBatteryText(d: BluetoothDevice?): String? {
+        val parts = listOf(10, 12, 11).mapNotNull { key ->
+            runCatching {
+                val b = BluetoothDevice::class.java.getMethod("getMetadata", Int::class.javaPrimitiveType).invoke(d, key) as? ByteArray
+                b?.toString(Charsets.UTF_8)?.trim()?.toIntOrNull()?.takeIf { it in 0..100 }
+            }.getOrNull()
+        }
+        if (parts.size >= 2) return parts.joinToString("/")
+        val single = deviceBattery(d)
+        return if (single >= 0) "$single %" else null
+    }
+
     private fun deviceBattery(d: BluetoothDevice?): Int =
         runCatching { BluetoothDevice::class.java.getMethod("getBatteryLevel").invoke(d) as Int }
             .getOrDefault(-1).let { if (it in 0..100) it else -1 }
@@ -285,13 +298,12 @@ object QuickActions {
                         // Akkustand kommt oft erst kurz nach dem Verbinden: kurz warten, dann kurz anzeigen.
                         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                             val name = deviceName(dev)
-                            val batt = deviceBattery(dev)
-                            btDevices[dev.address] = name to batt
+                            btDevices[dev.address] = name to deviceBattery(dev)
                             IslandBus.post(
                                 IslandEvent(
                                     app = "BLUETOOTH", title = name.uppercase(),
-                                    text = if (batt >= 0) "$batt %" else "Verbunden",
-                                    icon = icon("bluetooth"), quiet = true,
+                                    text = deviceBatteryText(dev) ?: "Verbunden",
+                                    icon = icon("bluetooth"), quiet = true, kind = Kind.STATUS,
                                 ),
                             )
                         }, 1500)
@@ -316,7 +328,7 @@ object QuickActions {
         if (prev != null && !prev && plugged && st.statusEnabled("charging")) {
             IslandBus.post(
                 IslandEvent(
-                    app = "AKKU", title = "LÄDT", text = "$pct %", icon = icon("charge"), quiet = true,
+                    app = "AKKU", title = "LÄDT", text = "$pct %", icon = icon("charge"), quiet = true, kind = Kind.STATUS,
                 ),
             )
         }

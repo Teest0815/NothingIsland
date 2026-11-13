@@ -858,7 +858,7 @@ private fun MessageContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float
         gap = gap,
         iconGap = iconGap,
         modifier = modifier,
-        rightAlignStart = true,
+        rightAlignStart = e.kind != Kind.STATUS,
         left = {
             SmallIcon(e.icon, (14f * sc).dp)
             Text(
@@ -874,8 +874,10 @@ private fun MessageContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float
         right = {
             Text(
                 text = e.text,
-                color = TextGray,
-                fontSize = (11f * sc).sp,
+                color = if (e.kind == Kind.STATUS) Fg else TextGray,
+                fontFamily = if (e.kind == Kind.STATUS) Mono else FontFamily.Default,
+                fontWeight = if (e.kind == Kind.STATUS) FontWeight.Medium else FontWeight.Normal,
+                fontSize = (if (e.kind == Kind.STATUS) 12f else 11f).let { (it * sc).sp },
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

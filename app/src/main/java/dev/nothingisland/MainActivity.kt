@@ -207,6 +207,31 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        var dump by remember { mutableStateOf(getSharedPreferences("island_prefs", MODE_PRIVATE).getString("workoutDump", null)) }
+        dump?.let { text ->
+            SectionLabel("LETZTE TRAININGS-BENACHRICHTIGUNG")
+            Card {
+                Text(
+                    text.take(1200),
+                    color = Muted,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillButton("KOPIEREN", filled = true, modifier = Modifier.weight(1f)) {
+                    (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager)
+                        .setPrimaryClip(ClipData.newPlainText("Training", text))
+                }
+                PillButton("LÖSCHEN", filled = false, modifier = Modifier.weight(1f)) {
+                    getSharedPreferences("island_prefs", MODE_PRIVATE).edit().remove("workoutDump").apply()
+                    dump = null
+                }
+            }
+        }
+
         SectionLabel("SETUP")
         StepRow("01", "Über anderen Apps anzeigen", overlayOk) {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))

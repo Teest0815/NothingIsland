@@ -134,7 +134,7 @@ class IslandListenerService : NotificationListenerService() {
         if (n.category == Notification.CATEGORY_CALL) return Kind.CALL
         if (n.category == Notification.CATEGORY_ALARM && (ongoing || n.fullScreenIntent != null)) return Kind.TIMER
         if (!ongoing) return null
-        if (pkg in FITNESS_PACKAGES) {
+        if (pkg in FITNESS_PACKAGES || pkg.startsWith("com.wahoofitness")) {
             // Komoot: Abbiegehinweise sind Navigation, sonst Aufzeichnung.
             val t = (ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty() + " " +
                 ex.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()).lowercase()
@@ -156,7 +156,10 @@ class IslandListenerService : NotificationListenerService() {
     private fun buildEvent(sbn: StatusBarNotification, kind: Kind): IslandEvent {
         val n = sbn.notification
         val ex = n.extras
+        // Trainings-Apps (z. B. Wahoo) bauen eigene Ansichten: Texte und Zähler daraus lesen.
+        val remote = if (kind == Kind.WORKOUT) remoteTexts(n) else RemoteInfo()
         val title = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+            .ifBlank { remote.texts.firstOrNull().orEmpty() }
         val text = (ex.getCharSequence(Notification.EXTRA_BIG_TEXT)
             ?: ex.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
 
@@ -193,6 +196,10 @@ class IslandListenerService : NotificationListenerService() {
 
         var chronoBase: Long? = if (chrono) n.`when` else null
         var countDown = chrono && ex.getBoolean(Notification.EXTRA_CHRONOMETER_COUNT_DOWN)
+        if (chronoBase == null && remote.chronoBase != null) {
+            chronoBase = remote.chronoBase
+            countDown = remote.countDown
+        }
         var rightText: String? = null
 
         // Musik: Abspielposition aus der Media-Session lesen (läuft live weiter, pausiert = fester Wert).
@@ -238,13 +245,22 @@ class IslandListenerService : NotificationListenerService() {
 
         val metrics = if (kind == Kind.WORKOUT) {
             val lines = ex.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.joinToString(" • ").orEmpty()
-            parseMetrics(
-                listOf(
-                    title, text, ex.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString().orEmpty(),
-                    ex.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString().orEmpty(),
-                    ex.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString().orEmpty(), lines,
-                ).joinToString(" • "),
-            )
+            val all = listOf(
+                title, text, ex.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString().orEmpty(),
+                ex.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString().orEmpty(),
+                ex.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString().orEmpty(), lines,
+            ).joinToString(" • ")
+            val m = LinkedHashMap(parseMetrics(all))
+            m.putAll(parseLabeled(remote.texts))
+            if (m["time"] == null) remote.texts.firstOrNull { TIME_ONLY.matches(it) }?.let { m["time"] = it }
+            // Diagnose für die Einstellungen: was wurde aus der Benachrichtigung gelesen?
+            runCatching {
+                getSharedPreferences("island_prefs", Context.MODE_PRIVATE).edit().putString(
+                    "workoutDump",
+                    "${sbn.packageName}\ntitle=$title\ntext=$text\nansicht=${remote.texts}\nzähler=${remote.chronoBase}\nwerte=$m",
+                ).apply()
+            }
+            m
         } else emptyMap()
 
         return IslandEvent(
@@ -270,6 +286,65 @@ class IslandListenerService : NotificationListenerService() {
             reply = reply,
             metrics = metrics,
         )
+    }
+
+    private class RemoteInfo(
+        val texts: List<String> = emptyList(),
+        val chronoBase: Long? = null,
+        val countDown: Boolean = false,
+    )
+
+    /** Baut die eigene Ansicht der Benachrichtigung nach und liest Texte und Zähler heraus. */
+    @Suppress("DEPRECATION")
+    private fun remoteTexts(n: Notification): RemoteInfo {
+        var best = RemoteInfo()
+        for (rv in listOfNotNull(n.bigContentView, n.contentView, n.headsUpContentView)) {
+            runCatching {
+                val root = rv.apply(this, android.widget.FrameLayout(this))
+                val texts = ArrayList<String>()
+                var base: Long? = null
+                var down = false
+                fun walk(v: android.view.View) {
+                    if (v is android.widget.Chronometer) {
+                        val el = SystemClock.elapsedRealtime()
+                        val now = System.currentTimeMillis()
+                        down = v.isCountDown
+                        base = if (down) v.base - el + now else now - (el - v.base)
+                        v.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { texts.add(it) }
+                    } else if (v is android.widget.TextView) {
+                        v.text?.toString()?.trim()?.takeIf { it.isNotEmpty() }?.let { texts.add(it) }
+                    }
+                    if (v is android.view.ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+                }
+                walk(root)
+                if (texts.size > best.texts.size || (best.chronoBase == null && base != null && texts.isNotEmpty())) {
+                    best = RemoteInfo(texts, base, down)
+                }
+            }
+        }
+        return best
+    }
+
+    /** Wertepaare der eigenen Ansicht: Beschriftung, dann Wert (z. B. "BPM", "142"). */
+    private fun parseLabeled(texts: List<String>): Map<String, String> {
+        val m = LinkedHashMap<String, String>()
+        for (i in 0 until texts.size - 1) {
+            val label = texts[i].lowercase().trim()
+            val raw = texts[i + 1].trim()
+            if (!raw.any { it.isDigit() } || raw.equals("n/a", true)) continue
+            val v = raw.replace(',', '.')
+            when {
+                "bpm" in label || "puls" in label || "herz" in label || "heart" in label -> m["bpm"] = "$v bpm"
+                "min/mi" in label -> m["pace"] = "$v /mi"
+                "min/" in label || "pace" in label || "tempo" in label -> m["pace"] = "$v /km"
+                "schritte" in label || "spm" in label || "cadence" in label || "kadenz" in label || "rpm" in label -> m["cad"] = "$v spm"
+                label == "w" || "watt" in label || "power" in label || "leistung" in label -> m["power"] = "$v W"
+                "km/h" in label || "speed" in label || "geschw" in label -> m["speed"] = "$v km/h"
+                "kcal" in label || "kalorien" in label -> m["kcal"] = "$v kcal"
+                label == "km" || label == "mi" || "dist" in label || "strecke" in label -> m["dist"] = "$v $label".replace("dist", "km")
+            }
+        }
+        return m
     }
 
     /** Liest Trainingswerte aus dem Text der Benachrichtigung (Deutsch und Englisch). */
@@ -330,6 +405,8 @@ class IslandListenerService : NotificationListenerService() {
             "com.google.android.apps.maps", "com.waze", "net.osmand", "net.osmand.plus",
             "app.organicmaps", "com.here.app.maps", "com.sygic.aura",
         )
+
+        private val TIME_ONLY = Regex("""\d{1,2}:\d{2}(:\d{2})?""")
 
         /** Trainings-Apps: laufende Aufzeichnung wird als Training angezeigt (Zeit links, Wert rechts). */
         private val FITNESS_PACKAGES = setOf(
