@@ -157,6 +157,19 @@ object QuickActions {
     fun powerSave(ctx: Context): Boolean =
         runCatching { (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isPowerSaveMode }.getOrDefault(false)
 
+    /** Berechnet, ob der Sparmodus der Island aktiv ist, und meldet es dem Bus. */
+    fun updateLowPower(ctx: Context, st: IslandSettings) {
+        val on = when (st.powerSaver) {
+            2 -> true
+            1 -> powerSave(ctx) || (!lastPluggedNow && lastPct in 0..20)
+            else -> false
+        }
+        IslandBus.setLowPower(on)
+    }
+
+    @Volatile private var lastPluggedNow = false
+    @Volatile private var lastPct = -1
+
     fun locationOn(ctx: Context): Boolean =
         runCatching { (ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager).isLocationEnabled }.getOrDefault(false)
 
@@ -367,6 +380,9 @@ object QuickActions {
         val plugged = i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
         val prev = lastPlugged
         lastPlugged = plugged
+        lastPluggedNow = plugged
+        lastPct = pct
+        updateLowPower(ctx, st)
         if (pct < 0) return
         if (prev != null && !prev && plugged && st.statusEnabled("charging")) {
             IslandBus.post(

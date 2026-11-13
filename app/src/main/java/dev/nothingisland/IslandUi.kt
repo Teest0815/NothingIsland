@@ -158,10 +158,14 @@ private fun IslandHostBody() {
     val torchOn by QuickActions.torch.collectAsState()
     LaunchedEffect(torchOn, s.statusPills, s.statusOff) { QuickActions.syncStatus(ctx, s) }
     // Wecker-Countdown und Zustände ohne eigenes Signal regelmäßig prüfen.
-    LaunchedEffect(Unit) {
+    val lowPowerNow by IslandBus.lowPower.collectAsState()
+    LaunchedEffect(s.powerSaver) { QuickActions.updateLowPower(ctx, s) }
+    LaunchedEffect(lowPowerNow) {
+        val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
         while (true) {
-            delay(30_000)
-            QuickActions.syncStatus(ctx, IslandBus.settings.value)
+            delay(if (lowPowerNow) 120_000L else 45_000L)
+            // Bei ausgeschaltetem Bildschirm gibt es nichts anzuzeigen.
+            if (pm?.isInteractive != false) QuickActions.syncStatus(ctx, IslandBus.settings.value)
         }
     }
     DisposableEffect(ctx) {
@@ -178,6 +182,7 @@ private fun IslandHostBody() {
                     "android.bluetooth.device.action.BATTERY_LEVEL_CHANGED" ->
                         QuickActions.onBluetooth(ctx, i, IslandBus.settings.value)
                 }
+                QuickActions.updateLowPower(ctx, IslandBus.settings.value)
                 QuickActions.syncStatus(ctx, IslandBus.settings.value)
             }
         }
@@ -868,6 +873,27 @@ private fun TurnArrow(turn: Turn, size: Dp, color: Color = Fg) {
 
 @Composable
 private fun Equalizer(playing: Boolean, sc: Float) {
+    val lp by IslandBus.lowPower.collectAsState()
+    if (lp) {
+        // Sparmodus: stehende Balken statt Dauer-Animation.
+        val hs = floatArrayOf(0.55f, 0.95f, 0.4f, 0.75f)
+        Row(
+            modifier = Modifier.height((12f * sc).dp),
+            horizontalArrangement = Arrangement.spacedBy((2f * sc).dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            hs.forEach { h ->
+                Box(
+                    Modifier
+                        .width((2.5f * sc).dp)
+                        .fillMaxHeight(if (playing) h else 0.2f)
+                        .clip(RoundedCornerShape(50))
+                        .background(NothingRed),
+                )
+            }
+        }
+        return
+    }
     val t = rememberInfiniteTransition(label = "eq")
     val periods = intArrayOf(520, 380, 610, 450)
     Row(
@@ -895,6 +921,11 @@ private fun Equalizer(playing: Boolean, sc: Float) {
 
 @Composable
 private fun LivePulse(sc: Float) {
+    val lp by IslandBus.lowPower.collectAsState()
+    if (lp) {
+        Box(Modifier.size((5f * sc).dp).clip(CircleShape).background(NothingRed))
+        return
+    }
     val t = rememberInfiniteTransition(label = "pulse")
     val a by t.animateFloat(
         initialValue = 0.3f,
@@ -979,7 +1010,8 @@ private fun Chrono(
     LaunchedEffect(e.chronoBase) {
         while (true) {
             now = System.currentTimeMillis()
-            delay(500)
+            // Sekunden-Anzeige: genau zum nächsten Sekundenwechsel statt alle 500 ms.
+            delay(1000L - (now % 1000L) + 5L)
         }
     }
     val base = e.chronoBase ?: return

@@ -106,6 +106,8 @@ data class IslandSettings(
     val equalizer: Boolean = true,
     /** System-Pop-ups (Heads-up) anderer Apps ausschalten, solange die Island läuft. Braucht WRITE_SECURE_SETTINGS. */
     val suppressPopups: Boolean = false,
+    /** Sparmodus: 0 aus, 1 automatisch (Systemsparmodus oder Akku unter 20 %), 2 immer. */
+    val powerSaver: Int = 1,
     /** Wischen auf der Musik-Pille: Song vor/zurück (die Pille dehnt sich in die Richtung). */
     val swipeSkip: Boolean = true,
     /** Mehrere Benachrichtigungen nacheinander zeigen statt die vorige zu überschreiben. */
@@ -177,6 +179,14 @@ object IslandBus {
         if (c[0] != left || c[1] != top || c[2] != width || c[3] != height) {
             _touchRect.value = floatArrayOf(left, top, width, height)
         }
+    }
+
+    /** true, wenn der Sparmodus der Island gerade aktiv ist (keine Dauer-Animationen, seltener prüfen). */
+    private val _lowPower = MutableStateFlow(false)
+    val lowPower: StateFlow<Boolean> = _lowPower.asStateFlow()
+
+    fun setLowPower(v: Boolean) {
+        if (_lowPower.value != v) _lowPower.value = v
     }
 
     private val _settings = MutableStateFlow(IslandSettings())
@@ -352,6 +362,7 @@ object IslandBus {
             hapticLevel = p.getInt("hapticLevel", d.hapticLevel),
             equalizer = p.getBoolean("equalizer", d.equalizer),
             suppressPopups = p.getBoolean("suppressPopups", d.suppressPopups),
+            powerSaver = p.getInt("powerSaver", d.powerSaver),
             swipeSkip = p.getBoolean("swipeSkip", d.swipeSkip),
             multiNotif = p.getBoolean("multiNotif", d.multiNotif),
             clipboard = p.getBoolean("clipboard", d.clipboard),
@@ -395,6 +406,7 @@ object IslandBus {
             .putInt("hapticLevel", s.hapticLevel)
             .putBoolean("equalizer", s.equalizer)
             .putBoolean("suppressPopups", s.suppressPopups)
+            .putInt("powerSaver", s.powerSaver)
             .putBoolean("swipeSkip", s.swipeSkip)
             .putBoolean("multiNotif", s.multiNotif)
             .putBoolean("clipboard", s.clipboard)

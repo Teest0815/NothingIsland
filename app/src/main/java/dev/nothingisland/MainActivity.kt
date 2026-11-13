@@ -440,6 +440,27 @@ class MainActivity : ComponentActivity() {
             Spacer(Modifier.height(8.dp))
         }
 
+        SectionLabel("SPARMODUS")
+        Card {
+            Text(
+                "Spart Akku: keine Dauer-Animationen (Equalizer, Puls), Zustände werden seltener geprüft. Bei ausgeschaltetem Bildschirm pausiert die Prüfung immer.",
+                color = Muted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "AUS", 1 to "AUTOMATISCH", 2 to "IMMER").forEach { (k, n) ->
+                    Chip(n, s.powerSaver == k) { edit { it.copy(powerSaver = k) } }
+                }
+            }
+            Text(
+                "Automatisch: aktiv, wenn der Energiesparmodus des Handys an ist oder der Akku unter 20 % liegt.",
+                color = Muted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+        }
+
         SectionLabel("HAPTIK")
         Card {
             ToggleRow("Kurz vibrieren beim Aufklappen", s.haptics) { c ->
