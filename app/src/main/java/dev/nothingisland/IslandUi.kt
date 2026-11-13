@@ -569,7 +569,7 @@ private fun IslandHostBody() {
                     if (targetState.first == Mode.QUICK) {
                         // Schnellzugriff: Rahmen wächst zuerst, die Kacheln blenden danach einzeln ein.
                         return@AnimatedContent ContentTransform(
-                            targetContentEnter = fadeIn(tween(140, delayMillis = 120)),
+                            targetContentEnter = fadeIn(tween(110, delayMillis = 30)),
                             initialContentExit = fadeOut(tween(90)),
                             targetContentZIndex = 0f,
                             sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
@@ -1375,7 +1375,7 @@ private fun QuickPanel(tiles: List<QuickTile>, sc: Float, modifier: Modifier, on
                     val appBmp = if (t.key.startsWith("app:")) QuickActions.appIcon(t.key.removePrefix("app:")) else null
                     var shown by remember { mutableStateOf(false) }
                     LaunchedEffect(Unit) {
-                        delay(130L + (r * 4 + c) * 32L)
+                        delay(25L + (r * 4 + c) * 24L)
                         shown = true
                     }
                     val appear by animateFloatAsState(if (shown) 1f else 0f, spring(dampingRatio = 0.7f, stiffness = 420f), label = "tile")

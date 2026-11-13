@@ -74,6 +74,39 @@ class OverlayHost(
 
     val isShown: Boolean get() = overlay != null
 
+    // ---- Vollbild-Erkennung: 1-Pixel-Fenster ohne LAYOUT_IN_SCREEN. Es sitzt unter der Statusleiste (y > 0),
+    // und rutscht auf y = 0, sobald die Statusleiste ausgeblendet ist. Wurde nie y > 0 gemessen, wird nie ausgeblendet.
+    private var probe: View? = null
+    private var probeMax = 0
+    private var probeLast = false
+    private val probeHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val probeTick = object : Runnable {
+        override fun run() {
+            sampleProbe()
+            probeHandler.postDelayed(this, if (IslandBus.lowPower.value) 1500L else 600L)
+        }
+    }
+
+    private fun sampleProbe() {
+        if (!IslandBus.settings.value.hideFullscreen) {
+            probeLast = false
+            IslandBus.setFullscreen(false)
+            return
+        }
+        val v = probe ?: return
+        if (!v.isAttachedToWindow) return
+        val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+        if (pm?.isInteractive == false) return
+        val loc = IntArray(2)
+        v.getLocationOnScreen(loc)
+        val y = loc[1]
+        if (y > probeMax) probeMax = y
+        val fs = probeMax > 0 && y < probeMax / 2
+        // Erst nach zwei gleichen Messungen umschalten (kein Flackern bei Übergängen).
+        if (fs == probeLast) IslandBus.setFullscreen(fs)
+        probeLast = fs
+    }
+
     fun show(): Boolean {
         if (overlay != null) return true
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -85,13 +118,6 @@ class OverlayHost(
             setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             setViewTreeViewModelStoreOwner(lifecycleOwner)
             setContent { IslandHost() }
-            // Vollbild erkennen: Ist die Statusleiste für die App darunter ausgeblendet, meldet das System sie als unsichtbar.
-            setOnApplyWindowInsetsListener { v, insets ->
-                val visible = androidx.core.view.WindowInsetsCompat.toWindowInsetsCompat(insets, v)
-                    .isVisible(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-                IslandBus.setFullscreen(!visible)
-                v.onApplyWindowInsets(insets)
-            }
         }
 
         val d0 = context.resources.displayMetrics.density
@@ -162,6 +188,18 @@ class OverlayHost(
             touchParams = tp
             updateLockState()
         }
+        val pv = View(context)
+        val pp = WindowManager.LayoutParams(
+            1, 1, windowType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+            PixelFormat.TRANSLUCENT,
+        ).apply { gravity = Gravity.TOP or Gravity.START }
+        if (runCatching { wm.addView(pv, pp) }.isSuccess) {
+            probe = pv
+            probeHandler.postDelayed(probeTick, 1000L)
+        }
         // Auf dem Sperrbildschirm ist die Island nicht antippbar.
         val rc = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, i: Intent?) = updateLockState()
@@ -186,6 +224,10 @@ class OverlayHost(
     }
 
     fun remove() {
+        probeHandler.removeCallbacks(probeTick)
+        probe?.let { v -> runCatching { windowManager?.removeView(v) } }
+        probe = null
+        IslandBus.setFullscreen(false)
         QuickActions.applyHeadsUp(context, false)
         replyJob?.cancel()
         replyJob = null
