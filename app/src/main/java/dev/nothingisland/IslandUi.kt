@@ -174,8 +174,11 @@ private fun IslandHostBody() {
         val r = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: android.content.Context?, i: android.content.Intent?) {
                 when (i?.action) {
-                    "android.net.wifi.WIFI_AP_STATE_CHANGED" ->
-                        QuickActions.hotspotOn = i.getIntExtra("wifi_state", 0) % 10 == 3
+                    "android.net.wifi.WIFI_AP_STATE_CHANGED" -> {
+                        val on = i.getIntExtra("wifi_state", 0) % 10 == 3
+                        if (on != QuickActions.hotspotOn) QuickActions.watchHotspot(ctx, on)
+                        QuickActions.hotspotOn = on
+                    }
                     android.content.Intent.ACTION_BATTERY_CHANGED ->
                         QuickActions.onBattery(ctx, i, IslandBus.settings.value)
                     android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED,

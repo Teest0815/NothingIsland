@@ -60,6 +60,36 @@ object QuickActions {
 
     // ---- Zustände, die per Broadcast oder Callback hereinkommen
     @Volatile var hotspotOn = false
+    @Volatile var hotspotClients: Int? = null
+    private var softApCallback: Any? = null
+
+    /** Zählt die Geräte am Hotspot (ab Android 11). Meldet nichts, wenn das System oder der Hersteller es nicht zulässt. */
+    fun watchHotspot(ctx: Context, on: Boolean) {
+        if (android.os.Build.VERSION.SDK_INT < 30) return
+        val app = ctx.applicationContext
+        val wm = app.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager ?: return
+        runCatching {
+            (softApCallback as? android.net.wifi.WifiManager.SoftApCallback)?.let { wm.unregisterSoftApCallback(it) }
+            softApCallback = null
+            if (!on) {
+                hotspotClients = null
+                return
+            }
+            val cb = object : android.net.wifi.WifiManager.SoftApCallback {
+                override fun onConnectedClientsChanged(clients: MutableList<android.net.wifi.WifiClient>) {
+                    hotspotClients = clients.size
+                    syncStatus(app, IslandBus.settings.value)
+                }
+                @Suppress("OVERRIDE_DEPRECATION")
+                override fun onNumClientsChanged(numClients: Int) {
+                    hotspotClients = numClients
+                    syncStatus(app, IslandBus.settings.value)
+                }
+            }
+            wm.registerSoftApCallback(app.mainExecutor, cb)
+            softApCallback = cb
+        }
+    }
     @Volatile private var micActive = false
     private val camUnavailable = HashSet<String>()
     private val btDevices = LinkedHashMap<String, Pair<String, Int>>() // Adresse -> (Name, Akku %)
@@ -516,16 +546,73 @@ object QuickActions {
 
     // ------------------------------------------------------------ Zwischenablage
 
+    private fun clipDump(ctx: Context, text: String) {
+        runCatching {
+            ctx.getSharedPreferences("island_prefs", Context.MODE_PRIVATE).edit().putString("clipDump", text).apply()
+        }
+    }
+
     fun onClipboard(ctx: Context) {
         if (!IslandBus.settings.value.clipboard) return
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager ?: return
         val clip = runCatching { cm.primaryClip }.getOrNull()
         val sensitive = clip?.description?.extras?.getBoolean("android.content.extra.IS_SENSITIVE") == true
-        var text = ""
+        var raw = ""
         if (clip != null && clip.itemCount > 0 && !sensitive) {
-            text = runCatching { clip.getItemAt(0).coerceToText(ctx).toString() }.getOrDefault("")
+            raw = runCatching { clip.getItemAt(0).coerceToText(ctx).toString() }.getOrDefault("")
         }
-        text = text.trim().replace(Regex("\\s+"), " ")
+        val stamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.GERMANY).format(java.util.Date())
+        if (raw.isNotBlank() || sensitive) {
+            clipDump(ctx, "$stamp  Meldung erhalten\ndirekt gelesen: ${raw.length} Zeichen, sensibel=$sensitive")
+            showClip(raw)
+            return
+        }
+        // Android 10+: Im Hintergrund liefert die Zwischenablage nichts. Kurz ein Fenster mit Fokus öffnen, dann darf die App lesen.
+        val done = java.util.concurrent.atomic.AtomicBoolean(false)
+        val finish: (String?, String) -> Unit = { t, how ->
+            if (done.compareAndSet(false, true)) {
+                clipDump(ctx, "$stamp  Meldung erhalten\ndirekt gelesen: 0 Zeichen\n$how: ${t?.length ?: 0} Zeichen")
+                showClip(t.orEmpty())
+            }
+        }
+        readWithFocus(ctx, cm) { t -> finish(t, "mit Fokus-Fenster") }
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ finish(null, "Zeitüberschreitung (kein Fokus)") }, 700)
+    }
+
+    private fun readWithFocus(ctx: Context, cm: android.content.ClipboardManager, onText: (String?) -> Unit) {
+        val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as? android.view.WindowManager ?: return
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        var view: android.view.View? = null
+        var fired = false
+        val remove = { view?.let { v -> runCatching { wm.removeView(v) } }; view = null }
+        val v = object : android.view.View(ctx) {
+            override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+                super.onWindowFocusChanged(hasWindowFocus)
+                if (hasWindowFocus && !fired) {
+                    fired = true
+                    val t = runCatching { cm.primaryClip?.getItemAt(0)?.coerceToText(ctx)?.toString() }.getOrNull()
+                    handler.post { remove() }
+                    onText(t)
+                }
+            }
+        }
+        val lp = android.view.WindowManager.LayoutParams(
+            1, 1, android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                android.view.WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM,
+            android.graphics.PixelFormat.TRANSLUCENT,
+        ).apply { gravity = android.view.Gravity.TOP or android.view.Gravity.START }
+        view = v
+        if (runCatching { wm.addView(v, lp) }.isFailure) {
+            view = null
+            return
+        }
+        handler.postDelayed({ remove() }, 900)
+    }
+
+    private fun showClip(raw: String) {
+        var text = raw.trim().replace(Regex("\\s+"), " ")
         if (text.startsWith("http://") || text.startsWith("https://")) {
             text = text.substringAfter("://").removePrefix("www.").substringBefore('/')
         }
@@ -622,7 +709,14 @@ object QuickActions {
 
         setStatus(st.statusEnabled("dnd"), "dnd", dndOn(app), "NICHT STÖREN", "Aktiv", "moon", false, "AUS") { toggleDnd(app) }
 
-        setStatus(st.statusEnabled("hotspot"), "hotspot", hotspotOn, "HOTSPOT", "Aktiv", "hotspot", true, "EINSTELLUNGEN") {
+        val hs = hotspotClients
+        val hsText = when {
+            hs == null -> "Aktiv"
+            hs == 0 -> "Keine Geräte"
+            hs == 1 -> "1 Gerät"
+            else -> "$hs Geräte"
+        }
+        setStatus(st.statusEnabled("hotspot"), "hotspot", hotspotOn, "HOTSPOT", hsText, "hotspot", true, "EINSTELLUNGEN") {
             open(app, "android.settings.TETHER_SETTINGS", Settings.ACTION_WIRELESS_SETTINGS)
         }
         setStatus(st.statusEnabled("airplane"), "airplane", globalOn(app, "airplane_mode_on"), "FLUGMODUS", "Aktiv", "airplane", false, "EINSTELLUNGEN") {

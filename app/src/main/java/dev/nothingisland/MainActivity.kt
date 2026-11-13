@@ -247,6 +247,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        var clipDump by remember { mutableStateOf(getSharedPreferences("island_prefs", MODE_PRIVATE).getString("clipDump", null)) }
+        clipDump?.let { text ->
+            SectionLabel("LETZTE ZWISCHENABLAGE")
+            Card {
+                Text(text, color = Muted, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(vertical = 8.dp))
+            }
+            Spacer(Modifier.height(10.dp))
+            PillButton("LÖSCHEN", filled = false, modifier = Modifier.fillMaxWidth()) {
+                getSharedPreferences("island_prefs", MODE_PRIVATE).edit().remove("clipDump").apply()
+                clipDump = null
+            }
+        }
+
         var alarmDump by remember { mutableStateOf(getSharedPreferences("island_prefs", MODE_PRIVATE).getString("alarmDump", null)) }
         alarmDump?.let { text ->
             SectionLabel("LETZTE WECKER-ANZEIGE")
