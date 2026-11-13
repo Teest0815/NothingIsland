@@ -82,12 +82,36 @@ class IslandListenerService : NotificationListenerService() {
         super.onDestroy()
     }
 
+    // Laufende Meldungen (Fortschritt, Musik, Training) melden sich oft mehrmals pro Sekunde:
+    // höchstens alle 700 ms auswerten, der letzte Stand kommt verzögert nach.
+    private val lastHandled = HashMap<String, Long>()
+    private val trailing = HashMap<String, Runnable>()
+    private val throttleHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         showOverlay() // falls die Berechtigung erst nach dem Verbinden erteilt wurde
+        if (sbn.isOngoing) {
+            val now = SystemClock.uptimeMillis()
+            val last = lastHandled[sbn.key] ?: 0L
+            if (now - last < 700L) {
+                trailing.remove(sbn.key)?.let { throttleHandler.removeCallbacks(it) }
+                val r = Runnable {
+                    trailing.remove(sbn.key)
+                    lastHandled[sbn.key] = SystemClock.uptimeMillis()
+                    runCatching { handle(sbn, allowAlert = true) }
+                }
+                trailing[sbn.key] = r
+                throttleHandler.postDelayed(r, 700L - (now - last))
+                return
+            }
+            lastHandled[sbn.key] = now
+        }
         runCatching { handle(sbn, allowAlert = true) }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        trailing.remove(sbn.key)?.let { throttleHandler.removeCallbacks(it) }
+        lastHandled.remove(sbn.key)
         IslandBus.removeOngoing(sbn.key)
     }
 

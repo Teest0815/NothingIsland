@@ -609,6 +609,19 @@ object QuickActions {
 
     // ------------------------------------------------------------ Kalender
 
+    private var calCheckedAt = 0L
+    private var calCache: Pair<Long, String>? = null
+
+    /** Der Kalender wird höchstens alle 2 Minuten abgefragt (oder neu, wenn der Termin begonnen hat). */
+    private fun nextEventCached(ctx: Context): Pair<Long, String>? {
+        val now = System.currentTimeMillis()
+        val c = calCache
+        if (now - calCheckedAt < 120_000L && (c == null || c.first > now)) return c
+        calCheckedAt = now
+        calCache = nextEvent(ctx)
+        return calCache
+    }
+
     private fun nextEvent(ctx: Context): Pair<Long, String>? {
         if (ctx.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) != android.content.pm.PackageManager.PERMISSION_GRANTED) return null
         return runCatching {
@@ -739,7 +752,7 @@ object QuickActions {
         )
 
         // Nächster Termin: in den letzten 10 Minuten vorher als Countdown.
-        val ev = if (st.statusEnabled("calendar")) nextEvent(app) else null
+        val ev = if (st.statusEnabled("calendar")) nextEventCached(app) else null
         setStatus(
             st.statusEnabled("calendar"), "calendar", ev != null, "TERMIN",
             ev?.second?.let { if (it.length > 20) it.take(19) + "…" else it } ?: "", "calendar",

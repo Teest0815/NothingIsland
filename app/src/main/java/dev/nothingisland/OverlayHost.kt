@@ -26,6 +26,8 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -71,6 +73,8 @@ class OverlayHost(
     private var replyJob: Job? = null
     private var lockReceiver: BroadcastReceiver? = null
     private var touchParams: WindowManager.LayoutParams? = null
+    private var lastAx = Int.MIN_VALUE
+    private var lastAy = Int.MIN_VALUE
 
     val isShown: Boolean get() = overlay != null
 
@@ -80,10 +84,28 @@ class OverlayHost(
     private var probeMax = 0
     private var probeLast = false
     private val probeHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var probeJob: Job? = null
+    private var probeRunning = false
     private val probeTick = object : Runnable {
         override fun run() {
             sampleProbe()
-            probeHandler.postDelayed(this, if (IslandBus.lowPower.value) 1500L else 600L)
+            probeHandler.postDelayed(this, if (IslandBus.lowPower.value) 1500L else 700L)
+        }
+    }
+
+    /** Die Messschleife läuft nur, wenn "Bei Vollbild ausblenden" an und der Bildschirm an ist. */
+    private fun updateProbeLoop() {
+        val want = probe != null && IslandBus.settings.value.hideFullscreen && IslandBus.screenOn.value
+        if (want && !probeRunning) {
+            probeRunning = true
+            probeHandler.postDelayed(probeTick, 300L)
+        } else if (!want && probeRunning) {
+            probeRunning = false
+            probeHandler.removeCallbacks(probeTick)
+            if (!IslandBus.settings.value.hideFullscreen) {
+                probeLast = false
+                IslandBus.setFullscreen(false)
+            }
         }
     }
 
@@ -198,12 +220,19 @@ class OverlayHost(
         ).apply { gravity = Gravity.TOP or Gravity.START }
         if (runCatching { wm.addView(pv, pp) }.isSuccess) {
             probe = pv
-            probeHandler.postDelayed(probeTick, 1000L)
         }
         // Auf dem Sperrbildschirm ist die Island nicht antippbar.
         val rc = object : BroadcastReceiver() {
-            override fun onReceive(c: Context?, i: Intent?) = updateLockState()
+            override fun onReceive(c: Context?, i: Intent?) {
+                when (i?.action) {
+                    Intent.ACTION_SCREEN_OFF -> IslandBus.setScreenOn(false)
+                    Intent.ACTION_SCREEN_ON -> IslandBus.setScreenOn(true)
+                }
+                updateProbeLoop()
+                updateLockState()
+            }
         }
+        (context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager)?.let { IslandBus.setScreenOn(it.isInteractive) }
         runCatching {
             val f = IntentFilter().apply {
                 addAction(Intent.ACTION_SCREEN_OFF)
@@ -216,6 +245,9 @@ class OverlayHost(
         replyJob = scope.launch {
             IslandBus.replyTarget.collect { ev -> if (ev != null) showReply() else removeReply() }
         }
+        probeJob = scope.launch {
+            IslandBus.settings.map { it.hideFullscreen }.distinctUntilChanged().collect { updateProbeLoop() }
+        }
         layoutJob = scope.launch {
             combine(IslandBus.settings, IslandBus.windowSize, IslandBus.touchRect) { st, size, r -> Triple(st, size, r) }
                 .collect { (st, size, r) -> applyLayout(st, size, r) }
@@ -224,6 +256,9 @@ class OverlayHost(
     }
 
     fun remove() {
+        probeJob?.cancel()
+        probeJob = null
+        probeRunning = false
         probeHandler.removeCallbacks(probeTick)
         probe?.let { v -> runCatching { windowManager?.removeView(v) } }
         probe = null
@@ -328,9 +363,16 @@ class OverlayHost(
         val d = context.resources.displayMetrics.density
         p.x = leftPx(s.offsetX, size.third)
         p.y = (s.windowTop * d).toInt()
-        p.width = (size.first * d).toInt().coerceAtLeast(1)
-        p.height = (size.second * d).toInt().coerceAtLeast(1)
-        runCatching { windowManager?.updateViewLayout(v, p) }
+        val nw = (size.first * d).toInt().coerceAtLeast(1)
+        val nh = (size.second * d).toInt().coerceAtLeast(1)
+        val changed = p.width != nw || p.height != nh || p.x != lastAx || p.y != lastAy
+        p.width = nw
+        p.height = nh
+        if (changed) {
+            lastAx = p.x
+            lastAy = p.y
+            runCatching { windowManager?.updateViewLayout(v, p) }
+        }
         updateLockState()
         val tp = touchParams
         val tv = touchView

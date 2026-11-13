@@ -162,13 +162,17 @@ private fun IslandHostBody() {
     // Wecker-Countdown und Zustände ohne eigenes Signal regelmäßig prüfen.
     val lowPowerNow by IslandBus.lowPower.collectAsState()
     LaunchedEffect(s.powerSaver) { QuickActions.updateLowPower(ctx, s) }
-    LaunchedEffect(lowPowerNow) {
-        val pm = ctx.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+    val screenOnNow by IslandBus.screenOn.collectAsState()
+    LaunchedEffect(lowPowerNow, screenOnNow) {
+        // Bei ausgeschaltetem Bildschirm gibt es nichts anzuzeigen: keine Schleife. Beim Einschalten sofort abgleichen.
+        if (!screenOnNow) return@LaunchedEffect
         while (true) {
-            delay(if (lowPowerNow) 120_000L else 45_000L)
-            // Bei ausgeschaltetem Bildschirm gibt es nichts anzuzeigen.
-            if (pm?.isInteractive != false) QuickActions.syncStatus(ctx, IslandBus.settings.value)
+            delay(if (lowPowerNow) 180_000L else 60_000L)
+            QuickActions.syncStatus(ctx, IslandBus.settings.value)
         }
+    }
+    LaunchedEffect(screenOnNow) {
+        if (screenOnNow) QuickActions.syncStatus(ctx, IslandBus.settings.value)
     }
     DisposableEffect(ctx) {
         val r = object : android.content.BroadcastReceiver() {
@@ -937,7 +941,12 @@ private fun Equalizer(playing: Boolean, sc: Float) {
             Box(
                 Modifier
                     .width((2.5f * sc).dp)
-                    .fillMaxHeight(if (playing) h else 0.2f)
+                    .fillMaxHeight()
+                    // Nur im Zeichnen skalieren: keine Neuberechnung des Layouts pro Bild.
+                    .graphicsLayer {
+                        scaleY = if (playing) h else 0.2f
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 1f)
+                    }
                     .clip(RoundedCornerShape(50))
                     .background(NothingRed),
             )
@@ -959,7 +968,7 @@ private fun LivePulse(sc: Float) {
         animationSpec = infiniteRepeatable(tween(900, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label = "pulseAlpha",
     )
-    Box(Modifier.size((5f * sc).dp).clip(CircleShape).background(NothingRed.copy(alpha = a)))
+    Box(Modifier.size((5f * sc).dp).graphicsLayer { alpha = a }.clip(CircleShape).background(NothingRed))
 }
 
 /** Nach dem Verkleinern einer Meldung: Absender links, Nachricht rechts der Kamera. */
@@ -1033,7 +1042,9 @@ private fun Chrono(
     color: Color = Fg,
 ) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(e.chronoBase) {
+    val screenOn by IslandBus.screenOn.collectAsState()
+    LaunchedEffect(e.chronoBase, screenOn) {
+        if (!screenOn) return@LaunchedEffect
         while (true) {
             now = System.currentTimeMillis()
             // Sekunden-Anzeige: genau zum nächsten Sekundenwechsel statt alle 500 ms.
@@ -1407,9 +1418,12 @@ private fun MediaExpanded(
     val mc = e.media ?: return
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     var base by remember(e.positionMs, e.positionStamp) { mutableStateOf(e.positionMs to e.positionStamp) }
-    LaunchedEffect(e.playing) {
-        while (e.playing) {
-            delay(250)
+    val screenOnM by IslandBus.screenOn.collectAsState()
+    val lowM by IslandBus.lowPower.collectAsState()
+    LaunchedEffect(e.playing, screenOnM) {
+        now = SystemClock.elapsedRealtime()
+        while (e.playing && screenOnM) {
+            delay(if (lowM) 1000L else 500L)
             now = SystemClock.elapsedRealtime()
         }
     }

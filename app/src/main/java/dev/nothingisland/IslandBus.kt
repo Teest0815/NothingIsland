@@ -189,6 +189,14 @@ object IslandBus {
         }
     }
 
+    /** Bildschirm an? Bei aus laufen keine Zeit-Schleifen. */
+    private val _screenOn = MutableStateFlow(true)
+    val screenOn: StateFlow<Boolean> = _screenOn.asStateFlow()
+
+    fun setScreenOn(v: Boolean) {
+        if (_screenOn.value != v) _screenOn.value = v
+    }
+
     /** true, wenn der Sparmodus der Island gerade aktiv ist (keine Dauer-Animationen, seltener prüfen). */
     private val _lowPower = MutableStateFlow(false)
     val lowPower: StateFlow<Boolean> = _lowPower.asStateFlow()
