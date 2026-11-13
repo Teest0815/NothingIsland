@@ -77,12 +77,13 @@ private val STATUS_TYPES = listOf(
     "airplane" to "Flugmodus",
     "bluetooth" to "Neues Bluetooth-Gerät kurz anzeigen",
     "charging" to "Laden kurz anzeigen (beim Anstecken)",
-    "lowbattery" to "Akku schwach",
+    "lowbattery" to "Akku-Warnung (bei 20 % und 10 %)",
     "mic" to "Mikrofon wird verwendet",
     "camera" to "Kamera wird verwendet",
     "powersave" to "Energiesparmodus",
     "location" to "Standort an",
     "alarm" to "Wecker kurz vor dem Klingeln (10 Min.)",
+    "calendar" to "Nächster Termin (10 Min. vorher)",
 )
 
 class MainActivity : ComponentActivity() {
@@ -91,6 +92,7 @@ class MainActivity : ComponentActivity() {
     private var refresh by mutableIntStateOf(0)
 
     private val btPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
+    private val calPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -383,6 +385,8 @@ class MainActivity : ComponentActivity() {
             ToggleRow("Ruhe-Pille anzeigen", s.idleVisible) { c -> edit { it.copy(idleVisible = c) } }
             ToggleRow("Musik, Timer & Co. dauerhaft anzeigen", s.showOngoing) { c -> edit { it.copy(showOngoing = c) } }
             ToggleRow("Auf dem Sperrbildschirm antippbar", s.lockTouch) { c -> edit { it.copy(lockTouch = c) } }
+            ToggleRow("Mehrere Benachrichtigungen nacheinander (Zähler +N)", s.multiNotif) { c -> edit { it.copy(multiNotif = c) } }
+            ToggleRow("Kopierten Text kurz anzeigen (Zwischenablage)", s.clipboard) { c -> edit { it.copy(clipboard = c) } }
             ToggleRow("Im Hintergrund aktiv halten (stille Benachrichtigung)", s.keepAlive) { c ->
                 edit { it.copy(keepAlive = c) }
                 if (c) KeepAliveService.start(ctx) else KeepAliveService.stop(ctx)
@@ -413,6 +417,7 @@ class MainActivity : ComponentActivity() {
         Card {
             ToggleRow("Equalizer-Balken bei laufender Musik", s.equalizer) { c -> edit { it.copy(equalizer = c) } }
             ToggleRow("Podcast: Vor-/Zurückspulen-Tasten", s.mediaSeek) { c -> edit { it.copy(mediaSeek = c) } }
+            ToggleRow("Wischen links/rechts: Song zurück/vor", s.swipeSkip) { c -> edit { it.copy(swipeSkip = c) } }
         }
 
         SectionLabel("TRAINING (STRAVA, POLAR, WAHOO, KOMOOT)")
@@ -474,6 +479,18 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+            }
+            if (s.statusEnabled("calendar") &&
+                ctx.checkSelfPermission(Manifest.permission.READ_CALENDAR) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                Text(
+                    "Kalender-Zugriff erlauben (nötig für „Nächster Termin“)",
+                    color = NothingRed,
+                    fontSize = 13.sp,
+                    modifier = Modifier
+                        .clickable { calPermission.launch(Manifest.permission.READ_CALENDAR) }
+                        .padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
+                )
             }
         }
 

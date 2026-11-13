@@ -106,6 +106,12 @@ data class IslandSettings(
     val equalizer: Boolean = true,
     /** System-Pop-ups (Heads-up) anderer Apps ausschalten, solange die Island läuft. Braucht WRITE_SECURE_SETTINGS. */
     val suppressPopups: Boolean = false,
+    /** Wischen auf der Musik-Pille: Song vor/zurück (die Pille dehnt sich in die Richtung). */
+    val swipeSkip: Boolean = true,
+    /** Mehrere Benachrichtigungen nacheinander zeigen statt die vorige zu überschreiben. */
+    val multiNotif: Boolean = true,
+    /** Kopierten Text kurz in der Pille zeigen. */
+    val clipboard: Boolean = true,
     /** Training: Wert rechts in der Pille (bpm, dist, pace, speed, power, cad, kcal). */
     val workoutMetric: String = "bpm",
     /** Reihenfolge der Schnellzugriff-Kacheln. */
@@ -175,6 +181,10 @@ object IslandBus {
 
     private val _settings = MutableStateFlow(IslandSettings())
     val settings: StateFlow<IslandSettings> = _settings.asStateFlow()
+
+    /** Wartende Meldungen hinter der aktuellen (nur bei "mehrere Benachrichtigungen"). */
+    private val _pending = MutableStateFlow<List<IslandEvent>>(emptyList())
+    val pending: StateFlow<List<IslandEvent>> = _pending.asStateFlow()
 
     private val _current = MutableStateFlow<IslandEvent?>(null)
     val current: StateFlow<IslandEvent?> = _current.asStateFlow()
@@ -249,6 +259,7 @@ object IslandBus {
         _replyShown.value = false
         _quick.value = false
         _expanded.value = false
+        _pending.value = emptyList()
         _current.value = null
     }
 
@@ -263,11 +274,29 @@ object IslandBus {
             recent[event.id] = event
             while (recent.size > 20) recent.remove(recent.keys.first())
         }
+        val cur = _current.value
+        if (_settings.value.multiNotif && cur != null && !cur.quiet && !event.quiet) {
+            if (event.key.isNotEmpty() && cur.key == event.key) {
+                _current.value = event // Aktualisierung derselben Unterhaltung
+            } else {
+                _pending.update { list ->
+                    val rest = if (event.key.isEmpty()) list else list.filterNot { it.key == event.key }
+                    (rest + event).takeLast(6)
+                }
+            }
+            return
+        }
         _current.value = event
     }
 
     fun dismiss() {
-        _current.value = null
+        val next = _pending.value.firstOrNull()
+        if (next != null) {
+            _pending.update { it.drop(1) }
+            _current.value = next
+        } else {
+            _current.value = null
+        }
     }
 
     // ---- Dauerhafte Aktivitäten (Musik, Timer, Anruf, Downloads ...) ----
@@ -323,6 +352,9 @@ object IslandBus {
             hapticLevel = p.getInt("hapticLevel", d.hapticLevel),
             equalizer = p.getBoolean("equalizer", d.equalizer),
             suppressPopups = p.getBoolean("suppressPopups", d.suppressPopups),
+            swipeSkip = p.getBoolean("swipeSkip", d.swipeSkip),
+            multiNotif = p.getBoolean("multiNotif", d.multiNotif),
+            clipboard = p.getBoolean("clipboard", d.clipboard),
             workoutMetric = p.getString("workoutMetric", d.workoutMetric) ?: d.workoutMetric,
             quickTiles = p.getString("quickTiles", d.quickTiles) ?: d.quickTiles,
             appRules = p.getString("appRules", d.appRules) ?: "",
@@ -363,6 +395,9 @@ object IslandBus {
             .putInt("hapticLevel", s.hapticLevel)
             .putBoolean("equalizer", s.equalizer)
             .putBoolean("suppressPopups", s.suppressPopups)
+            .putBoolean("swipeSkip", s.swipeSkip)
+            .putBoolean("multiNotif", s.multiNotif)
+            .putBoolean("clipboard", s.clipboard)
             .putString("workoutMetric", s.workoutMetric)
             .putString("quickTiles", s.quickTiles)
             .putString("appRules", s.appRules)

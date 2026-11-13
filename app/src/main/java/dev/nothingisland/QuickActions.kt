@@ -62,7 +62,9 @@ object QuickActions {
     private val camUnavailable = HashSet<String>()
     private val btDevices = LinkedHashMap<String, Pair<String, Int>>() // Adresse -> (Name, Akku %)
     private var lastPlugged: Boolean? = null
-    private var lowWarned = false
+    private var lowStage = 0
+    private var lastClip = ""
+    private var lastClipAt = 0L
 
     fun init(ctx: Context) {
         if (registered) return
@@ -373,13 +375,87 @@ object QuickActions {
                 ),
             )
         }
-        if (plugged || pct > 20) lowWarned = false
-        if (!plugged && pct <= 15 && !lowWarned && st.statusEnabled("lowbattery")) {
-            lowWarned = true
-            IslandBus.post(
-                IslandEvent(app = "AKKU", title = "AKKU SCHWACH · $pct %", text = "Bitte bald laden", icon = icon("battery")),
-            )
+        if (plugged || pct > 25) lowStage = 0
+        if (!plugged && st.statusEnabled("lowbattery")) {
+            val saver = runCatching {
+                android.app.PendingIntent.getActivity(
+                    ctx, 7, Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+            }.getOrNull()
+            if (pct <= 10 && lowStage < 2) {
+                lowStage = 2
+                IslandBus.post(
+                    IslandEvent(
+                        app = "AKKU", title = "AKKU KRITISCH · $pct %", text = "Jetzt laden oder Energiesparmodus an",
+                        icon = icon("battery"), action = saver,
+                    ),
+                )
+            } else if (pct <= 20 && lowStage < 1) {
+                lowStage = 1
+                IslandBus.post(
+                    IslandEvent(
+                        app = "AKKU", title = "AKKU SCHWACH · $pct %", text = "Bitte bald laden",
+                        icon = icon("battery"), action = saver,
+                    ),
+                )
+            }
         }
+    }
+
+    // ------------------------------------------------------------ Zwischenablage
+
+    fun onClipboard(ctx: Context) {
+        if (!IslandBus.settings.value.clipboard) return
+        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager ?: return
+        val clip = runCatching { cm.primaryClip }.getOrNull()
+        val sensitive = clip?.description?.extras?.getBoolean("android.content.extra.IS_SENSITIVE") == true
+        var text = ""
+        if (clip != null && clip.itemCount > 0 && !sensitive) {
+            text = runCatching { clip.getItemAt(0).coerceToText(ctx).toString() }.getOrDefault("")
+        }
+        text = text.trim().replace(Regex("\\s+"), " ")
+        if (text.startsWith("http://") || text.startsWith("https://")) {
+            text = text.substringAfter("://").removePrefix("www.").substringBefore('/')
+        }
+        if (text.length > 22) text = text.take(21) + "…"
+        val now = System.currentTimeMillis()
+        if (text == lastClip && now - lastClipAt < 1500) return
+        lastClip = text
+        lastClipAt = now
+        IslandBus.post(
+            IslandEvent(
+                app = "ZWISCHENABLAGE", title = "KOPIERT", text = text, icon = icon("copy"),
+                quiet = true, kind = Kind.STATUS,
+            ),
+        )
+    }
+
+    // ------------------------------------------------------------ Kalender
+
+    private fun nextEvent(ctx: Context): Pair<Long, String>? {
+        if (ctx.checkSelfPermission(android.Manifest.permission.READ_CALENDAR) != android.content.pm.PackageManager.PERMISSION_GRANTED) return null
+        return runCatching {
+            val now = System.currentTimeMillis()
+            val b = android.provider.CalendarContract.Instances.CONTENT_URI.buildUpon()
+            android.content.ContentUris.appendId(b, now)
+            android.content.ContentUris.appendId(b, now + 10 * 60_000L)
+            val cols = arrayOf(
+                android.provider.CalendarContract.Instances.BEGIN,
+                android.provider.CalendarContract.Instances.TITLE,
+                android.provider.CalendarContract.Instances.ALL_DAY,
+            )
+            ctx.contentResolver.query(b.build(), cols, null, null, "begin ASC")?.use { c ->
+                var best: Pair<Long, String>? = null
+                while (c.moveToNext()) {
+                    val begin = c.getLong(0)
+                    if (begin <= now || c.getInt(2) == 1) continue
+                    best = begin to (c.getString(1)?.takeIf { it.isNotBlank() } ?: "Termin")
+                    break
+                }
+                best
+            }
+        }.getOrNull()
     }
 
     // ------------------------------------------------------------ Status-Anzeigen in der Pille
@@ -477,6 +553,22 @@ object QuickActions {
             if (next != null) SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(next)) + (creatorLabel?.let { " · $it" } ?: "") else "", "alarm",
             false, "WECKER", countDownTo = next, action = { open(app, AlarmClock.ACTION_SHOW_ALARMS) },
         )
+
+        // Nächster Termin: in den letzten 10 Minuten vorher als Countdown.
+        val ev = if (st.statusEnabled("calendar")) nextEvent(app) else null
+        setStatus(
+            st.statusEnabled("calendar"), "calendar", ev != null, "TERMIN",
+            ev?.second?.let { if (it.length > 20) it.take(19) + "…" else it } ?: "", "calendar",
+            false, "KALENDER", countDownTo = ev?.first,
+            action = {
+                runCatching {
+                    app.startActivity(
+                        Intent(Intent.ACTION_VIEW, android.net.Uri.parse("content://com.android.calendar/time/${ev?.first ?: System.currentTimeMillis()}"))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+            },
+        )
     }
 
     // ------------------------------------------------------------ Symbole (weiß, 96x96)
@@ -571,6 +663,22 @@ object QuickActions {
                 c.drawRoundRect(RectF(32f, 16f, 64f, 30f), 4f, 4f, fill)
                 c.drawCircle(48f, 54f, 17f, clear)
                 c.drawCircle(48f, 54f, 10f, fill)
+            }
+            "copy" -> {
+                c.drawRoundRect(RectF(24f, 22f, 72f, 86f), 8f, 8f, line)
+                c.drawRoundRect(RectF(34f, 12f, 62f, 28f), 5f, 5f, fill)
+                c.drawLine(34f, 48f, 62f, 48f, line)
+                c.drawLine(34f, 62f, 62f, 62f, line)
+            }
+            "calendar" -> {
+                c.drawRoundRect(RectF(14f, 22f, 82f, 84f), 8f, 8f, line)
+                c.drawLine(14f, 40f, 82f, 40f, line)
+                c.drawLine(32f, 12f, 32f, 28f, line)
+                c.drawLine(64f, 12f, 64f, 28f, line)
+                c.drawCircle(34f, 58f, 5f, fill)
+                c.drawCircle(48f, 58f, 5f, fill)
+                c.drawCircle(62f, 58f, 5f, fill)
+                c.drawCircle(34f, 72f, 5f, fill)
             }
             "pin" -> {
                 c.drawCircle(48f, 36f, 26f, fill)

@@ -54,6 +54,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import kotlin.math.sign
+import kotlin.math.roundToInt
 import kotlin.math.abs
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -86,6 +87,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.layout
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
@@ -139,7 +143,15 @@ private fun IslandHostBody() {
     val manual by IslandBus.expanded.collectAsState()
     val quick by IslandBus.quick.collectAsState()
     val replying by IslandBus.replyShown.collectAsState()
+    val pendingList by IslandBus.pending.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    // Zwischenablage: kopierten Text kurz zeigen.
+    DisposableEffect(ctx, s.clipboard) {
+        val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+        val l = android.content.ClipboardManager.OnPrimaryClipChangedListener { QuickActions.onClipboard(ctx) }
+        if (s.clipboard) runCatching { cm?.addPrimaryClipChangedListener(l) }
+        onDispose { runCatching { cm?.removePrimaryClipChangedListener(l) } }
+    }
     LaunchedEffect(Unit) { QuickActions.init(ctx) }
     LaunchedEffect(s.suppressPopups) { QuickActions.applyHeadsUp(ctx, s.suppressPopups) }
     val torchOn by QuickActions.torch.collectAsState()
@@ -359,6 +371,10 @@ private fun IslandHostBody() {
     // Wischen nach links oder rechts schließt Meldung, aufgeklappte Pille und Nachricht.
     val swipeX = remember { Animatable(0f) }
     val swipeScope = rememberCoroutineScope()
+    // Musik: Wischen dehnt die Pille in die Richtung und wechselt den Song.
+    val stretch = remember { Animatable(0f) }
+    val canSkip = mode == Mode.COMPACT && s.swipeSkip && current?.kind == Kind.MEDIA && current.media != null
+    val curForSkip by rememberUpdatedState(current)
     val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || mode == Mode.QUICK
     LaunchedEffect(mode) { swipeX.snapTo(0f) }
     val onSwipeAway: () -> Unit = {
@@ -414,14 +430,41 @@ private fun IslandHostBody() {
                     val pop = 0.9f + 0.1f * appear.value
                     scaleX = pressScale * pop
                     scaleY = pressScale * pop
-                    translationX = swipeX.value
+                    translationX = swipeX.value + stretch.value / 2f
                     alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value
                 }
-                .size(width, height)
+                .layout { m, _ ->
+                    val w = width.roundToPx() + abs(stretch.value).roundToInt()
+                    val h = height.roundToPx()
+                    val pl = m.measure(Constraints.fixed(w, h))
+                    layout(w, h) { pl.place(0, 0) }
+                }
                 .clip(shape)
                 .background(Bg)
                 .border(1.dp, Hairline, shape)
-                .pointerInput(mode) {
+                .pointerInput(mode, canSkip) {
+                    if (canSkip) {
+                        val maxS = 44.dp.toPx()
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                val x = stretch.value
+                                swipeScope.launch {
+                                    if (abs(x) > 22.dp.toPx()) {
+                                        val tc = curForSkip?.media?.transportControls
+                                        runCatching { if (x > 0) tc?.skipToNext() else tc?.skipToPrevious() }
+                                        if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
+                                    }
+                                    stretch.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 380f))
+                                }
+                            },
+                            onDragCancel = { swipeScope.launch { stretch.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 500f)) } },
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                swipeScope.launch { stretch.snapTo((stretch.value + dragAmount * 0.6f).coerceIn(-maxS, maxS)) }
+                            },
+                        )
+                        return@pointerInput
+                    }
                     if (!swipeable) return@pointerInput
                     detectHorizontalDragGestures(
                         onDragEnd = {
@@ -522,7 +565,7 @@ private fun IslandHostBody() {
                         MessageContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(messageW.dp, smallH.dp))
                     }
                     Mode.ALERT -> (alert ?: lastAlert)?.let {
-                        AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp)) {
+                        AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp), if (s.multiNotif) pendingList.size else 0) {
                             // Antworten: Eingabe direkt in der Island, die Meldung verschwindet.
                             IslandBus.startReply(it)
                             suppressLinger = true
@@ -938,7 +981,7 @@ private fun Chrono(
 
 /** Aufgeklappte Meldung bei neuer Benachrichtigung. */
 @Composable
-internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, onReply: () -> Unit) {
+internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, more: Int = 0, onReply: () -> Unit) {
     Row(
         modifier = modifier.padding(horizontal = (18f * sc).dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -975,6 +1018,15 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, onR
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+            }
+        }
+        if (more > 0) {
+            Spacer(Modifier.width((8f * sc).dp))
+            Box(
+                modifier = Modifier.clip(CircleShape).background(ButtonBg).padding(horizontal = (8f * sc).dp, vertical = (4f * sc).dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("+$more", color = Fg, fontFamily = Mono, fontSize = (11f * sc).sp, fontWeight = FontWeight.Medium)
             }
         }
         if (event.reply != null) {
