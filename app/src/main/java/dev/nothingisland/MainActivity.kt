@@ -266,6 +266,7 @@ class MainActivity : ComponentActivity() {
                 IslandBus.removeOngoing("demo-timer")
                 IslandBus.removeOngoing("demo-music")
                 IslandBus.removeOngoing("demo-nav")
+                IslandBus.removeOngoing("demo-workout")
             }
             PillButton("PANEL", filled = false, modifier = Modifier.weight(1f)) { IslandBus.setQuick(true) }
         }
@@ -353,6 +354,26 @@ class MainActivity : ComponentActivity() {
         Card {
             ToggleRow("Equalizer-Balken bei laufender Musik", s.equalizer) { c -> edit { it.copy(equalizer = c) } }
             ToggleRow("Podcast: Vor-/Zurückspulen-Tasten", s.mediaSeek) { c -> edit { it.copy(mediaSeek = c) } }
+        }
+
+        SectionLabel("TRAINING (STRAVA, POLAR, WAHOO, KOMOOT)")
+        Card {
+            Text(
+                "Während einer Aufzeichnung zeigt die kleine Pille links die Zeit und rechts diesen Wert. Er wird aus der Benachrichtigung der App gelesen, die Anzeige hängt also davon ab, was die App dort mitteilt. Fehlt der Wert, zeigt die Pille den ersten vorhandenen.",
+                color = Muted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 8.dp, bottom = 10.dp),
+            )
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    "bpm" to "PULS", "dist" to "DISTANZ", "pace" to "TEMPO", "speed" to "GESCHW.",
+                    "power" to "LEISTUNG", "cad" to "KADENZ", "kcal" to "KALORIEN",
+                ).forEach { (k, n) -> Chip(n, s.workoutMetric == k) { edit { it.copy(workoutMetric = k) } } }
+            }
+            PillButton("TRAINING TESTEN", filled = false, modifier = Modifier.fillMaxWidth()) {
+                IslandBus.upsertOngoing(demoWorkout())
+            }
+            Spacer(Modifier.height(8.dp))
         }
 
         SectionLabel("HAPTIK")
@@ -794,6 +815,18 @@ private fun demoMusic(): IslandEvent = IslandEvent(
     title = "Lofi Beats",
     text = "Nothing Radio",
     actions = listOf(IslandAction("Zurück"), IslandAction("Pause"), IslandAction("Weiter")),
+)
+
+/** Nur zur Ansicht: Training wie von Strava oder Polar. */
+private fun demoWorkout(): IslandEvent = IslandEvent(
+    key = "demo-workout",
+    kind = Kind.WORKOUT,
+    app = "Training",
+    title = "Lauf",
+    text = "",
+    chronoBase = System.currentTimeMillis() - (12 * 60 + 34) * 1000L,
+    metrics = linkedMapOf("bpm" to "142 bpm", "dist" to "3.2 km", "pace" to "5:30 /km", "kcal" to "210 kcal"),
+    actions = listOf(IslandAction("Beenden", onClick = { IslandBus.removeOngoing("demo-workout") })),
 )
 
 /** Nur zur Ansicht: Navigation wie von einer Karten-App. */

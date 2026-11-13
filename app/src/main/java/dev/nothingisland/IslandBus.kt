@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /** Reihenfolge = Priorität in der kleinen Pille. */
-enum class Kind { CALL, NAVIGATION, TIMER, MEDIA, PROGRESS, STATUS, OTHER }
+enum class Kind { CALL, NAVIGATION, TIMER, WORKOUT, MEDIA, PROGRESS, STATUS, OTHER }
 
 data class IslandAction(
     val title: String,
@@ -43,6 +43,8 @@ data class IslandEvent(
     val rightText: String? = null,
     /** Leise Meldung: geht direkt in die kleine Pille, ohne aufzuklappen. */
     val quiet: Boolean = false,
+    /** Training: erkannte Werte (bpm, dist, pace, speed, power, cad, kcal, time). */
+    val metrics: Map<String, String> = emptyMap(),
     /** Antwort-Möglichkeit (Messenger). */
     val reply: IslandReply? = null,
     /** Musik: Steuerung, Zustand und Metadaten. */
@@ -100,6 +102,8 @@ data class IslandSettings(
     val hapticLevel: Int = 2,
     /** Equalizer-Balken bei laufender Musik. */
     val equalizer: Boolean = true,
+    /** Training: Wert rechts in der Pille (bpm, dist, pace, speed, power, cad, kcal). */
+    val workoutMetric: String = "bpm",
     /** Reihenfolge der Schnellzugriff-Kacheln. */
     val quickTiles: String = "torch,ringer,dnd,hotspot,airplane,wifi,bluetooth,app",
     /** App-Regeln: "paket=REGEL,paket=REGEL" mit MUTE, QUIET oder LIVE. */
@@ -286,6 +290,7 @@ object IslandBus {
             haptics = p.getBoolean("haptics", d.haptics),
             hapticLevel = p.getInt("hapticLevel", d.hapticLevel),
             equalizer = p.getBoolean("equalizer", d.equalizer),
+            workoutMetric = p.getString("workoutMetric", d.workoutMetric) ?: d.workoutMetric,
             quickTiles = p.getString("quickTiles", d.quickTiles) ?: d.quickTiles,
             appRules = p.getString("appRules", d.appRules) ?: "",
             theme = p.getString("theme", d.theme) ?: d.theme,
@@ -324,6 +329,7 @@ object IslandBus {
             .putBoolean("haptics", s.haptics)
             .putInt("hapticLevel", s.hapticLevel)
             .putBoolean("equalizer", s.equalizer)
+            .putString("workoutMetric", s.workoutMetric)
             .putString("quickTiles", s.quickTiles)
             .putString("appRules", s.appRules)
             .putString("theme", s.theme)

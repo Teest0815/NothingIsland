@@ -134,6 +134,14 @@ class IslandListenerService : NotificationListenerService() {
         if (n.category == Notification.CATEGORY_CALL) return Kind.CALL
         if (n.category == Notification.CATEGORY_ALARM && (ongoing || n.fullScreenIntent != null)) return Kind.TIMER
         if (!ongoing) return null
+        if (pkg in FITNESS_PACKAGES) {
+            // Komoot: Abbiegehinweise sind Navigation, sonst Aufzeichnung.
+            val t = (ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty() + " " +
+                ex.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()).lowercase()
+            val turn = Regex("""\b\d+\s?m\b""").containsMatchIn(t) &&
+                listOf("links", "rechts", "left", "right", "abbieg", "turn", "geradeaus", "straight").any { it in t }
+            return if (pkg == "de.komoot.android" && turn) Kind.NAVIGATION else Kind.WORKOUT
+        }
         return when {
             n.category == "navigation" || pkg in NAV_PACKAGES -> Kind.NAVIGATION
             pkg in LIVE_PACKAGES -> Kind.PROGRESS
@@ -228,6 +236,17 @@ class IslandListenerService : NotificationListenerService() {
             }
         }
 
+        val metrics = if (kind == Kind.WORKOUT) {
+            val lines = ex.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.joinToString(" • ").orEmpty()
+            parseMetrics(
+                listOf(
+                    title, text, ex.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString().orEmpty(),
+                    ex.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString().orEmpty(),
+                    ex.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString().orEmpty(), lines,
+                ).joinToString(" • "),
+            )
+        } else emptyMap()
+
         return IslandEvent(
             key = sbn.key,
             kind = kind,
@@ -249,7 +268,34 @@ class IslandListenerService : NotificationListenerService() {
             art = art,
             canSkipSeconds = canSkip,
             reply = reply,
+            metrics = metrics,
         )
+    }
+
+    /** Liest Trainingswerte aus dem Text der Benachrichtigung (Deutsch und Englisch). */
+    private fun parseMetrics(src: String): Map<String, String> {
+        val m = LinkedHashMap<String, String>()
+        var t = src
+        val o = RegexOption.IGNORE_CASE
+        fun num(v: String) = v.replace(',', '.')
+        Regex("""(\d{1,2}:\d{2})\s*(?:min)?\s*/\s*(km|mi)""", o).find(t)?.let {
+            m["pace"] = "${it.groupValues[1]} /${it.groupValues[2].lowercase()}"; t = t.replace(it.value, " ")
+        }
+        Regex("""(\d+(?:[.,]\d+)?)\s*(km/h|kmh|mph)""", o).find(t)?.let {
+            m["speed"] = "${num(it.groupValues[1])} ${it.groupValues[2].lowercase()}"; t = t.replace(it.value, " ")
+        }
+        Regex("""(\d{2,3})\s*(?:bpm|♥|❤)|(?:herzfrequenz|heart rate|puls|hr)\D{0,3}(\d{2,3})""", o).find(t)?.let {
+            val v = it.groupValues[1].ifEmpty { it.groupValues[2] }
+            m["bpm"] = "$v bpm"; t = t.replace(it.value, " ")
+        }
+        Regex("""(\d+(?:[.,]\d+)?)\s*(km|mi)\b""", o).find(t)?.let {
+            m["dist"] = "${num(it.groupValues[1])} ${it.groupValues[2].lowercase()}"; t = t.replace(it.value, " ")
+        }
+        Regex("""(\d{1,4})\s*(?:w|watt)\b""", o).find(t)?.let { m["power"] = "${it.groupValues[1]} W"; t = t.replace(it.value, " ") }
+        Regex("""(\d{2,3})\s*(rpm|spm)""", o).find(t)?.let { m["cad"] = "${it.groupValues[1]} ${it.groupValues[2].lowercase()}"; t = t.replace(it.value, " ") }
+        Regex("""(\d{1,5})\s*(?:kcal|cal)\b""", o).find(t)?.let { m["kcal"] = "${it.groupValues[1]} kcal"; t = t.replace(it.value, " ") }
+        Regex("""\b(\d{1,2}:\d{2}(?::\d{2})?)\b""").find(t)?.let { m["time"] = it.groupValues[1] }
+        return m
     }
 
     private fun mediaClock(ms: Long): String {
@@ -282,7 +328,13 @@ class IslandListenerService : NotificationListenerService() {
         /** Karten-Apps, deren laufende Benachrichtigung als Navigation angezeigt wird. */
         private val NAV_PACKAGES = setOf(
             "com.google.android.apps.maps", "com.waze", "net.osmand", "net.osmand.plus",
-            "app.organicmaps", "com.here.app.maps", "com.sygic.aura", "de.komoot.android",
+            "app.organicmaps", "com.here.app.maps", "com.sygic.aura",
+        )
+
+        /** Trainings-Apps: laufende Aufzeichnung wird als Training angezeigt (Zeit links, Wert rechts). */
+        private val FITNESS_PACKAGES = setOf(
+            "com.strava", "fi.polar.polarflow", "fi.polar.beat", "com.wahoofitness.fitness", "com.wahoofitness.bolt",
+            "com.wahoofitness.elemnt", "de.komoot.android", "com.garmin.android.apps.connectmobile",
         )
 
         /** Lieferdienste, Fahrdienste und Co.: laufende Meldung wird als Live-Aktivität gezeigt. */

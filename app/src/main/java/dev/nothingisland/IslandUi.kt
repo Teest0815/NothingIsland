@@ -513,7 +513,7 @@ private fun IslandHostBody() {
                     Mode.IDLE -> IdleDots(sc)
                     Mode.QUICK -> QuickPanel(quickKeys, bsc, Modifier.requiredSize(bigW.dp, (quickBaseH * fsc).dp)) { touch++ }
                     Mode.COMPACT -> shownCurrent?.let {
-                        CompactContent(it, sc, gap, s.iconTextGap.toFloat(), s.equalizer, Modifier.requiredSize(compactW.dp, smallH.dp))
+                        CompactContent(it, sc, gap, s.iconTextGap.toFloat(), s.equalizer, s.workoutMetric, Modifier.requiredSize(compactW.dp, smallH.dp))
                     }
                     Mode.MESSAGE -> (lingering ?: lastMessage)?.let {
                         MessageContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(messageW.dp, smallH.dp))
@@ -668,8 +668,9 @@ private fun SplitRow(
 
 /** Links Name (bei Navigation nur die Entfernung), rechts Zeit (bei Navigation der Abbiege-Pfeil). */
 @Composable
-private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float, eq: Boolean, modifier: Modifier) {
+private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float, eq: Boolean, workoutMetric: String, modifier: Modifier) {
     val nav = e.kind == Kind.NAVIGATION
+    val workout = e.kind == Kind.WORKOUT
     SplitRow(
         sc = sc,
         gap = gap,
@@ -677,7 +678,17 @@ private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float
         modifier = modifier,
         left = {
             SmallIcon(e.icon, (14f * sc).dp)
-            Text(
+            if (workout) {
+                // Links die Zeit (läuft live mit, wenn die App einen Zähler liefert).
+                Box(Modifier.weight(1f)) {
+                    if (e.chronoBase != null) Chrono(e, (12f * sc).sp)
+                    else Text(
+                        text = e.metrics["time"] ?: e.title.ifBlank { e.app },
+                        color = Fg, fontFamily = Mono, fontWeight = FontWeight.Medium,
+                        fontSize = (12f * sc).sp, maxLines = 1,
+                    )
+                }
+            } else Text(
                 text = if (nav) navDistance(e) else e.title.ifBlank { e.app },
                 color = Fg,
                 fontFamily = if (nav) Mono else FontFamily.Default,
@@ -690,7 +701,14 @@ private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float
         },
         right = {
             val turn = if (nav) navTurn(e) else Turn.NONE
+            val wv = if (workout) workoutValue(e, workoutMetric) else null
             when {
+                workout -> if (wv != null) Text(
+                    text = wv.uppercase(),
+                    color = if (workoutMetric == "bpm") NothingRed else Fg,
+                    fontFamily = Mono, fontWeight = FontWeight.Medium,
+                    fontSize = (12f * sc).sp, maxLines = 1,
+                ) else LivePulse(sc)
                 nav && turn != Turn.NONE -> TurnArrow(turn, (16f * sc).dp)
                 e.chronoBase != null || (e.kind == Kind.MEDIA && e.rightText != null) -> Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -720,6 +738,18 @@ private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float
         },
     )
 }
+
+// ---------------------------------------------------------------- Training
+
+private val WORKOUT_ORDER = listOf("bpm", "dist", "pace", "speed", "power", "cad", "kcal")
+
+/** Gewählter Wert, sonst der erste vorhandene. */
+private fun workoutValue(e: IslandEvent, pref: String): String? =
+    e.metrics[pref] ?: WORKOUT_ORDER.firstNotNullOfOrNull { e.metrics[it] }
+
+/** Alle erkannten Werte in einer Zeile, z. B. "142 BPM · 5.2 KM". */
+private fun workoutLine(e: IslandEvent): String =
+    WORKOUT_ORDER.mapNotNull { e.metrics[it] }.take(4).joinToString("  ·  ") { it.uppercase() }
 
 // ---------------------------------------------------------------- Navigation
 
@@ -1013,7 +1043,21 @@ private fun OngoingExpanded(
                 Spacer(Modifier.width((14f * sc).dp))
                 Column(modifier = Modifier.weight(1f)) {
                     AppLabel(e.app, sc)
-                    if (e.chronoBase != null) {
+                    if (e.kind == Kind.WORKOUT) {
+                        if (e.chronoBase != null) Chrono(e, (22f * sc).sp)
+                        else Text(
+                            text = e.metrics["time"] ?: e.title,
+                            color = Fg, fontFamily = Mono, fontWeight = FontWeight.Medium,
+                            fontSize = (22f * sc).sp, maxLines = 1,
+                        )
+                        val line = workoutLine(e)
+                        if (line.isNotBlank()) {
+                            Text(
+                                text = line, color = TextGray, fontFamily = Mono, fontSize = (11f * sc).sp,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    } else if (e.chronoBase != null) {
                         Chrono(e, (22f * sc).sp)
                         if (e.title.isNotBlank()) {
                             Text(
