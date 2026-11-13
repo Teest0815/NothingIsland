@@ -2,6 +2,7 @@ package dev.nothingisland
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontFamily
 
 /** Aktuelles Aussehen der Island. Wird aus den Einstellungen gesetzt, bevor die UI gezeichnet wird. */
@@ -10,6 +11,29 @@ object IslandTheme {
     @Volatile var bg: Color = Color.Black
     @Volatile var fg: Color = Color.White
     @Volatile var font: FontFamily = FontFamily.Monospace
+
+    /** Schriftfarbe auf einer Fläche in Akzentfarbe: dunkel bei hellem Akzent, sonst weiß. */
+    val onAccent: Color get() = if (accent.luminance() > 0.45f) Color(0xFF101010) else Color.White
+
+    /** Akzentfarbe als Schrift auf dem Island-Hintergrund, bei zu wenig Kontrast Richtung Schriftfarbe gemischt. */
+    val accentText: Color get() = accentOn(bg)
+
+    fun accentOn(bg: Color): Color {
+        var t = 0f
+        var c = accent
+        val other = if (bg.luminance() > 0.5f) Color.Black else Color.White
+        while (contrast(c, bg) < 3.2f && t < 1f) {
+            t += 0.1f
+            c = lerp(accent, other, t)
+        }
+        return c
+    }
+
+    private fun contrast(a: Color, b: Color): Float {
+        val l1 = a.luminance() + 0.05f
+        val l2 = b.luminance() + 0.05f
+        return if (l1 > l2) l1 / l2 else l2 / l1
+    }
 
     val textGray: Color get() = lerp(bg, fg, 0.6f)
     val dotGray: Color get() = lerp(bg, fg, 0.22f)

@@ -5,6 +5,8 @@ import android.app.AlarmManager
 import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.content.Intent
+import androidx.core.graphics.drawable.toBitmap
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -281,7 +283,40 @@ object QuickActions {
         ),
     )
 
-    fun tile(key: String): QuickTile? = tiles.firstOrNull { it.key == key }
+    fun tile(key: String): QuickTile? =
+        tiles.firstOrNull { it.key == key } ?: if (key.startsWith("app:")) appTile(key) else null
+
+    // ---- Eigene Kacheln: beliebige App starten ("app:<Paketname>") ----
+    @Volatile var appContext: Context? = null
+    private val appTiles = HashMap<String, QuickTile>()
+    private val appIcons = HashMap<String, ImageBitmap>()
+
+    private fun appTile(key: String): QuickTile? {
+        appTiles[key]?.let { return it }
+        val ctx = appContext ?: return null
+        val pkg = key.removePrefix("app:")
+        val pm = ctx.packageManager
+        if (pm.getLaunchIntentForPackage(pkg) == null) return null
+        val label = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
+        val t = QuickTile(
+            key, label, { label.uppercase().take(10) }, "app", { false },
+            { c ->
+                runCatching { pm.getLaunchIntentForPackage(pkg)?.let { c.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+                true
+            },
+        )
+        appTiles[key] = t
+        return t
+    }
+
+    /** Start-Symbol der App für eine eigene Kachel (farbig, nicht eingefärbt). */
+    fun appIcon(pkg: String): ImageBitmap? {
+        appIcons[pkg]?.let { return it }
+        val ctx = appContext ?: return null
+        return runCatching {
+            ctx.packageManager.getApplicationIcon(pkg).toBitmap(96, 96).asImageBitmap()
+        }.getOrNull()?.also { appIcons[pkg] = it }
+    }
 
     // ------------------------------------------------------------ Bluetooth
 
@@ -388,8 +423,13 @@ object QuickActions {
             IslandBus.post(
                 IslandEvent(
                     app = "AKKU", title = "LÄDT", text = "$pct %", icon = icon("charge"), quiet = true, kind = Kind.STATUS,
+                    tap = { showChargeDetails(ctx) },
                 ),
             )
+        }
+        if (IslandBus.ongoing.value.any { it.key == "charge-detail" }) {
+            if (plugged) buildChargeEvent(ctx, i)?.let { IslandBus.upsertOngoing(it) }
+            else IslandBus.removeOngoing("charge-detail")
         }
         if (plugged || pct > 25) lowStage = 0
         if (!plugged && st.statusEnabled("lowbattery")) {
@@ -417,6 +457,61 @@ object QuickActions {
                 )
             }
         }
+    }
+
+    // ------------------------------------------------------------ Ladedetails
+
+    private fun buildChargeEvent(ctx: Context, i: Intent): IslandEvent? {
+        val level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = i.getIntExtra(BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1)
+        if (level < 0) return null
+        val pct = level * 100 / scale
+        val plugType = i.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0)
+        val bm = ctx.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
+        val remainMs = runCatching { bm?.computeChargeTimeRemaining() ?: -1L }.getOrDefault(-1L)
+        val tempC = i.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE).let { if (it == Int.MIN_VALUE) null else it / 10f }
+        val volt = i.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) / 1000f
+        var cur = runCatching { bm?.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW) ?: 0L }.getOrDefault(0L)
+        cur = kotlin.math.abs(cur)
+        if (cur in 1..20000) cur *= 1000 // manche Geräte liefern mA statt µA
+        val watts = cur / 1_000_000f * volt
+        val charging = plugType != 0
+        val head = if (charging) "$pct %  ·  LÄDT" else "$pct %"
+        val remain = if (charging && remainMs > 0) {
+            val m = (remainMs / 60_000L).toInt().coerceAtLeast(1)
+            if (m >= 60) "voll in ${m / 60} Std. ${m % 60} Min." else "voll in $m Min."
+        } else if (charging && pct >= 100) "voll" else null
+        val kind = when {
+            plugType and BatteryManager.BATTERY_PLUGGED_WIRELESS != 0 -> "kabellos"
+            plugType and BatteryManager.BATTERY_PLUGGED_AC != 0 -> "Netzteil"
+            plugType and BatteryManager.BATTERY_PLUGGED_USB != 0 -> "USB"
+            else -> null
+        }
+        val parts = listOfNotNull(
+            remain,
+            if (charging && watts >= 0.5f) String.format(java.util.Locale.GERMANY, "%.1f W", watts) else null,
+            tempC?.let { String.format(java.util.Locale.GERMANY, "%.0f °C", it) },
+            kind,
+        )
+        val saver = runCatching {
+            android.app.PendingIntent.getActivity(
+                ctx, 8, Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        }.getOrNull()
+        return IslandEvent(
+            key = "charge-detail", app = "AKKU", title = head, text = parts.joinToString("  ·  "),
+            icon = icon("charge"), progress = pct / 100f,
+            actions = listOf(IslandAction("Energiesparmodus", intent = saver)),
+        )
+    }
+
+    fun showChargeDetails(ctx: Context) {
+        val i = ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return
+        val ev = buildChargeEvent(ctx, i) ?: return
+        IslandBus.upsertOngoing(ev)
+        IslandBus.setPrimary("charge-detail")
+        IslandBus.setExpanded(true)
     }
 
     // ------------------------------------------------------------ Zwischenablage

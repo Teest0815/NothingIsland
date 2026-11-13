@@ -146,7 +146,7 @@ fun ReplyBar() {
                 ) {
                     Text(
                         "SENDEN",
-                        color = androidx.compose.ui.graphics.Color.White,
+                        color = IslandTheme.onAccent,
                         fontFamily = IslandTheme.font,
                         fontWeight = FontWeight.Bold,
                         fontSize = (10f * sc).sp,

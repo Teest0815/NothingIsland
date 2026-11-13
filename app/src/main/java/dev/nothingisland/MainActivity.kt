@@ -75,6 +75,8 @@ import kotlin.math.roundToInt
 
 private val CardBorder = Color(0xFF2A2A2A)
 private val Muted = Color(0xFF9A9A9A)
+/** Akzentfarbe als Schrift auf dem dunklen App-Hintergrund (bei dunklem Akzent aufgehellt). */
+private val AppAccent: Color get() = IslandTheme.accentOn(Color.Black)
 
 private val TABS = listOf("START", "LAYOUT", "FUNKTION", "DESIGN", "APPS")
 
@@ -294,7 +296,7 @@ class MainActivity : ComponentActivity() {
             Spacer(Modifier.height(8.dp))
             Text(
                 "Android hat die Barrierefreiheit für Nothing Island ausgeschaltet (das passiert, wenn die App beendet wird). Schalte sie bei 03 wieder ein. Damit die App das künftig selbst macht, einmalig am PC: adb shell pm grant dev.nothingisland android.permission.WRITE_SECURE_SETTINGS",
-                color = NothingRed,
+                color = AppAccent,
                 fontSize = 12.sp,
             )
         }
@@ -416,6 +418,8 @@ class MainActivity : ComponentActivity() {
             ToggleRow("Ruhe-Pille anzeigen", s.idleVisible) { c -> edit { it.copy(idleVisible = c) } }
             ToggleRow("Musik, Timer & Co. dauerhaft anzeigen", s.showOngoing) { c -> edit { it.copy(showOngoing = c) } }
             ToggleRow("Auf dem Sperrbildschirm antippbar", s.lockTouch) { c -> edit { it.copy(lockTouch = c) } }
+            ToggleRow("Bei Vollbild ausblenden (Video, Spiele)", s.hideFullscreen) { c -> edit { it.copy(hideFullscreen = c) } }
+            ToggleRow("Im Querformat ausblenden", s.hideLandscape) { c -> edit { it.copy(hideLandscape = c) } }
             ToggleRow("Mehrere Benachrichtigungen nacheinander (Zähler +N)", s.multiNotif) { c -> edit { it.copy(multiNotif = c) } }
             ToggleRow("Kopierten Text kurz anzeigen (Zwischenablage)", s.clipboard) { c -> edit { it.copy(clipboard = c) } }
             ToggleRow("Im Hintergrund aktiv halten (stille Benachrichtigung)", s.keepAlive) { c ->
@@ -429,7 +433,7 @@ class MainActivity : ComponentActivity() {
             if (s.suppressPopups && !QuickActions.hasSecurePermission(ctx)) {
                 Text(
                     "Freigabe fehlt. Einmalig am PC: adb shell pm grant dev.nothingisland android.permission.WRITE_SECURE_SETTINGS",
-                    color = NothingRed,
+                    color = AppAccent,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(bottom = 6.dp),
                 )
@@ -516,7 +520,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 Text(
                     "Kalender-Zugriff erlauben (nötig für „Nächster Termin“)",
-                    color = NothingRed,
+                    color = AppAccent,
                     fontSize = 13.sp,
                     modifier = Modifier
                         .clickable { calPermission.launch(Manifest.permission.READ_CALENDAR) }
@@ -558,13 +562,14 @@ class MainActivity : ComponentActivity() {
                 modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("${i + 1}", color = NothingRed, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(end = 10.dp))
+                Text("${i + 1}", color = AppAccent, fontFamily = FontFamily.Monospace, fontSize = 12.sp, modifier = Modifier.padding(end = 10.dp))
                 Text(QuickActions.tile(key)?.name ?: key, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
                 MiniButton("▲", i > 0) { set(sel.toMutableList().also { l -> l.add(i - 1, l.removeAt(i)) }) }
                 MiniButton("▼", i < sel.size - 1) { set(sel.toMutableList().also { l -> l.add(i + 1, l.removeAt(i)) }) }
                 MiniButton("✕", true) { set(sel.filter { it != key }) }
             }
         }
+        if (sel.size < 12) AppTilePicker(sel) { set(sel + it) }
         val free = QuickActions.tiles.filter { it.key !in sel }
         if (free.isNotEmpty() && sel.size < 12) {
             Spacer(Modifier.height(6.dp))
@@ -572,7 +577,7 @@ class MainActivity : ComponentActivity() {
             free.forEach { t ->
                 Text(
                     "+  ${t.name}",
-                    color = NothingRed,
+                    color = AppAccent,
                     fontSize = 14.sp,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -581,6 +586,63 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    /** Eigene Kachel: eine beliebige App aus der Liste als Schnellstart-Kachel hinzufügen. */
+    @Composable
+    private fun AppTilePicker(selected: List<String>, onPick: (String) -> Unit) {
+        var open by remember { mutableStateOf(false) }
+        var query by remember { mutableStateOf("") }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            if (open) "Eigene App-Kachel  ▴" else "+  Eigene App-Kachel  ▾",
+            color = AppAccent,
+            fontSize = 14.sp,
+            modifier = Modifier.fillMaxWidth().clickable { open = !open }.padding(vertical = 8.dp),
+        )
+        if (!open) return
+        val apps = remember {
+            val pm = packageManager
+            pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+                .map { it.loadLabel(pm).toString() to it.activityInfo.packageName }
+                .distinctBy { it.second }
+                .sortedBy { it.first.lowercase() }
+        }
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(50))
+                .border(1.dp, CardBorder, RoundedCornerShape(50))
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+        ) {
+            if (query.isEmpty()) Text("App suchen …", color = Muted, fontSize = 14.sp)
+            BasicTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                cursorBrush = SolidColor(AppAccent),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        val shown = apps.filter { ("app:" + it.second) !in selected && (query.isBlank() || it.first.contains(query, true)) }.take(if (query.isBlank()) 12 else 30)
+        shown.forEach { (label, pkg) ->
+            Text(
+                label,
+                color = Color.White,
+                fontSize = 14.sp,
+                maxLines = 1,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onPick("app:$pkg")
+                        open = false
+                        query = ""
+                    }
+                    .padding(vertical = 8.dp),
+            )
+        }
+        if (query.isBlank()) Text("Tippe zum Suchen, um alle Apps zu sehen.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
     }
 
     // ---------------------------------------------------------------- DESIGN
@@ -702,7 +764,7 @@ class MainActivity : ComponentActivity() {
                     onValueChange = { query = it },
                     singleLine = true,
                     textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
-                    cursorBrush = SolidColor(NothingRed),
+                    cursorBrush = SolidColor(AppAccent),
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -739,7 +801,7 @@ class MainActivity : ComponentActivity() {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(index, color = NothingRed, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+            Text(index, color = AppAccent, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
             Text(title, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
             Box(
                 Modifier
@@ -765,7 +827,7 @@ private fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
     ) {
         Text(
             text,
-            color = if (selected) Color.White else Muted,
+            color = if (selected) IslandTheme.onAccent else Muted,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
             fontSize = 11.sp,
@@ -795,7 +857,7 @@ private fun SectionLabel(text: String) {
     Spacer(Modifier.height(32.dp))
     Text(
         text,
-        color = NothingRed,
+        color = AppAccent,
         fontFamily = FontFamily.Monospace,
         fontSize = 12.sp,
         letterSpacing = 2.sp,
@@ -825,7 +887,7 @@ private fun SettingSlider(
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(label, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
-            Text(valueText, color = NothingRed, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+            Text(valueText, color = AppAccent, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
         }
         Slider(
             value = value.coerceIn(range.start, range.endInclusive),
@@ -833,7 +895,7 @@ private fun SettingSlider(
             valueRange = range,
             colors = SliderDefaults.colors(
                 thumbColor = Color.White,
-                activeTrackColor = NothingRed,
+                activeTrackColor = AppAccent,
                 inactiveTrackColor = CardBorder,
             ),
         )
@@ -852,7 +914,7 @@ private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
             onCheckedChange = onChange,
             colors = SwitchDefaults.colors(
                 checkedTrackColor = NothingRed,
-                checkedThumbColor = Color.White,
+                checkedThumbColor = IslandTheme.onAccent,
                 uncheckedTrackColor = Color(0xFF1A1A1A),
                 uncheckedThumbColor = Color(0xFF777777),
             ),
@@ -873,7 +935,7 @@ private fun PillButton(text: String, filled: Boolean, modifier: Modifier = Modif
     ) {
         Text(
             text,
-            color = Color.White,
+            color = if (filled) IslandTheme.onAccent else Color.White,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.sp,

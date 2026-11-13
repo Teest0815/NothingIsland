@@ -58,6 +58,8 @@ data class IslandEvent(
     val art: ImageBitmap? = null,
     /** Player unterstützt Vor-/Zurückspulen (FAST_FORWARD / REWIND). */
     val canSkipSeconds: Boolean = false,
+    /** Eigene Aktion beim Antippen der kleinen Meldungs-Pille (statt [action]). */
+    val tap: (() -> Unit)? = null,
 )
 
 data class IslandSettings(
@@ -106,6 +108,9 @@ data class IslandSettings(
     val equalizer: Boolean = true,
     /** System-Pop-ups (Heads-up) anderer Apps ausschalten, solange die Island läuft. Braucht WRITE_SECURE_SETTINGS. */
     val suppressPopups: Boolean = false,
+    /** Island ausblenden bei Vollbild (Video, Spiel) bzw. im Querformat. Eingehende Anrufe bleiben sichtbar. */
+    val hideFullscreen: Boolean = true,
+    val hideLandscape: Boolean = false,
     /** Sparmodus: 0 aus, 1 automatisch (Systemsparmodus oder Akku unter 20 %), 2 immer. */
     val powerSaver: Int = 1,
     /** Wischen auf der Musik-Pille: Song vor/zurück (die Pille dehnt sich in die Richtung). */
@@ -192,6 +197,14 @@ object IslandBus {
         if (_lowPower.value != v) _lowPower.value = v
     }
 
+    /** true, wenn die Statusleiste gerade ausgeblendet ist (Vollbild-Video, Spiel ...). */
+    private val _fullscreen = MutableStateFlow(false)
+    val fullscreen: StateFlow<Boolean> = _fullscreen.asStateFlow()
+
+    fun setFullscreen(v: Boolean) {
+        if (_fullscreen.value != v) _fullscreen.value = v
+    }
+
     private val _settings = MutableStateFlow(IslandSettings())
     val settings: StateFlow<IslandSettings> = _settings.asStateFlow()
 
@@ -227,6 +240,7 @@ object IslandBus {
 
     fun setExpanded(value: Boolean) {
         _expanded.value = value
+        if (!value) removeOngoing("charge-detail")
     }
 
     /** Aktivität in der großen Pille. Alle anderen erscheinen als Kreis daneben. */
@@ -272,6 +286,7 @@ object IslandBus {
         _replyShown.value = false
         _quick.value = false
         _expanded.value = false
+        removeOngoing("charge-detail")
         _pending.value = emptyList()
         _current.value = null
     }
@@ -365,6 +380,8 @@ object IslandBus {
             hapticLevel = p.getInt("hapticLevel", d.hapticLevel),
             equalizer = p.getBoolean("equalizer", d.equalizer),
             suppressPopups = p.getBoolean("suppressPopups", d.suppressPopups),
+            hideFullscreen = p.getBoolean("hideFullscreen", d.hideFullscreen),
+            hideLandscape = p.getBoolean("hideLandscape", d.hideLandscape),
             powerSaver = p.getInt("powerSaver", d.powerSaver),
             swipeSkip = p.getBoolean("swipeSkip", d.swipeSkip),
             multiNotif = p.getBoolean("multiNotif", d.multiNotif),
@@ -411,6 +428,8 @@ object IslandBus {
             .putInt("hapticLevel", s.hapticLevel)
             .putBoolean("equalizer", s.equalizer)
             .putBoolean("suppressPopups", s.suppressPopups)
+            .putBoolean("hideFullscreen", s.hideFullscreen)
+            .putBoolean("hideLandscape", s.hideLandscape)
             .putInt("powerSaver", s.powerSaver)
             .putBoolean("swipeSkip", s.swipeSkip)
             .putBoolean("multiNotif", s.multiNotif)

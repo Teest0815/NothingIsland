@@ -103,6 +103,8 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 val NothingRed: Color get() = IslandTheme.accent
+val AccentText: Color get() = IslandTheme.accentText
+val OnAccent: Color get() = IslandTheme.onAccent
 private val DotGray: Color get() = IslandTheme.dotGray
 private val TextGray: Color get() = IslandTheme.textGray
 private val Hairline: Color get() = IslandTheme.hairline
@@ -271,7 +273,11 @@ private fun IslandHostBody() {
         else -> Mode.IDLE
     }
     // Beim Antworten zeichnet das eigene Eingabefenster; die Pille tritt zurück.
-    if ((mode == Mode.IDLE && !s.idleVisible && !preview) || replying) {
+    val fullscreenNow by IslandBus.fullscreen.collectAsState()
+    val landscapeNow = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val hideNow = ((s.hideFullscreen && fullscreenNow) || (s.hideLandscape && landscapeNow)) &&
+        alert?.kind != Kind.CALL && !preview
+    if ((mode == Mode.IDLE && !s.idleVisible && !preview) || replying || hideNow) {
         // Das Fenster behält seine Größe (nur die Touch-Fläche schrumpft): Ein Größenwechsel beim Zurückkehren
         // ließ die kleine Pille kurz nach links oder rechts springen.
         SideEffect { IslandBus.setTouchRect(0f, 0f, 1f, 1f) }
@@ -306,7 +312,7 @@ private fun IslandHostBody() {
     val fsc = sc * minOf(s.expandedScale, s.expandedFrameMax) // Rahmen wächst nur bis zum Limit
     // Aufgeklappt gilt nur die eigene Breite (begrenzt durch den Bildschirm), nicht die "Maximale Breite".
     val bigW = minOf(s.expandedWidth.toFloat(), screenW - 8f)
-    val hasActions = current?.actions?.isNotEmpty() == true
+    val hasActions = current?.actions?.isNotEmpty() == true || (current?.kind == Kind.CALL && current.chronoBase != null)
     val quickKeys = remember(s.quickTiles) {
         s.quickTiles.split(',').mapNotNull { QuickActions.tile(it) }.take(12)
     }
@@ -528,7 +534,8 @@ private fun IslandHostBody() {
                             IslandBus.dismiss()
                         }
                         Mode.MESSAGE -> {
-                            runCatching { lingering?.action?.send() }
+                            val l = lingering
+                            if (l?.tap != null) l.tap.invoke() else runCatching { l?.action?.send() }
                             lingering = null
                         }
                         Mode.COMPACT -> {
@@ -765,7 +772,7 @@ private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float
             when {
                 workout -> if (wv != null) Text(
                     text = wv.uppercase(),
-                    color = if (workoutMetric == "bpm") NothingRed else Fg,
+                    color = if (workoutMetric == "bpm") AccentText else Fg,
                     fontFamily = Mono, fontWeight = FontWeight.Medium,
                     fontSize = (12f * sc).sp, maxLines = 1,
                 ) else LivePulse(sc)
@@ -1102,7 +1109,7 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
 private fun AppLabel(app: String, sc: Float) {
     Text(
         text = app.uppercase(),
-        color = NothingRed,
+        color = AccentText,
         fontFamily = Mono,
         fontSize = (10f * sc).sp,
         letterSpacing = 1.6.sp,
@@ -1194,7 +1201,7 @@ private fun OngoingExpanded(
                 if (count > 1) {
                     Text(
                         text = "${index + 1}/$count",
-                        color = NothingRed,
+                        color = AccentText,
                         fontFamily = Mono,
                         fontSize = (11f * sc).sp,
                         modifier = Modifier
@@ -1204,13 +1211,15 @@ private fun OngoingExpanded(
                     )
                 }
             }
-            if (e.actions.isNotEmpty()) {
+            val callActive = e.kind == Kind.CALL && e.chronoBase != null
+            if (e.actions.isNotEmpty() || callActive) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy((8f * sc).dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     e.actions.forEach { ActionButton(it, sc, onAction) }
+                    if (callActive) CallControls(e, sc, onAction)
                 }
             }
         }
@@ -1294,7 +1303,7 @@ private fun SeekButton(label: String, sc: Float, onClick: () -> Unit) {
 }
 
 @Composable
-private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean, sc: Float, onClick: () -> Unit) {
+private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean, sc: Float, tint: Boolean = true, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .weight(1f)
@@ -1308,12 +1317,12 @@ private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean
         Image(
             bitmap = icon,
             contentDescription = label,
-            colorFilter = ColorFilter.tint(Fg),
-            modifier = Modifier.size((20f * sc).dp),
+            colorFilter = if (tint) ColorFilter.tint(if (active) OnAccent else Fg) else null,
+            modifier = Modifier.size(((if (tint) 20f else 26f) * sc).dp),
         )
         Spacer(Modifier.height((5f * sc).dp))
         Text(
-            label, color = if (active) Fg else TextGray, fontFamily = Mono,
+            label, color = if (active) OnAccent else TextGray, fontFamily = Mono,
             fontSize = (8f * sc).sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
@@ -1340,7 +1349,8 @@ private fun QuickPanel(tiles: List<QuickTile>, sc: Float, modifier: Modifier, on
         tiles.chunked(4).forEach { row ->
             Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy((10f * sc).dp)) {
                 row.forEach { t ->
-                    QuickTile(QuickActions.icon(t.icon), t.label(ctx), t.active(ctx), sc) {
+                    val appBmp = if (t.key.startsWith("app:")) QuickActions.appIcon(t.key.removePrefix("app:")) else null
+                    QuickTile(appBmp ?: QuickActions.icon(t.icon), t.label(ctx), t.active(ctx), sc, appBmp == null) {
                         if (t.click(ctx)) IslandBus.setQuick(false) else onUsed()
                     }
                 }
@@ -1422,7 +1432,7 @@ private fun MediaExpanded(
             if (count > 1) {
                 Text(
                     text = "${index + 1}/$count",
-                    color = NothingRed,
+                    color = AccentText,
                     fontFamily = Mono,
                     fontSize = (11f * sc).sp,
                     modifier = Modifier
@@ -1511,6 +1521,53 @@ private val dangerWords = listOf(
 )
 
 @Composable
+private fun CallToggle(label: String, on: Boolean, sc: Float, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .height((38f * sc).dp)
+            .defaultMinSize(minWidth = (44f * sc).dp)
+            .clip(RoundedCornerShape(50))
+            .background(if (on) NothingRed else ButtonBg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = (12f * sc).dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = if (on) OnAccent else Fg,
+            fontFamily = Mono,
+            fontSize = (11f * sc).sp,
+            letterSpacing = 1.sp,
+            maxLines = 1,
+        )
+    }
+}
+
+/** Stumm und Lautsprecher während eines Gesprächs (nur wenn die Anruf-App sie nicht selbst anbietet). */
+@Composable
+private fun CallControls(e: IslandEvent, sc: Float, onUsed: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val am = remember { ctx.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager }
+    var muted by remember { mutableStateOf(runCatching { am.isMicrophoneMute }.getOrDefault(false)) }
+    var speaker by remember { mutableStateOf(runCatching { @Suppress("DEPRECATION") am.isSpeakerphoneOn }.getOrDefault(false)) }
+    val titles = e.actions.joinToString(" ") { it.title.lowercase() }
+    if (listOf("stumm", "mute").none { it in titles }) {
+        CallToggle("STUMM", muted, sc) {
+            runCatching { am.isMicrophoneMute = !muted }
+            muted = runCatching { am.isMicrophoneMute }.getOrDefault(!muted)
+            onUsed()
+        }
+    }
+    if (listOf("lautsprecher", "speaker").none { it in titles }) {
+        CallToggle("LAUTSPRECHER", speaker, sc) {
+            runCatching { @Suppress("DEPRECATION") am.isSpeakerphoneOn = !speaker }
+            speaker = runCatching { @Suppress("DEPRECATION") am.isSpeakerphoneOn }.getOrDefault(!speaker)
+            onUsed()
+        }
+    }
+}
+
+@Composable
 private fun ActionButton(a: IslandAction, sc: Float, onUsed: () -> Unit) {
     val danger = remember(a.title) {
         val t = a.title.lowercase()
@@ -1534,13 +1591,13 @@ private fun ActionButton(a: IslandAction, sc: Float, onUsed: () -> Unit) {
             Image(
                 bitmap = a.icon,
                 contentDescription = a.title,
-                colorFilter = ColorFilter.tint(Fg),
+                colorFilter = ColorFilter.tint(if (danger) OnAccent else Fg),
                 modifier = Modifier.size((20f * sc).dp),
             )
         } else {
             Text(
                 text = a.title.uppercase(),
-                color = Fg,
+                color = if (danger) OnAccent else Fg,
                 fontFamily = Mono,
                 fontSize = (11f * sc).sp,
                 letterSpacing = 1.sp,

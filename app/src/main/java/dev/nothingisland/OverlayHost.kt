@@ -85,6 +85,13 @@ class OverlayHost(
             setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             setViewTreeViewModelStoreOwner(lifecycleOwner)
             setContent { IslandHost() }
+            // Vollbild erkennen: Ist die Statusleiste für die App darunter ausgeblendet, meldet das System sie als unsichtbar.
+            setOnApplyWindowInsetsListener { v, insets ->
+                val visible = androidx.core.view.WindowInsetsCompat.toWindowInsetsCompat(insets, v)
+                    .isVisible(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                IslandBus.setFullscreen(!visible)
+                v.onApplyWindowInsets(insets)
+            }
         }
 
         val d0 = context.resources.displayMetrics.density
