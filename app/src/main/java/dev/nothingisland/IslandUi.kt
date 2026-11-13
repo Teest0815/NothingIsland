@@ -566,6 +566,23 @@ private fun IslandHostBody() {
                             sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
                         )
                     }
+                    if (targetState.first == Mode.QUICK) {
+                        // Schnellzugriff: Rahmen wächst zuerst, die Kacheln blenden danach einzeln ein.
+                        return@AnimatedContent ContentTransform(
+                            targetContentEnter = fadeIn(tween(140, delayMillis = 120)),
+                            initialContentExit = fadeOut(tween(90)),
+                            targetContentZIndex = 0f,
+                            sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
+                        )
+                    }
+                    if (initialState.first == Mode.QUICK) {
+                        return@AnimatedContent ContentTransform(
+                            targetContentEnter = fadeIn(tween(160, delayMillis = 140)),
+                            initialContentExit = fadeOut(tween(80)),
+                            targetContentZIndex = 0f,
+                            sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
+                        )
+                    }
                     val toBig = targetState.first == Mode.ALERT || targetState.first == Mode.EXPANDED || targetState.first == Mode.QUICK
                     val delay = if (toBig) 120 else 70
                     ContentTransform(
@@ -1303,11 +1320,17 @@ private fun SeekButton(label: String, sc: Float, onClick: () -> Unit) {
 }
 
 @Composable
-private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean, sc: Float, tint: Boolean = true, onClick: () -> Unit) {
+private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean, sc: Float, tint: Boolean = true, anim: Float = 1f, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .weight(1f)
             .fillMaxHeight()
+            .graphicsLayer {
+                alpha = anim.coerceIn(0f, 1f)
+                val k = 0.7f + 0.3f * anim
+                scaleX = k
+                scaleY = k
+            }
             .clip(RoundedCornerShape((14f * sc).dp))
             .background(if (active) NothingRed else ButtonBg)
             .clickable(onClick = onClick),
@@ -1346,11 +1369,17 @@ private fun QuickPanel(tiles: List<QuickTile>, sc: Float, modifier: Modifier, on
         modifier = modifier.padding(horizontal = (14f * sc).dp, vertical = (14f * sc).dp),
         verticalArrangement = Arrangement.spacedBy((10f * sc).dp),
     ) {
-        tiles.chunked(4).forEach { row ->
+        tiles.chunked(4).forEachIndexed { r, row ->
             Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy((10f * sc).dp)) {
-                row.forEach { t ->
+                row.forEachIndexed { c, t ->
                     val appBmp = if (t.key.startsWith("app:")) QuickActions.appIcon(t.key.removePrefix("app:")) else null
-                    QuickTile(appBmp ?: QuickActions.icon(t.icon), t.label(ctx), t.active(ctx), sc, appBmp == null) {
+                    var shown by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        delay(130L + (r * 4 + c) * 32L)
+                        shown = true
+                    }
+                    val appear by animateFloatAsState(if (shown) 1f else 0f, spring(dampingRatio = 0.7f, stiffness = 420f), label = "tile")
+                    QuickTile(appBmp ?: QuickActions.icon(t.icon), t.label(ctx), t.active(ctx), sc, appBmp == null, appear) {
                         if (t.click(ctx)) IslandBus.setQuick(false) else onUsed()
                     }
                 }

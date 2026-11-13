@@ -109,7 +109,7 @@ data class IslandSettings(
     /** System-Pop-ups (Heads-up) anderer Apps ausschalten, solange die Island läuft. Braucht WRITE_SECURE_SETTINGS. */
     val suppressPopups: Boolean = false,
     /** Island ausblenden bei Vollbild (Video, Spiel) bzw. im Querformat. Eingehende Anrufe bleiben sichtbar. */
-    val hideFullscreen: Boolean = true,
+    val hideFullscreen: Boolean = false,
     val hideLandscape: Boolean = false,
     /** Sparmodus: 0 aus, 1 automatisch (Systemsparmodus oder Akku unter 20 %), 2 immer. */
     val powerSaver: Int = 1,
