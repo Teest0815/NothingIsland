@@ -123,6 +123,9 @@ data class IslandSettings(
     /** nothing, white, midnight, mint, amber, violet oder custom. */
     val theme: String = "nothing",
     val themeHue: Float = 0f,
+    /** Nur bei custom: Sättigung und Helligkeit der Akzentfarbe (0..1). */
+    val themeSat: Float = 0.85f,
+    val themeVal: Float = 0.95f,
     /** Nur bei custom: 0 schwarz, 1 graphit, 2 weiß. */
     val themeBg: Int = 0,
     /** 0 Monospace, 1 Sans, 2 Serif. */
@@ -371,6 +374,8 @@ object IslandBus {
             appRules = p.getString("appRules", d.appRules) ?: "",
             theme = p.getString("theme", d.theme) ?: d.theme,
             themeHue = p.getFloat("themeHue", d.themeHue),
+            themeSat = p.getFloat("themeSat", d.themeSat),
+            themeVal = p.getFloat("themeVal", d.themeVal),
             themeBg = p.getInt("themeBg", d.themeBg),
             themeFont = p.getInt("themeFont", d.themeFont),
         )
@@ -415,6 +420,8 @@ object IslandBus {
             .putString("appRules", s.appRules)
             .putString("theme", s.theme)
             .putFloat("themeHue", s.themeHue)
+            .putFloat("themeSat", s.themeSat)
+            .putFloat("themeVal", s.themeVal)
             .putInt("themeBg", s.themeBg)
             .putInt("themeFont", s.themeFont)
             .apply()

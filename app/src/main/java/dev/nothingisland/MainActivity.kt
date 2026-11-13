@@ -52,6 +52,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -290,6 +299,28 @@ class MainActivity : ComponentActivity() {
             )
         }
 
+        val sv by IslandBus.settings.collectAsState()
+        SectionLabel("SPARMODUS")
+        Card {
+            Text(
+                "Spart Akku: keine Dauer-Animationen (Equalizer, Puls), Zustände werden seltener geprüft. Bei ausgeschaltetem Bildschirm pausiert die Prüfung immer.",
+                color = Muted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "AUS", 1 to "AUTOMATISCH", 2 to "IMMER").forEach { (k, n) ->
+                    Chip(n, sv.powerSaver == k) { edit { it.copy(powerSaver = k) } }
+                }
+            }
+            Text(
+                "Automatisch: aktiv, wenn der Energiesparmodus des Handys an ist oder der Akku unter 20 % liegt.",
+                color = Muted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+        }
+
         SectionLabel("TESTEN")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PillButton("MELDUNG", filled = true, modifier = Modifier.weight(1f)) {
@@ -438,27 +469,6 @@ class MainActivity : ComponentActivity() {
                 IslandBus.upsertOngoing(demoWorkout())
             }
             Spacer(Modifier.height(8.dp))
-        }
-
-        SectionLabel("SPARMODUS")
-        Card {
-            Text(
-                "Spart Akku: keine Dauer-Animationen (Equalizer, Puls), Zustände werden seltener geprüft. Bei ausgeschaltetem Bildschirm pausiert die Prüfung immer.",
-                color = Muted,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(0 to "AUS", 1 to "AUTOMATISCH", 2 to "IMMER").forEach { (k, n) ->
-                    Chip(n, s.powerSaver == k) { edit { it.copy(powerSaver = k) } }
-                }
-            }
-            Text(
-                "Automatisch: aktiv, wenn der Energiesparmodus des Handys an ist oder der Akku unter 20 % liegt.",
-                color = Muted,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(bottom = 6.dp),
-            )
         }
 
         SectionLabel("HAPTIK")
@@ -624,8 +634,8 @@ class MainActivity : ComponentActivity() {
 
         if (s.theme == "custom") {
             Card {
-                SettingSlider("Akzentfarbe", "${s.themeHue.roundToInt()}°", s.themeHue, 0f..359f) { v ->
-                    edit { it.copy(themeHue = v) }
+                AccentPicker(s.themeHue, s.themeSat, s.themeVal) { h, sa, v ->
+                    edit { it.copy(themeHue = h, themeSat = sa, themeVal = v) }
                 }
                 Text("Hintergrund", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp, bottom = 8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(bottom = 10.dp)) {
@@ -941,3 +951,77 @@ private fun previewAlert(): IslandEvent = IslandEvent(
     title = "Vorschau",
     text = "So groß ist die aufgeklappte Pille.",
 )
+
+
+private val ACCENT_SWATCHES = listOf(
+    Triple(355f, 0.85f, 0.90f), Triple(18f, 0.85f, 1f), Triple(42f, 0.90f, 1f), Triple(65f, 0.80f, 0.95f),
+    Triple(140f, 0.75f, 0.85f), Triple(165f, 0.80f, 0.90f), Triple(195f, 0.80f, 0.95f), Triple(215f, 0.80f, 1f),
+    Triple(265f, 0.60f, 1f), Triple(320f, 0.65f, 1f), Triple(0f, 0f, 0.95f), Triple(0f, 0f, 0.55f),
+)
+
+/** Farbwähler: Vorschau mit Hex-Wert, fertige Farben und drei Verläufe für Farbton, Sättigung, Helligkeit. */
+@Composable
+private fun AccentPicker(hue: Float, sat: Float, value: Float, onChange: (Float, Float, Float) -> Unit) {
+    val color = Color.hsv(hue.coerceIn(0f, 359f), sat.coerceIn(0f, 1f), value.coerceIn(0.15f, 1f))
+    val hex = String.format("#%06X", color.toArgb() and 0xFFFFFF)
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(40.dp).clip(CircleShape).background(color).border(1.dp, CardBorder, CircleShape))
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text("Akzentfarbe", color = Color.White, fontSize = 14.sp)
+            Text(hex, color = Muted, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+        }
+    }
+    Row(Modifier.fillMaxWidth().padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        ACCENT_SWATCHES.forEach { (h, sa, v) ->
+            val c = Color.hsv(h, sa, v)
+            val sel = kotlin.math.abs(h - hue) < 3f && kotlin.math.abs(sa - sat) < 0.04f && kotlin.math.abs(v - value) < 0.04f
+            Box(
+                Modifier
+                    .weight(1f)
+                    .aspectRatio(1f)
+                    .clip(CircleShape)
+                    .background(c)
+                    .border(if (sel) 2.dp else 1.dp, if (sel) Color.White else CardBorder, CircleShape)
+                    .clickable { onChange(h, sa, v) },
+            )
+        }
+    }
+    val hueBrush = Brush.horizontalGradient((0..6).map { Color.hsv((it * 60f).coerceAtMost(359f), sat, value) })
+    GradientBar("Farbton", hueBrush, hue / 359f, color) { onChange(it * 359f, sat, value) }
+    GradientBar("Sättigung", Brush.horizontalGradient(listOf(Color.hsv(hue, 0f, value), Color.hsv(hue, 1f, value))), sat, color) { onChange(hue, it, value) }
+    GradientBar("Helligkeit", Brush.horizontalGradient(listOf(Color.hsv(hue, sat, 0.15f), Color.hsv(hue, sat, 1f))), (value - 0.15f) / 0.85f, color) {
+        onChange(hue, sat, 0.15f + it * 0.85f)
+    }
+}
+
+@Composable
+private fun GradientBar(label: String, brush: Brush, fraction: Float, thumb: Color, onFraction: (Float) -> Unit) {
+    var w by remember { mutableIntStateOf(1) }
+    Text(label, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(30.dp)
+            .onSizeChanged { w = it.width.coerceAtLeast(1) }
+            .clip(RoundedCornerShape(50))
+            .background(brush)
+            .border(1.dp, CardBorder, RoundedCornerShape(50))
+            .pointerInput(Unit) { detectTapGestures { onFraction((it.x / w).coerceIn(0f, 1f)) } }
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { onFraction((it.x / w).coerceIn(0f, 1f)) },
+                ) { change, _ ->
+                    change.consume()
+                    onFraction((change.position.x / w).coerceIn(0f, 1f))
+                }
+            }
+            .drawBehind {
+                val r = size.height / 2f - 2.dp.toPx()
+                val x = (fraction.coerceIn(0f, 1f) * (size.width - 2 * r - 4.dp.toPx())) + r + 2.dp.toPx()
+                drawCircle(Color.White, r + 2.dp.toPx(), Offset(x, size.height / 2f))
+                drawCircle(thumb, r - 1.dp.toPx(), Offset(x, size.height / 2f))
+            },
+    )
+    Spacer(Modifier.height(6.dp))
+}

@@ -35,7 +35,7 @@ object IslandTheme {
             "amber" -> set(Color(0xFFFFB020), Color.Black, Color.White)
             "violet" -> set(Color(0xFFA66BFF), Color.Black, Color.White)
             "custom" -> {
-                val accent = Color.hsv(s.themeHue.coerceIn(0f, 359f), 0.85f, 0.95f)
+                val accent = Color.hsv(s.themeHue.coerceIn(0f, 359f), s.themeSat.coerceIn(0f, 1f), s.themeVal.coerceIn(0.15f, 1f))
                 when (s.themeBg) {
                     1 -> set(accent, Color(0xFF15161A), Color.White)
                     2 -> set(accent, Color(0xFFF4F4F4), Color(0xFF111111))
