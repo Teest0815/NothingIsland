@@ -82,7 +82,7 @@ private val STATUS_TYPES = listOf(
     "camera" to "Kamera wird verwendet",
     "powersave" to "Energiesparmodus",
     "location" to "Standort an",
-    "alarm" to "Wecker (10 Min. vorher)",
+    "alarm" to "Wecker kurz vor dem Klingeln (10 Min.)",
 )
 
 class MainActivity : ComponentActivity() {
@@ -119,8 +119,10 @@ class MainActivity : ComponentActivity() {
         @Suppress("UNUSED_VARIABLE") val key = refreshKey
         val s by IslandBus.settings.collectAsState()
         IslandTheme.apply(s)
+        // Tab und Scrollposition liegen außerhalb des key-Blocks, damit ein Theme-Wechsel sie nicht zurücksetzt.
+        var tab by rememberSaveable { mutableIntStateOf(0) }
+        val scroll = rememberScrollState()
         androidx.compose.runtime.key(IslandTheme.signature) {
-            var tab by rememberSaveable { mutableIntStateOf(0) }
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -151,7 +153,7 @@ class MainActivity : ComponentActivity() {
                     Column(
                         modifier = Modifier
                             .weight(1f)
-                            .verticalScroll(rememberScrollState())
+                            .verticalScroll(scroll)
                             .padding(horizontal = 24.dp),
                     ) {
                         when (tab) {

@@ -105,6 +105,30 @@ class IslandListenerService : NotificationListenerService() {
             return
         }
 
+        // Ohrhörer-Akku ("Links 100% Lade-Case 60% Rechts 100%"): kurz in der Pille zeigen statt als Meldung.
+        run {
+            val ex = n.extras
+            val all = listOf(
+                ex.getCharSequence(Notification.EXTRA_TEXT), ex.getCharSequence(Notification.EXTRA_BIG_TEXT),
+                ex.getCharSequence(Notification.EXTRA_SUB_TEXT),
+            ).joinToString(" ") { it?.toString().orEmpty() }
+            val parsed = parseEarbuds(all) ?: return@run
+            if (!IslandBus.settings.value.statusEnabled("bluetooth")) return@run
+            val name = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+                .replace(Regex("""\s+von\s+.+$""", RegexOption.IGNORE_CASE), "")
+            if (lastEarbuds[sbn.key] == parsed.first) return
+            lastEarbuds[sbn.key] = parsed.first
+            if (allowAlert) {
+                IslandBus.post(
+                    buildEvent(sbn, Kind.OTHER).copy(
+                        title = name.uppercase(), text = parsed.first, textShort = parsed.second,
+                        quiet = true, kind = Kind.STATUS,
+                    ),
+                )
+            }
+            return
+        }
+
         var kind = classify(n, sbn.isOngoing, sbn.packageName)
         if (kind == null && rule == "LIVE" && sbn.isOngoing) kind = Kind.PROGRESS
         if (kind != null) {
@@ -286,6 +310,18 @@ class IslandListenerService : NotificationListenerService() {
             reply = reply,
             metrics = metrics,
         )
+    }
+
+    private val lastEarbuds = HashMap<String, String>()
+
+    /** Liest links / Case / rechts aus Texten wie "Links 100% Lade-Case 60% Rechts 100%". */
+    private fun parseEarbuds(t: String): Pair<String, String?>? {
+        val o = RegexOption.IGNORE_CASE
+        Regex("""(?:links|left)\D{0,3}(\d{1,3})\s?%.*?(?:case|etui)\D{0,3}(\d{1,3})\s?%.*?(?:rechts|right)\D{0,3}(\d{1,3})\s?%""", o)
+            .find(t)?.let { return "${it.groupValues[1]}/${it.groupValues[2]}/${it.groupValues[3]}" to "${it.groupValues[1]}/${it.groupValues[3]}" }
+        Regex("""(?:links|left)\D{0,3}(\d{1,3})\s?%.*?(?:rechts|right)\D{0,3}(\d{1,3})\s?%""", o)
+            .find(t)?.let { return "${it.groupValues[1]}/${it.groupValues[2]}" to null }
+        return null
     }
 
     private class RemoteInfo(

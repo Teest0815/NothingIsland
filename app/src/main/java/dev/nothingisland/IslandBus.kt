@@ -97,7 +97,7 @@ data class IslandSettings(
     /** Status-Anzeigen in der Pille: Lampe, Stumm, Nicht stören, Hotspot, Flugmodus. */
     val statusPills: Boolean = true,
     /** Ausgeschaltete Status-Arten, kommagetrennt (torch, ringer, dnd, hotspot, airplane). */
-    val statusOff: String = "location",
+    val statusOff: String = "location,alarm",
     /** Kurzes Vibrieren beim Aufklappen. */
     val haptics: Boolean = true,
     /** 1 = leicht, 2 = mittel, 3 = stark. */
@@ -279,6 +279,11 @@ object IslandBus {
     fun loadPrefs(context: Context) {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val d = IslandSettings()
+        // Einmalig: "Wecker in 10 Min." ist jetzt standardmäßig aus.
+        if (!p.getBoolean("alarmOffDone", false)) {
+            val off = p.getString("statusOff", d.statusOff).orEmpty().split(',').filter { it.isNotBlank() } + "alarm"
+            p.edit().putString("statusOff", off.distinct().joinToString(",")).putBoolean("alarmOffDone", true).apply()
+        }
         _settings.value = IslandSettings(
             offsetX = p.getInt("offsetX", d.offsetX),
             offsetY = p.getInt("offsetY", d.offsetY),
