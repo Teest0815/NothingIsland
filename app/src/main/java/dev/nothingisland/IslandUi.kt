@@ -138,6 +138,7 @@ private fun IslandHostBody() {
     val primaryKey by IslandBus.primaryKey.collectAsState()
     val manual by IslandBus.expanded.collectAsState()
     val quick by IslandBus.quick.collectAsState()
+    val replying by IslandBus.replyTarget.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(Unit) { QuickActions.init(ctx) }
     val torchOn by QuickActions.torch.collectAsState()
@@ -159,7 +160,8 @@ private fun IslandHostBody() {
                         QuickActions.onBattery(ctx, i, IslandBus.settings.value)
                     android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED,
                     android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED,
-                    android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED ->
+                    android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED,
+                    "android.bluetooth.device.action.BATTERY_LEVEL_CHANGED" ->
                         QuickActions.onBluetooth(ctx, i, IslandBus.settings.value)
                 }
                 QuickActions.syncStatus(ctx, IslandBus.settings.value)
@@ -176,6 +178,7 @@ private fun IslandHostBody() {
             addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(android.bluetooth.BluetoothDevice.ACTION_ACL_DISCONNECTED)
             addAction(android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED)
+            addAction("android.bluetooth.device.action.BATTERY_LEVEL_CHANGED")
         }
         val ok = runCatching {
             androidx.core.content.ContextCompat.registerReceiver(
@@ -248,7 +251,8 @@ private fun IslandHostBody() {
         current != null -> Mode.COMPACT
         else -> Mode.IDLE
     }
-    if (mode == Mode.IDLE && !s.idleVisible && !preview) {
+    // Beim Antworten zeichnet das eigene Eingabefenster; die Pille tritt zurück.
+    if ((mode == Mode.IDLE && !s.idleVisible && !preview) || replying != null) {
         SideEffect {
             reported = Triple(1f, 1f, 1f)
             IslandBus.setWindowSize(1f, 1f, 1f)
@@ -520,14 +524,8 @@ private fun IslandHostBody() {
                     }
                     Mode.ALERT -> (alert ?: lastAlert)?.let {
                         AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp)) {
-                            // Antworten: kleines Eingabefenster öffnen, die Meldung verschwindet.
-                            runCatching {
-                                ctx.startActivity(
-                                    android.content.Intent(ctx, ReplyActivity::class.java)
-                                        .putExtra("id", it.id)
-                                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-                                )
-                            }
+                            // Antworten: Eingabe direkt in der Island, die Meldung verschwindet.
+                            IslandBus.startReply(it)
                             suppressLinger = true
                             IslandBus.dismiss()
                         }
@@ -872,14 +870,17 @@ private fun MessageContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float
             )
         },
         right = {
+            var short by remember(e.id) { mutableStateOf(false) }
             Text(
-                text = e.text,
+                text = if (short && e.textShort != null) e.textShort else e.text,
                 color = if (e.kind == Kind.STATUS) Fg else TextGray,
                 fontFamily = if (e.kind == Kind.STATUS) Mono else FontFamily.Default,
                 fontWeight = if (e.kind == Kind.STATUS) FontWeight.Medium else FontWeight.Normal,
                 fontSize = (if (e.kind == Kind.STATUS) 12f else 11f).let { (it * sc).sp },
                 maxLines = 1,
+                softWrap = e.textShort == null,
                 overflow = TextOverflow.Ellipsis,
+                onTextLayout = { if (e.textShort != null && it.hasVisualOverflow) short = true },
             )
         },
     )

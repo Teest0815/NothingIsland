@@ -67,6 +67,8 @@ class OverlayHost(
     private var owner: OverlayOwner? = null
     private var layoutJob: Job? = null
     private var touchView: View? = null
+    private var replyView: ComposeView? = null
+    private var replyJob: Job? = null
     private var lockReceiver: BroadcastReceiver? = null
     private var touchParams: WindowManager.LayoutParams? = null
 
@@ -166,6 +168,9 @@ class OverlayHost(
             context.registerReceiver(rc, f)
             lockReceiver = rc
         }
+        replyJob = scope.launch {
+            IslandBus.replyTarget.collect { ev -> if (ev != null) showReply() else removeReply() }
+        }
         layoutJob = scope.launch {
             combine(IslandBus.settings, IslandBus.windowSize, IslandBus.touchRect) { st, size, r -> Triple(st, size, r) }
                 .collect { (st, size, r) -> applyLayout(st, size, r) }
@@ -174,6 +179,9 @@ class OverlayHost(
     }
 
     fun remove() {
+        replyJob?.cancel()
+        replyJob = null
+        removeReply()
         layoutJob?.cancel()
         layoutJob = null
         lockReceiver?.let { r -> runCatching { context.unregisterReceiver(r) } }
@@ -187,6 +195,53 @@ class OverlayHost(
         params = null
         owner = null
         windowManager = null
+    }
+
+    /** Eigenes, fokussierbares Fenster für die Texteingabe (die Island selbst nimmt nie den Fokus). */
+    private fun showReply() {
+        val wm = windowManager ?: return
+        val lo = owner ?: return
+        if (replyView != null) return
+        val dm = context.resources.displayMetrics
+        val d = dm.density
+        val s = IslandBus.settings.value
+        val bigW = minOf(s.expandedWidth.toFloat(), dm.widthPixels / d - 8f)
+        val view = ComposeView(context).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+            setViewTreeLifecycleOwner(lo)
+            setViewTreeSavedStateRegistryOwner(lo)
+            setViewTreeViewModelStoreOwner(lo)
+            setOnTouchListener { _, ev ->
+                if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE) IslandBus.endReply()
+                false
+            }
+            setContent { ReplyBar() }
+        }
+        val lp = WindowManager.LayoutParams(
+            ((bigW + 24f) * d).toInt(),
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            x = (s.offsetX * d).toInt()
+            y = ((s.expandedTop - 12) * d).toInt()
+            softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            }
+        }
+        if (runCatching { wm.addView(view, lp) }.isSuccess) replyView = view
+    }
+
+    private fun removeReply() {
+        replyView?.let { v -> runCatching { windowManager?.removeView(v) } }
+        replyView = null
     }
 
     private fun updateLockState() {

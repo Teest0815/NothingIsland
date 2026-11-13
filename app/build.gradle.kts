@@ -59,4 +59,5 @@ dependencies {
     implementation("androidx.compose.animation:animation")
     implementation("androidx.compose.material3:material3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("org.lsposed.hiddenapibypass:hiddenapibypass:4.3")
 }

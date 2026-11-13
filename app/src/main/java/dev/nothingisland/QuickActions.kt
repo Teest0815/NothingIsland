@@ -248,17 +248,22 @@ object QuickActions {
     private fun deviceName(d: BluetoothDevice?): String =
         runCatching { d?.name }.getOrNull()?.takeIf { it.isNotBlank() } ?: "Bluetooth-Gerät"
 
-    /** Kopfhörer melden links, Case und rechts einzeln: als "11/34/43" (ohne Beschriftung). Sonst ein Wert. */
-    private fun deviceBatteryText(d: BluetoothDevice?): String? {
-        val parts = listOf(10, 12, 11).mapNotNull { key ->
-            runCatching {
-                val b = BluetoothDevice::class.java.getMethod("getMetadata", Int::class.javaPrimitiveType).invoke(d, key) as? ByteArray
-                b?.toString(Charsets.UTF_8)?.trim()?.toIntOrNull()?.takeIf { it in 0..100 }
-            }.getOrNull()
+    /** Links/Case/rechts einzeln (z. B. "11/34/43") und die kurze Fassung links/rechts ("11/43"). */
+    private fun deviceBatteryText(d: BluetoothDevice?): Pair<String, String?>? {
+        fun meta(key: Int): Int? = runCatching {
+            val b = BluetoothDevice::class.java.getMethod("getMetadata", Int::class.javaPrimitiveType).invoke(d, key) as? ByteArray
+            b?.toString(Charsets.UTF_8)?.trim()?.toIntOrNull()?.takeIf { it in 0..100 }
+        }.getOrNull()
+        val l = meta(10)
+        val c = meta(12)
+        val r = meta(11)
+        val full = listOfNotNull(l, c, r)
+        if (full.size >= 2) {
+            val short = if (l != null && r != null && c != null) "$l/$r" else null
+            return full.joinToString("/") to short
         }
-        if (parts.size >= 2) return parts.joinToString("/")
         val single = deviceBattery(d)
-        return if (single >= 0) "$single %" else null
+        return if (single >= 0) "$single %" to null else null
     }
 
     private fun deviceBattery(d: BluetoothDevice?): Int =
@@ -295,21 +300,32 @@ object QuickActions {
                     val isNew = dev.address !in btDevices
                     btDevices[dev.address] = deviceName(dev) to deviceBattery(dev)
                     if (isNew && st.statusEnabled("bluetooth")) {
-                        // Akkustand kommt oft erst kurz nach dem Verbinden: kurz warten, dann kurz anzeigen.
-                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        // Akkustände kommen oft erst kurz nach dem Verbinden: erst zeigen, dann bei Änderung aktualisieren.
+                        val h = android.os.Handler(android.os.Looper.getMainLooper())
+                        var shown: String? = null
+                        fun show() {
                             val name = deviceName(dev)
                             btDevices[dev.address] = name to deviceBattery(dev)
+                            val t = deviceBatteryText(dev)
+                            if (shown != null && t?.first == shown) return
+                            shown = t?.first
                             IslandBus.post(
                                 IslandEvent(
                                     app = "BLUETOOTH", title = name.uppercase(),
-                                    text = deviceBatteryText(dev) ?: "Verbunden",
+                                    text = t?.first ?: "Verbunden", textShort = t?.second,
                                     icon = icon("bluetooth"), quiet = true, kind = Kind.STATUS,
                                 ),
                             )
-                        }, 1500)
+                        }
+                        h.postDelayed({ show() }, 1500)
+                        h.postDelayed({ show() }, 5000)
                     }
                 }
             BluetoothDevice.ACTION_ACL_DISCONNECTED -> if (dev != null) btDevices.remove(dev.address)
+            "android.bluetooth.device.action.BATTERY_LEVEL_CHANGED" -> {
+                val lv = i.getIntExtra("android.bluetooth.device.extra.BATTERY_LEVEL", -1)
+                if (dev != null && lv in 0..100) btDevices[dev.address] = deviceName(dev) to lv
+            }
             android.bluetooth.BluetoothAdapter.ACTION_STATE_CHANGED ->
                 if (i.getIntExtra(android.bluetooth.BluetoothAdapter.EXTRA_STATE, 0) != android.bluetooth.BluetoothAdapter.STATE_ON) btDevices.clear()
         }

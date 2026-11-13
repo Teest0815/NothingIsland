@@ -33,15 +33,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Kleines Eingabefenster für Schnell-Antworten -->
-        <activity
-            android:name=".ReplyActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:launchMode="singleTask"
-            android:windowSoftInputMode="stateVisible|adjustResize"
-            android:theme="@style/Theme.NothingIsland.Reply" />
-
         <!-- Fängt Benachrichtigungen ab und hostet das Overlay -->
         <service
             android:name=".IslandListenerService"

@@ -45,6 +45,8 @@ data class IslandEvent(
     val quiet: Boolean = false,
     /** Training: erkannte Werte (bpm, dist, pace, speed, power, cad, kcal, time). */
     val metrics: Map<String, String> = emptyMap(),
+    /** Kürzere Fassung von [text], falls der Platz nicht reicht. */
+    val textShort: String? = null,
     /** Antwort-Möglichkeit (Messenger). */
     val reply: IslandReply? = null,
     /** Musik: Steuerung, Zustand und Metadaten. */
@@ -218,8 +220,21 @@ object IslandBus {
         _quick.value = value
     }
 
+    /** Meldung, auf die gerade direkt in der Island geantwortet wird. */
+    private val _replyTarget = MutableStateFlow<IslandEvent?>(null)
+    val replyTarget: StateFlow<IslandEvent?> = _replyTarget.asStateFlow()
+
+    fun startReply(e: IslandEvent) {
+        _replyTarget.value = e
+    }
+
+    fun endReply() {
+        _replyTarget.value = null
+    }
+
     /** Tippen außerhalb der Island: aufgeklappte Pille und Meldung wieder verkleinern. */
     fun collapse() {
+        _replyTarget.value = null
         _quick.value = false
         _expanded.value = false
         _current.value = null

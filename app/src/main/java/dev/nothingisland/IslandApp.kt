@@ -13,6 +13,8 @@ class IslandApp : Application() {
     override fun onCreate() {
         super.onCreate()
         CrashLog.install(this)
+        // Nötig, um den einzelnen Akkustand von Kopfhörern (links/Case/rechts) lesen zu können.
+        if (android.os.Build.VERSION.SDK_INT >= 28) runCatching { org.lsposed.hiddenapibypass.HiddenApiBypass.addHiddenApiExemptions("") }
         IslandBus.loadPrefs(this)
         A11yGuard.ensureEnabled(this)
         KeepAliveService.start(this)
