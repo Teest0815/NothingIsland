@@ -66,6 +66,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -372,7 +373,8 @@ private fun IslandHostBody() {
     val swipeX = remember { Animatable(0f) }
     val swipeScope = rememberCoroutineScope()
     // Musik: Wischen dehnt die Pille in die Richtung und wechselt den Song.
-    val stretch = remember { Animatable(0f) }
+    var stretchPx by remember { mutableFloatStateOf(0f) }
+    var stretchRaw by remember { mutableFloatStateOf(0f) }
     val canSkip = mode == Mode.COMPACT && s.swipeSkip && current?.kind == Kind.MEDIA && current.media != null
     val curForSkip by rememberUpdatedState(current)
     val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || mode == Mode.QUICK
@@ -430,11 +432,11 @@ private fun IslandHostBody() {
                     val pop = 0.9f + 0.1f * appear.value
                     scaleX = pressScale * pop
                     scaleY = pressScale * pop
-                    translationX = swipeX.value + stretch.value / 2f
+                    translationX = swipeX.value + stretchPx / 2f
                     alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value
                 }
                 .layout { m, _ ->
-                    val w = width.roundToPx() + abs(stretch.value).roundToInt()
+                    val w = width.roundToPx() + abs(stretchPx).roundToInt()
                     val h = height.roundToPx()
                     val pl = m.measure(Constraints.fixed(w, h))
                     layout(w, h) { pl.place(0, 0) }
@@ -444,23 +446,37 @@ private fun IslandHostBody() {
                 .border(1.dp, Hairline, shape)
                 .pointerInput(mode, canSkip) {
                     if (canSkip) {
-                        val maxS = 44.dp.toPx()
+                        val maxS = 48.dp.toPx()
+                        val trigger = 24.dp.toPx()
+                        var armed = false
+                        // Gummiband: je weiter gezogen, desto mehr Widerstand, ohne harten Anschlag.
+                        fun band(raw: Float) = maxS * kotlin.math.tanh(raw / (maxS * 1.7f))
+                        val release: () -> Unit = {
+                            val from = stretchPx
+                            val doSkip = abs(from) > trigger
+                            if (doSkip) {
+                                val tc = curForSkip?.media?.transportControls
+                                runCatching { if (from > 0) tc?.skipToNext() else tc?.skipToPrevious() }
+                            }
+                            stretchRaw = 0f
+                            armed = false
+                            swipeScope.launch {
+                                androidx.compose.animation.core.animate(
+                                    from, 0f,
+                                    animationSpec = spring(dampingRatio = 0.55f, stiffness = 260f),
+                                ) { v, _ -> stretchPx = v }
+                            }
+                        }
                         detectHorizontalDragGestures(
-                            onDragEnd = {
-                                val x = stretch.value
-                                swipeScope.launch {
-                                    if (abs(x) > 22.dp.toPx()) {
-                                        val tc = curForSkip?.media?.transportControls
-                                        runCatching { if (x > 0) tc?.skipToNext() else tc?.skipToPrevious() }
-                                        if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
-                                    }
-                                    stretch.animateTo(0f, spring(dampingRatio = 0.45f, stiffness = 380f))
-                                }
-                            },
-                            onDragCancel = { swipeScope.launch { stretch.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 500f)) } },
+                            onDragEnd = { release() },
+                            onDragCancel = { release() },
                             onHorizontalDrag = { change, dragAmount ->
                                 change.consume()
-                                swipeScope.launch { stretch.snapTo((stretch.value + dragAmount * 0.6f).coerceIn(-maxS, maxS)) }
+                                stretchRaw += dragAmount
+                                stretchPx = band(stretchRaw)
+                                val over = abs(stretchPx) > trigger
+                                if (over && !armed && s.haptics) QuickActions.haptic(ctx, 1)
+                                armed = over
                             },
                         )
                         return@pointerInput
