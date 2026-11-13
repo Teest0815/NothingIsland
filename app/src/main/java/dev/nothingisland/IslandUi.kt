@@ -176,7 +176,6 @@ private fun IslandHostBody() {
                 when (i?.action) {
                     "android.net.wifi.WIFI_AP_STATE_CHANGED" -> {
                         val on = i.getIntExtra("wifi_state", 0) % 10 == 3
-                        if (on != QuickActions.hotspotOn) QuickActions.watchHotspot(ctx, on)
                         QuickActions.hotspotOn = on
                     }
                     android.content.Intent.ACTION_BATTERY_CHANGED ->

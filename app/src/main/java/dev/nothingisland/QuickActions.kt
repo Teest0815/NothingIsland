@@ -60,35 +60,13 @@ object QuickActions {
 
     // ---- Zustände, die per Broadcast oder Callback hereinkommen
     @Volatile var hotspotOn = false
-    @Volatile var hotspotClients: Int? = null
-    private var softApCallback: Any? = null
+    /** Mobile Datenmenge beim Start des Hotspots (Summe aus Empfang und Senden), um den Verbrauch seitdem zu zeigen. */
+    @Volatile private var hotspotBase: Long? = null
 
-    /** Zählt die Geräte am Hotspot (ab Android 11). Meldet nichts, wenn das System oder der Hersteller es nicht zulässt. */
-    fun watchHotspot(ctx: Context, on: Boolean) {
-        if (android.os.Build.VERSION.SDK_INT < 30) return
-        val app = ctx.applicationContext
-        val wm = app.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager ?: return
-        runCatching {
-            (softApCallback as? android.net.wifi.WifiManager.SoftApCallback)?.let { wm.unregisterSoftApCallback(it) }
-            softApCallback = null
-            if (!on) {
-                hotspotClients = null
-                return
-            }
-            val cb = object : android.net.wifi.WifiManager.SoftApCallback {
-                override fun onConnectedClientsChanged(clients: MutableList<android.net.wifi.WifiClient>) {
-                    hotspotClients = clients.size
-                    syncStatus(app, IslandBus.settings.value)
-                }
-                @Suppress("OVERRIDE_DEPRECATION")
-                override fun onNumClientsChanged(numClients: Int) {
-                    hotspotClients = numClients
-                    syncStatus(app, IslandBus.settings.value)
-                }
-            }
-            wm.registerSoftApCallback(app.mainExecutor, cb)
-            softApCallback = cb
-        }
+    private fun mobileBytes(): Long {
+        val rx = android.net.TrafficStats.getMobileRxBytes()
+        val tx = android.net.TrafficStats.getMobileTxBytes()
+        return if (rx < 0 || tx < 0) -1L else rx + tx
     }
     @Volatile private var micActive = false
     private val camUnavailable = HashSet<String>()
@@ -709,12 +687,13 @@ object QuickActions {
 
         setStatus(st.statusEnabled("dnd"), "dnd", dndOn(app), "NICHT STÖREN", "Aktiv", "moon", false, "AUS") { toggleDnd(app) }
 
-        val hs = hotspotClients
-        val hsText = when {
-            hs == null -> "Aktiv"
-            hs == 0 -> "Keine Geräte"
-            hs == 1 -> "1 Gerät"
-            else -> "$hs Geräte"
+        if (!hotspotOn) hotspotBase = null
+        else if (hotspotBase == null) hotspotBase = mobileBytes()
+        val used = hotspotBase?.let { b -> mobileBytes().let { n -> if (b < 0 || n < 0) null else (n - b).coerceAtLeast(0) } }
+        val hsText = if (used == null) "Aktiv" else {
+            val mb = used / 1_000_000.0
+            if (mb >= 1000) String.format(java.util.Locale.GERMANY, "%.1f GB Daten", mb / 1000)
+            else String.format(java.util.Locale.GERMANY, "%.0f MB Daten", mb)
         }
         setStatus(st.statusEnabled("hotspot"), "hotspot", hotspotOn, "HOTSPOT", hsText, "hotspot", true, "EINSTELLUNGEN") {
             open(app, "android.settings.TETHER_SETTINGS", Settings.ACTION_WIRELESS_SETTINGS)
