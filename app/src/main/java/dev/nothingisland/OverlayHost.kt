@@ -179,6 +179,7 @@ class OverlayHost(
     }
 
     fun remove() {
+        QuickActions.applyHeadsUp(context, false)
         replyJob?.cancel()
         replyJob = null
         removeReply()
@@ -236,12 +237,19 @@ class OverlayHost(
                 layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             }
         }
-        if (runCatching { wm.addView(view, lp) }.isSuccess) replyView = view
+        if (runCatching { wm.addView(view, lp) }.isSuccess) {
+            replyView = view
+            // Erst wenn das Fenster steht, tritt die Pille zurück: so gibt es keinen Aussetzer.
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                if (replyView === view) IslandBus.setReplyShown(true)
+            }, 120)
+        }
     }
 
     private fun removeReply() {
         replyView?.let { v -> runCatching { windowManager?.removeView(v) } }
         replyView = null
+        IslandBus.setReplyShown(false)
     }
 
     private fun updateLockState() {

@@ -138,9 +138,10 @@ private fun IslandHostBody() {
     val primaryKey by IslandBus.primaryKey.collectAsState()
     val manual by IslandBus.expanded.collectAsState()
     val quick by IslandBus.quick.collectAsState()
-    val replying by IslandBus.replyTarget.collectAsState()
+    val replying by IslandBus.replyShown.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(Unit) { QuickActions.init(ctx) }
+    LaunchedEffect(s.suppressPopups) { QuickActions.applyHeadsUp(ctx, s.suppressPopups) }
     val torchOn by QuickActions.torch.collectAsState()
     LaunchedEffect(torchOn, s.statusPills, s.statusOff) { QuickActions.syncStatus(ctx, s) }
     // Wecker-Countdown und Zustände ohne eigenes Signal regelmäßig prüfen.
@@ -252,7 +253,7 @@ private fun IslandHostBody() {
         else -> Mode.IDLE
     }
     // Beim Antworten zeichnet das eigene Eingabefenster; die Pille tritt zurück.
-    if ((mode == Mode.IDLE && !s.idleVisible && !preview) || replying != null) {
+    if ((mode == Mode.IDLE && !s.idleVisible && !preview) || replying) {
         SideEffect {
             reported = Triple(1f, 1f, 1f)
             IslandBus.setWindowSize(1f, 1f, 1f)
@@ -527,7 +528,6 @@ private fun IslandHostBody() {
                             // Antworten: Eingabe direkt in der Island, die Meldung verschwindet.
                             IslandBus.startReply(it)
                             suppressLinger = true
-                            IslandBus.dismiss()
                         }
                     }
                     Mode.EXPANDED -> shownCurrent?.let { cur ->
@@ -940,7 +940,7 @@ private fun Chrono(
 
 /** Aufgeklappte Meldung bei neuer Benachrichtigung. */
 @Composable
-private fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, onReply: () -> Unit) {
+internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, onReply: () -> Unit) {
     Row(
         modifier = modifier.padding(horizontal = (18f * sc).dp),
         verticalAlignment = Alignment.CenterVertically,

@@ -97,13 +97,15 @@ data class IslandSettings(
     /** Status-Anzeigen in der Pille: Lampe, Stumm, Nicht stören, Hotspot, Flugmodus. */
     val statusPills: Boolean = true,
     /** Ausgeschaltete Status-Arten, kommagetrennt (torch, ringer, dnd, hotspot, airplane). */
-    val statusOff: String = "location,alarm",
+    val statusOff: String = "location",
     /** Kurzes Vibrieren beim Aufklappen. */
     val haptics: Boolean = true,
     /** 1 = leicht, 2 = mittel, 3 = stark. */
     val hapticLevel: Int = 2,
     /** Equalizer-Balken bei laufender Musik. */
     val equalizer: Boolean = true,
+    /** System-Pop-ups (Heads-up) anderer Apps ausschalten, solange die Island läuft. Braucht WRITE_SECURE_SETTINGS. */
+    val suppressPopups: Boolean = false,
     /** Training: Wert rechts in der Pille (bpm, dist, pace, speed, power, cad, kcal). */
     val workoutMetric: String = "bpm",
     /** Reihenfolge der Schnellzugriff-Kacheln. */
@@ -224,17 +226,27 @@ object IslandBus {
     private val _replyTarget = MutableStateFlow<IslandEvent?>(null)
     val replyTarget: StateFlow<IslandEvent?> = _replyTarget.asStateFlow()
 
+    /** true, sobald das Antwort-Fenster sichtbar ist; erst dann tritt die Pille zurück (nahtloser Übergang). */
+    private val _replyShown = MutableStateFlow(false)
+    val replyShown: StateFlow<Boolean> = _replyShown.asStateFlow()
+
+    fun setReplyShown(value: Boolean) {
+        _replyShown.value = value
+    }
+
     fun startReply(e: IslandEvent) {
         _replyTarget.value = e
     }
 
     fun endReply() {
         _replyTarget.value = null
+        _replyShown.value = false
     }
 
     /** Tippen außerhalb der Island: aufgeklappte Pille und Meldung wieder verkleinern. */
     fun collapse() {
         _replyTarget.value = null
+        _replyShown.value = false
         _quick.value = false
         _expanded.value = false
         _current.value = null
@@ -279,10 +291,10 @@ object IslandBus {
     fun loadPrefs(context: Context) {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val d = IslandSettings()
-        // Einmalig: "Wecker in 10 Min." ist jetzt standardmäßig aus.
-        if (!p.getBoolean("alarmOffDone", false)) {
-            val off = p.getString("statusOff", d.statusOff).orEmpty().split(',').filter { it.isNotBlank() } + "alarm"
-            p.edit().putString("statusOff", off.distinct().joinToString(",")).putBoolean("alarmOffDone", true).apply()
+        // Einmalig: Wecker-Anzeige wieder standardmäßig an.
+        if (!p.getBoolean("alarmOnV2", false)) {
+            val off = p.getString("statusOff", d.statusOff).orEmpty().split(',').filter { it.isNotBlank() && it != "alarm" }
+            p.edit().putString("statusOff", off.joinToString(",")).putBoolean("alarmOnV2", true).apply()
         }
         _settings.value = IslandSettings(
             offsetX = p.getInt("offsetX", d.offsetX),
@@ -310,6 +322,7 @@ object IslandBus {
             haptics = p.getBoolean("haptics", d.haptics),
             hapticLevel = p.getInt("hapticLevel", d.hapticLevel),
             equalizer = p.getBoolean("equalizer", d.equalizer),
+            suppressPopups = p.getBoolean("suppressPopups", d.suppressPopups),
             workoutMetric = p.getString("workoutMetric", d.workoutMetric) ?: d.workoutMetric,
             quickTiles = p.getString("quickTiles", d.quickTiles) ?: d.quickTiles,
             appRules = p.getString("appRules", d.appRules) ?: "",
@@ -349,6 +362,7 @@ object IslandBus {
             .putBoolean("haptics", s.haptics)
             .putInt("hapticLevel", s.hapticLevel)
             .putBoolean("equalizer", s.equalizer)
+            .putBoolean("suppressPopups", s.suppressPopups)
             .putString("workoutMetric", s.workoutMetric)
             .putString("quickTiles", s.quickTiles)
             .putString("appRules", s.appRules)

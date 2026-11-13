@@ -3,7 +3,13 @@ package dev.nothingisland
 import android.app.RemoteInput
 import android.content.Intent
 import android.os.Bundle
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.core.Animatable
+import kotlinx.coroutines.delay
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -73,65 +79,68 @@ fun ReplyBar() {
         keyboard?.hide()
         IslandBus.endReply()
     }
-    val shape = RoundedCornerShape((st.expandedCorner * fsc).dp.coerceAtMost(34.dp))
+    val shape = RoundedCornerShape((minOf(st.expandedCorner * fsc, 42f * fsc)).dp)
+    var expanded by remember(e.id) { mutableStateOf(false) }
+    LaunchedEffect(e.id) {
+        delay(60)
+        expanded = true
+        delay(140)
+        runCatching { focus.requestFocus() }
+        keyboard?.show()
+    }
     Box(Modifier.fillMaxWidth().padding(12.dp)) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .graphicsLayer {
-                    val p = 0.92f + 0.08f * appear.value
-                    scaleX = p; scaleY = p; alpha = appear.value
-                }
                 .clip(shape)
                 .background(IslandTheme.bg)
                 .border(1.dp, IslandTheme.hairline, shape)
-                .padding(horizontal = (16f * sc).dp, vertical = (12f * sc).dp),
+                .animateContentSize(spring(dampingRatio = 0.8f, stiffness = 380f)),
         ) {
-            Text(
-                text = "ANTWORT AN ${e.title.ifBlank { e.app }.uppercase()}",
-                color = IslandTheme.accent,
-                fontFamily = IslandTheme.font,
-                fontSize = (10f * sc).sp,
-                letterSpacing = 1.4.sp,
-                maxLines = 1,
-            )
-            Spacer(Modifier.height((8f * sc).dp))
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((8f * sc).dp)) {
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(50))
-                        .background(IslandTheme.buttonBg)
-                        .padding(horizontal = (14f * sc).dp, vertical = (10f * sc).dp),
+            // Oben dieselbe Meldung wie in der Island, darunter wächst das Eingabefeld heraus.
+            AlertContent(e.copy(reply = null), sc, Modifier.fillMaxWidth().height((84f * fsc).dp)) {}
+            AnimatedVisibility(visible = expanded, enter = fadeIn(tween(200)) + expandVertically(spring(dampingRatio = 0.8f, stiffness = 380f))) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = (16f * sc).dp, end = (16f * sc).dp, bottom = (14f * sc).dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy((8f * sc).dp),
                 ) {
-                    if (text.isEmpty()) {
-                        Text("Antwort schreiben …", color = IslandTheme.textGray, fontSize = (13f * sc).sp)
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(50))
+                            .background(IslandTheme.buttonBg)
+                            .padding(horizontal = (14f * sc).dp, vertical = (10f * sc).dp),
+                    ) {
+                        if (text.isEmpty()) {
+                            Text("Antwort schreiben …", color = IslandTheme.textGray, fontSize = (13f * sc).sp)
+                        }
+                        BasicTextField(
+                            value = text,
+                            onValueChange = { text = it },
+                            textStyle = TextStyle(color = IslandTheme.fg, fontSize = (13f * sc).sp),
+                            cursorBrush = SolidColor(IslandTheme.accent),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                            keyboardActions = KeyboardActions(onSend = { send() }),
+                            modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                        )
                     }
-                    BasicTextField(
-                        value = text,
-                        onValueChange = { text = it },
-                        textStyle = TextStyle(color = IslandTheme.fg, fontSize = (13f * sc).sp),
-                        cursorBrush = SolidColor(IslandTheme.accent),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(onSend = { send() }),
-                        modifier = Modifier.fillMaxWidth().focusRequester(focus),
-                    )
-                }
-                Box(
-                    Modifier
-                        .clip(RoundedCornerShape(50))
-                        .background(IslandTheme.accent)
-                        .clickable { send() }
-                        .padding(horizontal = (14f * sc).dp, vertical = (10f * sc).dp),
-                ) {
-                    Text(
-                        "SENDEN",
-                        color = androidx.compose.ui.graphics.Color.White,
-                        fontFamily = IslandTheme.font,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = (10f * sc).sp,
-                        letterSpacing = 1.sp,
-                    )
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(IslandTheme.accent)
+                            .clickable { send() }
+                            .padding(horizontal = (14f * sc).dp, vertical = (10f * sc).dp),
+                    ) {
+                        Text(
+                            "SENDEN",
+                            color = androidx.compose.ui.graphics.Color.White,
+                            fontFamily = IslandTheme.font,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = (10f * sc).sp,
+                            letterSpacing = 1.sp,
+                        )
+                    }
                 }
             }
         }

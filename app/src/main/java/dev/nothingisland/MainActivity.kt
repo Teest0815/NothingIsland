@@ -234,6 +234,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        var alarmDump by remember { mutableStateOf(getSharedPreferences("island_prefs", MODE_PRIVATE).getString("alarmDump", null)) }
+        alarmDump?.let { text ->
+            SectionLabel("LETZTE WECKER-ANZEIGE")
+            Card {
+                Text(text, color = Muted, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(vertical = 8.dp))
+            }
+            Spacer(Modifier.height(10.dp))
+            PillButton("LÖSCHEN", filled = false, modifier = Modifier.fillMaxWidth()) {
+                getSharedPreferences("island_prefs", MODE_PRIVATE).edit().remove("alarmDump").apply()
+                alarmDump = null
+            }
+        }
+
         SectionLabel("SETUP")
         StepRow("01", "Über anderen Apps anzeigen", overlayOk) {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
@@ -373,6 +386,25 @@ class MainActivity : ComponentActivity() {
             ToggleRow("Im Hintergrund aktiv halten (stille Benachrichtigung)", s.keepAlive) { c ->
                 edit { it.copy(keepAlive = c) }
                 if (c) KeepAliveService.start(ctx) else KeepAliveService.stop(ctx)
+            }
+            ToggleRow("System-Pop-ups anderer Apps ausblenden", s.suppressPopups) { c ->
+                edit { it.copy(suppressPopups = c) }
+                QuickActions.applyHeadsUp(ctx, c)
+            }
+            if (s.suppressPopups && !QuickActions.hasSecurePermission(ctx)) {
+                Text(
+                    "Freigabe fehlt. Einmalig am PC: adb shell pm grant dev.nothingisland android.permission.WRITE_SECURE_SETTINGS",
+                    color = NothingRed,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
+            } else {
+                Text(
+                    "Schaltet die Schwebe-Benachrichtigungen des Systems aus, solange die Island läuft. Die Meldungen bleiben in der Statusleiste. Braucht die gleiche einmalige adb-Freigabe wie die Barrierefreiheit. Auf manchen Oberflächen (z. B. HyperOS) muss man „Schwebende Benachrichtigungen“ zusätzlich je App ausschalten.",
+                    color = Muted,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
             }
             SettingSlider("Neue Meldung sichtbar für", "${s.alertSeconds} s", s.alertSeconds.toFloat(), 2f..15f) { v -> edit { it.copy(alertSeconds = v.roundToInt()) } }
         }

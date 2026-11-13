@@ -167,6 +167,31 @@ object QuickActions {
         }
     }
 
+    fun hasSecurePermission(ctx: Context): Boolean =
+        ctx.checkSelfPermission("android.permission.WRITE_SECURE_SETTINGS") == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    /**
+     * Schaltet die Pop-ups (Heads-up) des Systems aus oder wieder an. Der ursprüngliche Wert wird gemerkt
+     * und beim Wiedereinschalten zurückgesetzt. Gibt false zurück, wenn die Freigabe fehlt.
+     */
+    fun applyHeadsUp(ctx: Context, suppress: Boolean): Boolean {
+        if (!hasSecurePermission(ctx)) return false
+        val prefs = ctx.getSharedPreferences("island_prefs", Context.MODE_PRIVATE)
+        return runCatching {
+            val key = "heads_up_notifications_enabled"
+            if (suppress) {
+                if (!prefs.contains("headsUpOrig")) {
+                    prefs.edit().putInt("headsUpOrig", Settings.Global.getInt(ctx.contentResolver, key, 1)).apply()
+                }
+                Settings.Global.putInt(ctx.contentResolver, key, 0)
+            } else if (prefs.contains("headsUpOrig")) {
+                Settings.Global.putInt(ctx.contentResolver, key, prefs.getInt("headsUpOrig", 1))
+                prefs.edit().remove("headsUpOrig").apply()
+            }
+            true
+        }.getOrDefault(false)
+    }
+
     fun haptic(ctx: Context, level: Int) {
         runCatching {
             val v = ctx.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
@@ -432,13 +457,23 @@ object QuickActions {
         )
 
         // Wecker: in den letzten 10 Minuten vor dem Klingeln als Countdown.
-        val next = runCatching {
-            (app.getSystemService(Context.ALARM_SERVICE) as AlarmManager).nextAlarmClock?.triggerTime
-        }.getOrNull()
+        val info = runCatching { (app.getSystemService(Context.ALARM_SERVICE) as AlarmManager).nextAlarmClock }.getOrNull()
+        val next = info?.triggerTime
         val soon = next != null && next - System.currentTimeMillis() in 1..10 * 60_000L
+        val creator = runCatching { info?.showIntent?.creatorPackage }.getOrNull()
+        val creatorLabel = creator?.let {
+            runCatching { app.packageManager.getApplicationLabel(app.packageManager.getApplicationInfo(it, 0)).toString() }.getOrNull()
+        }
+        if (soon && st.statusEnabled("alarm") && !startTimes.containsKey("alarm")) {
+            runCatching {
+                app.getSharedPreferences("island_prefs", Context.MODE_PRIVATE).edit().putString(
+                    "alarmDump", "nextAlarm=$next\njetzt=${System.currentTimeMillis()}\nvon=$creator ($creatorLabel)",
+                ).apply()
+            }
+        }
         setStatus(
             st.statusEnabled("alarm"), "alarm", soon, "WECKER",
-            if (next != null) SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(next)) else "", "alarm",
+            if (next != null) SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(next)) + (creatorLabel?.let { " · $it" } ?: "") else "", "alarm",
             false, "WECKER", countDownTo = next, action = { open(app, AlarmClock.ACTION_SHOW_ALARMS) },
         )
     }
