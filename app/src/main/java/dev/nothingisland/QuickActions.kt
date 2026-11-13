@@ -459,15 +459,16 @@ object QuickActions {
         // Wecker: in den letzten 10 Minuten vor dem Klingeln als Countdown.
         val info = runCatching { (app.getSystemService(Context.ALARM_SERVICE) as AlarmManager).nextAlarmClock }.getOrNull()
         val next = info?.triggerTime
-        val soon = next != null && next - System.currentTimeMillis() in 1..10 * 60_000L
         val creator = runCatching { info?.showIntent?.creatorPackage }.getOrNull()
         val creatorLabel = creator?.let {
             runCatching { app.packageManager.getApplicationLabel(app.packageManager.getApplicationInfo(it, 0)).toString() }.getOrNull()
         }
-        if (soon && st.statusEnabled("alarm") && !startTimes.containsKey("alarm")) {
+        val clockLike = creator != null && listOf("clock", "alarm", "deskclock").any { creator.contains(it, true) }
+        val soon = next != null && clockLike && next - System.currentTimeMillis() in 1..10 * 60_000L
+        if (next != null) {
             runCatching {
                 app.getSharedPreferences("island_prefs", Context.MODE_PRIVATE).edit().putString(
-                    "alarmDump", "nextAlarm=$next\njetzt=${System.currentTimeMillis()}\nvon=$creator ($creatorLabel)",
+                    "alarmDump", "nextAlarm=$next\njetzt=${System.currentTimeMillis()}\nvon=$creator ($creatorLabel)\nuhrApp=$clockLike\nangezeigt=$soon",
                 ).apply()
             }
         }
