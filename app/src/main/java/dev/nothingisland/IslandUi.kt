@@ -427,7 +427,8 @@ private fun IslandHostBody() {
     val span = minOf(rowBig + 2f * WINDOW_MARGIN, screenW.toFloat())
     val slotTarget = if (circleItem != null) slotMax else 0f
     val topTarget = ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
-    val winH = topTarget + targetH + WINDOW_MARGIN
+    // Beim Herunterziehen einer Meldung braucht das Fenster Platz nach unten, sonst wird sie abgeschnitten.
+    val winH = topTarget + targetH + WINDOW_MARGIN + (if (canPullRead) 64f else 0f)
     LaunchedEffect(winH, span) {
         val gh = maxOf(winH, reported.second)
         if (span != reported.first || gh != reported.second) {
