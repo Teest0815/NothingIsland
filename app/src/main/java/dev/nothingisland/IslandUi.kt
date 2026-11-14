@@ -493,9 +493,10 @@ private fun IslandHostBody() {
                                 a?.markRead?.let { runCatching { it.send() } }
                                 if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                                 armed = false
+                                // Kein Hochgleiten: Versatz sofort weg, die Meldung schrumpft an Ort und Stelle in die kleine Pille.
+                                pullY = 0f
                                 suppressLinger = true
                                 IslandBus.dismiss()
-                                androidx.compose.animation.core.animate(y, 0f, animationSpec = spring(dampingRatio = 0.7f, stiffness = 420f)) { v, _ -> pullY = v }
                             } else {
                                 androidx.compose.animation.core.animate(y, 0f, animationSpec = spring(dampingRatio = 0.55f, stiffness = 420f)) { v, _ -> pullY = v }
                             }
