@@ -14,7 +14,8 @@ android {
         targetSdk = 34
         // Muss bei jedem Update steigen; CI nutzt die Build-Nummer.
         versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
-        versionName = "1.0"
+        // Version = 1.<Build-Nummer>: steigt mit jedem Push und steht in der App (START) und im Release.
+        versionName = "1." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
     }
 
     // Fester Schlüssel: Nur so lassen sich neue Versionen über die alte App installieren.

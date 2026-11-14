@@ -197,6 +197,14 @@ class MainActivity : ComponentActivity() {
         val btOk = Build.VERSION.SDK_INT < 31 ||
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
 
+        val ver = remember {
+            runCatching {
+                val pi = packageManager.getPackageInfo(packageName, 0)
+                "Version ${pi.versionName} · Build ${pi.longVersionCode}"
+            }.getOrDefault("Version unbekannt")
+        }
+        Text(ver, color = Muted, fontFamily = FontFamily.Monospace, fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp))
+
         var crash by remember { mutableStateOf(CrashLog.read(ctx)) }
         crash?.let { text ->
             SectionLabel("LETZTER ABSTURZ")

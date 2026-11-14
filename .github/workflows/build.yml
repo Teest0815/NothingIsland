@@ -36,9 +36,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          VERSION="1.${GITHUB_RUN_NUMBER}"
           cp app/build/outputs/apk/debug/app-debug.apk NothingIsland.apk
+          cp app/build/outputs/apk/debug/app-debug.apk "NothingIsland-v${VERSION}.apk"
+          MSG="$(git log -1 --pretty=%s)"
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest NothingIsland.apk \
-            --title "Nothing Island (latest)" \
-            --notes "Automatisch gebaute Debug-APK vom letzten Push." \
+          gh release create latest NothingIsland.apk "NothingIsland-v${VERSION}.apk" \
+            --title "Nothing Island v${VERSION}" \
+            --notes "Version ${VERSION} (Build ${GITHUB_RUN_NUMBER}) - ${MSG}" \
             --target "$GITHUB_SHA"
