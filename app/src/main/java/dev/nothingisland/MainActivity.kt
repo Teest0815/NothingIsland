@@ -612,7 +612,7 @@ class MainActivity : ComponentActivity() {
         var token by remember { mutableStateOf(HomeAssistant.token) }
         var status by remember { mutableStateOf<String?>(null) }
         Text(
-            "Zeigt Lampen, Schalter, Szenen u. a. als Kacheln im Schnellzugriff. Adresse z. B. http://homeassistant.local:8123. Das Token erstellst du in Home Assistant unter Profil → Sicherheit → Langzeit-Zugriffstoken. Es bleibt nur auf diesem Handy.",
+            "Zeigt Lampen, Schalter, Szenen u. a. als Kacheln im Schnellzugriff. Tippe auf SERVER SUCHEN (oder trage die Adresse ein, z. B. http://homeassistant.local:8123) und dann auf ANMELDEN. Die Zugangsdaten bleiben nur auf diesem Handy.",
             color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp),
         )
         @Composable
@@ -637,9 +637,48 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+        var loggedIn by remember { mutableStateOf(HomeAssistant.loggedIn) }
         field(url, "Adresse (http://…:8123)", false) { url = it; HomeAssistant.save(this@MainActivity, url, token) }
-        field(token, "Langzeit-Zugriffstoken", true) { token = it; HomeAssistant.save(this@MainActivity, url, token) }
-        PillButton("VERBINDUNG TESTEN", filled = true, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PillButton("SERVER SUCHEN", filled = false, modifier = Modifier.weight(1f)) {
+                status = "Suche im WLAN …"
+                HomeAssistant.discover(this@MainActivity) { found ->
+                    runOnUiThread {
+                        if (found != null) {
+                            url = found
+                            HomeAssistant.save(this@MainActivity, url, token)
+                            status = "Gefunden: $found"
+                        } else {
+                            status = "Fehler: nichts gefunden. Adresse von Hand eintragen."
+                        }
+                    }
+                }
+            }
+            PillButton(if (loggedIn) "ABMELDEN" else "ANMELDEN", filled = !loggedIn, modifier = Modifier.weight(1f)) {
+                if (loggedIn) {
+                    HomeAssistant.logout(this@MainActivity)
+                    loggedIn = false
+                    status = "Abgemeldet"
+                } else {
+                    HomeAssistant.save(this@MainActivity, url, token)
+                    status = "Browser öffnet sich: bei Home Assistant anmelden …"
+                    HomeAssistant.login(this@MainActivity) { err ->
+                        runOnUiThread {
+                            loggedIn = HomeAssistant.loggedIn
+                            status = err?.let { "Fehler: $it" } ?: "Angemeldet"
+                            if (err == null) HomeAssistant.refresh()
+                        }
+                    }
+                }
+            }
+        }
+        if (loggedIn) {
+            Text("Angemeldet über Home Assistant. Ein Token von Hand brauchst du nicht.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+        } else {
+            Text("Oder Langzeit-Token von Hand:", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp))
+            field(token, "Langzeit-Zugriffstoken", true) { token = it; HomeAssistant.save(this@MainActivity, url, token) }
+        }
+        PillButton("VERBINDUNG TESTEN", filled = false, modifier = Modifier.fillMaxWidth()) {
             status = "Teste …"
             HomeAssistant.save(this@MainActivity, url, token)
             HomeAssistant.refresh { err ->
