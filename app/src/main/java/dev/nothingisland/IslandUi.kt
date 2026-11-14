@@ -400,10 +400,10 @@ private fun IslandHostBody() {
     // Neue Inhalte in der kleinen Pille (Taschenlampe, Flugmodus ...) poppen mit Nachfedern auf.
     val bump = remember { Animatable(1f) }
     val bumpKey = if (mode == Mode.COMPACT) current?.key else if (mode == Mode.MESSAGE) lingering?.id?.toString() else null
-    var prevMode by remember { mutableStateOf(mode) }
+    var prevBumpMode by remember { mutableStateOf(mode) }
     LaunchedEffect(mode, bumpKey) {
-        val was = prevMode
-        prevMode = mode
+        val was = prevBumpMode
+        prevBumpMode = mode
         if (mode == Mode.COMPACT || mode == Mode.MESSAGE) {
             bump.snapTo(0.84f)
             bump.animateTo(1f, spring(dampingRatio = 0.38f, stiffness = 520f))
