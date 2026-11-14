@@ -400,10 +400,17 @@ private fun IslandHostBody() {
     // Neue Inhalte in der kleinen Pille (Taschenlampe, Flugmodus ...) poppen mit Nachfedern auf.
     val bump = remember { Animatable(1f) }
     val bumpKey = if (mode == Mode.COMPACT) current?.key else if (mode == Mode.MESSAGE) lingering?.id?.toString() else null
+    var prevMode by remember { mutableStateOf(mode) }
     LaunchedEffect(mode, bumpKey) {
+        val was = prevMode
+        prevMode = mode
         if (mode == Mode.COMPACT || mode == Mode.MESSAGE) {
             bump.snapTo(0.84f)
             bump.animateTo(1f, spring(dampingRatio = 0.38f, stiffness = 520f))
+        } else if (mode == Mode.IDLE && was != Mode.IDLE) {
+            // Pille zeigt nichts mehr an: kurzes, leichtes Nachfedern.
+            bump.snapTo(0.93f)
+            bump.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 450f))
         } else bump.snapTo(1f)
     }
     val swipeScope = rememberCoroutineScope()
@@ -1474,10 +1481,22 @@ private fun SeekButton(label: String, sc: Float, onClick: () -> Unit) {
 }
 
 @Composable
-private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean, sc: Float, tint: Boolean = true, anim: Float = 1f, onClick: () -> Unit) {
+private fun RowScope.QuickTile(icon: ImageBitmap, label: String, activeState: Boolean, sc: Float, tint: Boolean = true, anim: Float = 1f, momentary: Boolean = false, onClick: () -> Unit) {
+    // Kurzer Akzent-Blitz bei Tasten ohne zwei Zustände (Szenen, Skripte, Buttons).
+    val flash = remember { Animatable(0f) }
+    val flashScope = rememberCoroutineScope()
+    val active = activeState || flash.value > 0.5f
+    val click = {
+        if (momentary) flashScope.launch {
+            flash.snapTo(1f)
+            delay(260)
+            flash.animateTo(0f, tween(520))
+        }
+        onClick()
+    }
     // Zustandswechsel: Farbe blendet weich über, das Symbol federt kurz.
     val bgColor by androidx.compose.animation.animateColorAsState(
-        if (active) NothingRed else ButtonBg, tween(260), label = "tilebg",
+        if (active) NothingRed else ButtonBg, tween(if (momentary && flash.value > 0.5f) 90 else 260), label = "tilebg",
     )
     val iconPop = remember { Animatable(1f) }
     var first by remember { mutableStateOf(true) }
@@ -1490,7 +1509,7 @@ private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean
         modifier = Modifier
             .weight(1f)
             .fillMaxHeight()
-            .bounceClick(onClick)
+            .bounceClick(click)
             .graphicsLayer {
                 alpha = anim.coerceIn(0f, 1f)
                 val k = 0.62f + 0.38f * anim
@@ -1636,7 +1655,7 @@ private fun QuickPanel(pages: List<List<List<QuickTile>>>, sc: Float, modifier: 
                                         }
                                     }
                                     val appear by animateFloatAsState(if (shown) 1f else 0f, spring(dampingRatio = 0.62f, stiffness = 380f), label = "tile")
-                                    QuickTile(appBmp ?: QuickActions.icon(t.icon), t.label(ctx), t.active(ctx), sc, appBmp == null, appear) {
+                                    QuickTile(appBmp ?: QuickActions.icon(t.icon), t.label(ctx), t.active(ctx), sc, appBmp == null, appear, t.key.substringAfter(':').substringBefore('.') in setOf("scene", "script", "button") && t.key.startsWith("ha:")) {
                                         if (t.click(ctx)) IslandBus.setQuick(false) else onUsed()
                                     }
                                 }
