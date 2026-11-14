@@ -74,6 +74,7 @@
         </service>
 
         <!-- Verbindet den Benachrichtigungszugriff nach Update/Neustart neu -->
+        <receiver android:name=".TestReceiver" android:exported="false" />
         <receiver
             android:name=".RebindReceiver"
             android:exported="true">

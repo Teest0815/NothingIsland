@@ -339,7 +339,22 @@ class MainActivity : ComponentActivity() {
         SectionLabel("TESTEN")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PillButton("MELDUNG", filled = true, modifier = Modifier.weight(1f)) {
-                IslandBus.post(IslandEvent(app = "Nothing Island", title = "Test-Benachrichtigung", text = "So sieht deine Island aus."))
+                // Mit Antwort und "Als gelesen markieren", damit man beides ausprobieren kann.
+                val replyPi = android.app.PendingIntent.getBroadcast(
+                    this@MainActivity, 31, Intent(this@MainActivity, TestReceiver::class.java).setAction(TestReceiver.ACTION_REPLY),
+                    android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+                val readPi = android.app.PendingIntent.getBroadcast(
+                    this@MainActivity, 32, Intent(this@MainActivity, TestReceiver::class.java).setAction(TestReceiver.ACTION_READ),
+                    android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+                IslandBus.post(
+                    IslandEvent(
+                        app = "Nothing Island", title = "Test-Benachrichtigung", text = "So sieht deine Island aus.",
+                        reply = IslandReply(replyPi, android.app.RemoteInput.Builder(TestReceiver.KEY_REPLY).setLabel("Antworten").build()),
+                        markRead = readPi,
+                    ),
+                )
             }
             PillButton("TIMER", filled = false, modifier = Modifier.weight(1f)) {
                 val left = 5 * 60_000L

@@ -221,6 +221,8 @@ private fun IslandHostBody() {
     val ongoing = if (s.showOngoing) ongoingAll else emptyList()
 
     var touch by remember { mutableIntStateOf(0) }
+    var pullY by remember { mutableFloatStateOf(0f) }
+    var pullRaw by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(quick, touch) {
         if (quick) {
             delay(10_000)
@@ -251,6 +253,7 @@ private fun IslandHostBody() {
         lastAlert = a
         try {
             delay(s.alertSeconds * 1000L)
+            while (pullY > 0f) delay(200) // nicht wegklappen, solange gezogen wird
         } finally {
             // Bleibt noch eine Weile als Text in der kleinen Pille stehen, außer sie wurde weggewischt.
             if (suppressLinger) suppressLinger = false else lingering = a
@@ -396,10 +399,11 @@ private fun IslandHostBody() {
     // Musik: Wischen dehnt die Pille in die Richtung und wechselt den Song.
     var stretchPx by remember { mutableFloatStateOf(0f) }
     var stretchRaw by remember { mutableFloatStateOf(0f) }
-    // Meldung nach unten ziehen = als gelesen markieren.
-    var pullY by remember { mutableFloatStateOf(0f) }
+    // Meldung nach unten ziehen = als gelesen markieren (nur wenn die App die Aktion anbietet).
     val alertNow by rememberUpdatedState(alert)
-    val canPullRead = mode == Mode.ALERT && s.swipeDownRead
+    val canPullRead = mode == Mode.ALERT && s.swipeDownRead && (alert ?: lastAlert)?.markRead != null
+    // Wird die Meldung mitten im Ziehen beendet, bleibt sonst der Versatz stehen.
+    LaunchedEffect(canPullRead) { if (!canPullRead) pullY = 0f }
     val canSkip = mode == Mode.COMPACT && s.swipeSkip && current?.kind == Kind.MEDIA && current.media != null
     val curForSkip by rememberUpdatedState(current)
     val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || (mode == Mode.QUICK && quickPages.size <= 1)
@@ -428,7 +432,7 @@ private fun IslandHostBody() {
     val slotTarget = if (circleItem != null) slotMax else 0f
     val topTarget = ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
     // Beim Herunterziehen einer Meldung braucht das Fenster Platz nach unten, sonst wird sie abgeschnitten.
-    val winH = topTarget + targetH + WINDOW_MARGIN + (if (canPullRead) 64f else 0f)
+    val winH = topTarget + targetH + WINDOW_MARGIN + (if (canPullRead) 40f else 0f)
     LaunchedEffect(winH, span) {
         val gh = maxOf(winH, reported.second)
         if (span != reported.first || gh != reported.second) {
@@ -460,6 +464,8 @@ private fun IslandHostBody() {
                     scaleY = pressScale * pop
                     translationX = swipeX.value + stretchPx / 2f
                     translationY = pullY
+                    // Zieht sich beim Ziehen leicht in die Länge.
+                    if (pullY > 0f) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
                     alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value
                 }
                 .layout { m, _ ->
@@ -473,33 +479,38 @@ private fun IslandHostBody() {
                 .border(1.dp, Hairline, shape)
                 .pointerInput(canPullRead) {
                     if (!canPullRead) return@pointerInput
-                    val trigger = 34.dp.toPx()
-                    detectVerticalDragGestures(
-                        onDragEnd = {
-                            val y = pullY
-                            swipeScope.launch {
-                                if (y > trigger) {
-                                    val a = alertNow
-                                    if (a != null) {
-                                        // Aktion "als gelesen" der App, sonst die Meldung im System entfernen.
-                                        val ok = a.markRead?.let { runCatching { it.send() }.isSuccess } == true
-                                        if (!ok) runCatching { IslandListenerService.instance?.cancelNotification(a.key) }
-                                    }
-                                    if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
-                                    androidx.compose.animation.core.animate(y, y + 24.dp.toPx(), animationSpec = tween(110)) { v, _ -> pullY = v }
-                                    suppressLinger = true
-                                    IslandBus.dismiss()
-                                    pullY = 0f
-                                } else {
-                                    androidx.compose.animation.core.animate(y, 0f, animationSpec = spring(dampingRatio = 0.6f, stiffness = 500f)) { v, _ -> pullY = v }
-                                }
+                    val maxPull = 30.dp.toPx()
+                    val trigger = 18.dp.toPx()
+                    // Gummiband: zieht sich ein Stück mit und gibt immer mehr Widerstand.
+                    fun band(raw: Float) = maxPull * kotlin.math.tanh(raw / (maxPull * 1.6f))
+                    var armed = false
+                    val release: () -> Unit = {
+                        val y = pullY
+                        pullRaw = 0f
+                        swipeScope.launch {
+                            if (y > trigger) {
+                                val a = alertNow
+                                a?.markRead?.let { runCatching { it.send() } }
+                                if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
+                                armed = false
+                                suppressLinger = true
+                                IslandBus.dismiss()
+                                androidx.compose.animation.core.animate(y, 0f, animationSpec = spring(dampingRatio = 0.7f, stiffness = 420f)) { v, _ -> pullY = v }
+                            } else {
+                                androidx.compose.animation.core.animate(y, 0f, animationSpec = spring(dampingRatio = 0.55f, stiffness = 420f)) { v, _ -> pullY = v }
                             }
-                        },
-                        onDragCancel = { pullY = 0f },
+                        }
+                    }
+                    detectVerticalDragGestures(
+                        onDragEnd = { release() },
+                        onDragCancel = { release() },
                         onVerticalDrag = { change, dragAmount ->
                             change.consume()
-                            // Nur nach unten, mit leichtem Widerstand.
-                            pullY = (pullY + dragAmount * 0.7f).coerceIn(0f, 56.dp.toPx())
+                            pullRaw = (pullRaw + dragAmount).coerceAtLeast(0f)
+                            pullY = band(pullRaw)
+                            val over = pullY > trigger
+                            if (over && !armed && s.haptics) QuickActions.haptic(ctx, 1)
+                            armed = over
                         },
                     )
                 }
