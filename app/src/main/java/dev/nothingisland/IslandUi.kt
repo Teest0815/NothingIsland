@@ -1493,7 +1493,7 @@ private fun RowScope.QuickTile(icon: ImageBitmap, label: String, activeState: Bo
     )
     val iconPop = remember { Animatable(1f) }
     var first by remember { mutableStateOf(true) }
-    LaunchedEffect(active) {
+    LaunchedEffect(activeState) {
         if (first) { first = false; return@LaunchedEffect }
         iconPop.snapTo(0.55f)
         iconPop.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 500f))
