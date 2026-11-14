@@ -24,6 +24,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import android.os.SystemClock
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.Image
@@ -395,6 +396,10 @@ private fun IslandHostBody() {
     // Musik: Wischen dehnt die Pille in die Richtung und wechselt den Song.
     var stretchPx by remember { mutableFloatStateOf(0f) }
     var stretchRaw by remember { mutableFloatStateOf(0f) }
+    // Meldung nach unten ziehen = als gelesen markieren.
+    var pullY by remember { mutableFloatStateOf(0f) }
+    val alertNow by rememberUpdatedState(alert)
+    val canPullRead = mode == Mode.ALERT && s.swipeDownRead
     val canSkip = mode == Mode.COMPACT && s.swipeSkip && current?.kind == Kind.MEDIA && current.media != null
     val curForSkip by rememberUpdatedState(current)
     val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || (mode == Mode.QUICK && quickPages.size <= 1)
@@ -453,6 +458,7 @@ private fun IslandHostBody() {
                     scaleX = pressScale * pop
                     scaleY = pressScale * pop
                     translationX = swipeX.value + stretchPx / 2f
+                    translationY = pullY
                     alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value
                 }
                 .layout { m, _ ->
@@ -464,6 +470,38 @@ private fun IslandHostBody() {
                 .clip(shape)
                 .background(Bg)
                 .border(1.dp, Hairline, shape)
+                .pointerInput(canPullRead) {
+                    if (!canPullRead) return@pointerInput
+                    val trigger = 34.dp.toPx()
+                    detectVerticalDragGestures(
+                        onDragEnd = {
+                            val y = pullY
+                            swipeScope.launch {
+                                if (y > trigger) {
+                                    val a = alertNow
+                                    if (a != null) {
+                                        // Aktion "als gelesen" der App, sonst die Meldung im System entfernen.
+                                        val ok = a.markRead?.let { runCatching { it.send() }.isSuccess } == true
+                                        if (!ok) runCatching { IslandListenerService.instance?.cancelNotification(a.key) }
+                                    }
+                                    if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
+                                    androidx.compose.animation.core.animate(y, y + 24.dp.toPx(), animationSpec = tween(110)) { v, _ -> pullY = v }
+                                    suppressLinger = true
+                                    IslandBus.dismiss()
+                                    pullY = 0f
+                                } else {
+                                    androidx.compose.animation.core.animate(y, 0f, animationSpec = spring(dampingRatio = 0.6f, stiffness = 500f)) { v, _ -> pullY = v }
+                                }
+                            }
+                        },
+                        onDragCancel = { pullY = 0f },
+                        onVerticalDrag = { change, dragAmount ->
+                            change.consume()
+                            // Nur nach unten, mit leichtem Widerstand.
+                            pullY = (pullY + dragAmount * 0.7f).coerceIn(0f, 56.dp.toPx())
+                        },
+                    )
+                }
                 .pointerInput(mode, canSkip) {
                     if (canSkip) {
                         val maxS = 48.dp.toPx()

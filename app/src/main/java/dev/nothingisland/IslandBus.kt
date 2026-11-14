@@ -117,6 +117,8 @@ data class IslandSettings(
     val powerSaver: Int = 1,
     /** Wischen auf der Musik-Pille: Song vor/zurück (die Pille dehnt sich in die Richtung). */
     val swipeSkip: Boolean = true,
+    /** Meldung nach unten ziehen = als gelesen markieren. */
+    val swipeDownRead: Boolean = true,
     /** Mehrere Benachrichtigungen nacheinander zeigen statt die vorige zu überschreiben. */
     val multiNotif: Boolean = true,
     /** Kopierten Text kurz in der Pille zeigen. */
@@ -394,6 +396,7 @@ object IslandBus {
             hideLandscape = p.getBoolean("hideLandscape", d.hideLandscape),
             powerSaver = p.getInt("powerSaver", d.powerSaver),
             swipeSkip = p.getBoolean("swipeSkip", d.swipeSkip),
+            swipeDownRead = p.getBoolean("swipeDownRead", d.swipeDownRead),
             multiNotif = p.getBoolean("multiNotif", d.multiNotif),
             clipboard = p.getBoolean("clipboard", d.clipboard),
             workoutMetric = p.getString("workoutMetric", d.workoutMetric) ?: d.workoutMetric,
@@ -442,6 +445,7 @@ object IslandBus {
             .putBoolean("hideLandscape", s.hideLandscape)
             .putInt("powerSaver", s.powerSaver)
             .putBoolean("swipeSkip", s.swipeSkip)
+            .putBoolean("swipeDownRead", s.swipeDownRead)
             .putBoolean("multiNotif", s.multiNotif)
             .putBoolean("clipboard", s.clipboard)
             .putString("workoutMetric", s.workoutMetric)

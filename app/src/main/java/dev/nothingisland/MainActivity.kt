@@ -465,6 +465,7 @@ class MainActivity : ComponentActivity() {
         Card {
             ToggleRow("Equalizer-Balken bei laufender Musik", s.equalizer) { c -> edit { it.copy(equalizer = c) } }
             ToggleRow("Podcast: Vor-/Zurückspulen-Tasten", s.mediaSeek) { c -> edit { it.copy(mediaSeek = c) } }
+            ToggleRow("Meldung nach unten ziehen: als gelesen markieren", s.swipeDownRead) { c -> edit { it.copy(swipeDownRead = c) } }
             ToggleRow("Wischen links/rechts: Song zurück/vor", s.swipeSkip) { c -> edit { it.copy(swipeSkip = c) } }
         }
 
