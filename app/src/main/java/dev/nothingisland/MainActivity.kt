@@ -457,6 +457,8 @@ class MainActivity : ComponentActivity() {
             ToggleRow("Bei Vollbild ausblenden (Video, Spiele)", s.hideFullscreen) { c -> edit { it.copy(hideFullscreen = c) } }
             ToggleRow("Im Querformat ausblenden", s.hideLandscape) { c -> edit { it.copy(hideLandscape = c) } }
             ToggleRow("Mehrere Benachrichtigungen nacheinander (Zähler +N)", s.multiNotif) { c -> edit { it.copy(multiNotif = c) } }
+            ToggleRow("Meldungen derselben App zusammenfassen", s.groupNotif) { c -> edit { it.copy(groupNotif = c) } }
+            ToggleRow("Bestätigungscodes erkennen (Tippen kopiert)", s.otpCodes) { c -> edit { it.copy(otpCodes = c) } }
             ToggleRow("Kopierten Text kurz anzeigen (Zwischenablage)", s.clipboard) { c -> edit { it.copy(clipboard = c) } }
             ToggleRow("Im Hintergrund aktiv halten (stille Benachrichtigung)", s.keepAlive) { c ->
                 edit { it.copy(keepAlive = c) }

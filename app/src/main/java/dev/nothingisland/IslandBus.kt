@@ -62,6 +62,10 @@ data class IslandEvent(
     val tap: (() -> Unit)? = null,
     /** "Als gelesen markieren" der Meldung (Messenger bieten die Aktion an). */
     val markRead: PendingIntent? = null,
+    /** Zusammengefasste Meldungen derselben App. */
+    val count: Int = 1,
+    /** Erkannter Bestätigungscode (OTP). */
+    val code: String? = null,
 )
 
 data class IslandSettings(
@@ -121,6 +125,10 @@ data class IslandSettings(
     val swipeDownRead: Boolean = true,
     /** Mehrere Benachrichtigungen nacheinander zeigen statt die vorige zu überschreiben. */
     val multiNotif: Boolean = true,
+    /** Mehrere Meldungen derselben App zusammenfassen. */
+    val groupNotif: Boolean = true,
+    /** Bestätigungscodes erkennen und Kopieren anbieten. */
+    val otpCodes: Boolean = true,
     /** Kopierten Text kurz in der Pille zeigen. */
     val clipboard: Boolean = true,
     /** Training: Wert rechts in der Pille (bpm, dist, pace, speed, power, cad, kcal). */
@@ -315,13 +323,25 @@ object IslandBus {
             while (recent.size > 20) recent.remove(recent.keys.first())
         }
         val cur = _current.value
+        val group = _settings.value.groupNotif
         if (_settings.value.multiNotif && cur != null && !cur.quiet && !event.quiet) {
-            if (event.key.isNotEmpty() && cur.key == event.key) {
+            if (group && event.kind == Kind.OTHER && cur.kind == Kind.OTHER && cur.app == event.app &&
+                event.code == null && cur.code == null
+            ) {
+                // Gleiche App: zusammenfassen, neueste Meldung zeigen, Zähler hochzählen.
+                _current.value = event.copy(count = if (event.key == cur.key) cur.count else cur.count + 1)
+            } else if (event.key.isNotEmpty() && cur.key == event.key) {
                 _current.value = event // Aktualisierung derselben Unterhaltung
             } else {
                 _pending.update { list ->
-                    val rest = if (event.key.isEmpty()) list else list.filterNot { it.key == event.key }
-                    (rest + event).takeLast(6)
+                    val same = if (group && event.kind == Kind.OTHER && event.code == null)
+                        list.firstOrNull { it.app == event.app && it.kind == Kind.OTHER && it.code == null } else null
+                    if (same != null) {
+                        list.map { if (it === same) event.copy(count = if (event.key == same.key) same.count else same.count + 1) else it }
+                    } else {
+                        val rest = if (event.key.isEmpty()) list else list.filterNot { it.key == event.key }
+                        (rest + event).takeLast(6)
+                    }
                 }
             }
             return
@@ -398,6 +418,8 @@ object IslandBus {
             swipeSkip = p.getBoolean("swipeSkip", d.swipeSkip),
             swipeDownRead = p.getBoolean("swipeDownRead", d.swipeDownRead),
             multiNotif = p.getBoolean("multiNotif", d.multiNotif),
+            groupNotif = p.getBoolean("groupNotif", d.groupNotif),
+            otpCodes = p.getBoolean("otpCodes", d.otpCodes),
             clipboard = p.getBoolean("clipboard", d.clipboard),
             workoutMetric = p.getString("workoutMetric", d.workoutMetric) ?: d.workoutMetric,
             quickTiles = p.getString("quickTiles", d.quickTiles) ?: d.quickTiles,
@@ -447,6 +469,8 @@ object IslandBus {
             .putBoolean("swipeSkip", s.swipeSkip)
             .putBoolean("swipeDownRead", s.swipeDownRead)
             .putBoolean("multiNotif", s.multiNotif)
+            .putBoolean("groupNotif", s.groupNotif)
+            .putBoolean("otpCodes", s.otpCodes)
             .putBoolean("clipboard", s.clipboard)
             .putString("workoutMetric", s.workoutMetric)
             .putString("quickTiles", s.quickTiles)

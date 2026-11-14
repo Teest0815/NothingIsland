@@ -676,6 +676,13 @@ private fun IslandHostBody() {
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                             suppressLinger = true
                             IslandBus.dismiss()
+                        }, onCopyCode = {
+                            it.code?.let { c ->
+                                if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
+                                suppressLinger = true
+                                IslandBus.dismiss()
+                                QuickActions.copyCode(ctx, c)
+                            }
                         }) {
                             // Antworten: Eingabe direkt in der Island, die Meldung verschwindet.
                             IslandBus.startReply(it)
@@ -1124,9 +1131,24 @@ private fun Chrono(
     )
 }
 
+/** Klick mit federndem Eindrücken (Scale-Bounce) statt starrem Ripple. */
+@Composable
+internal fun Modifier.bounceClick(onClick: () -> Unit): Modifier {
+    val src = remember { MutableInteractionSource() }
+    val down by src.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        if (down) 0.86f else 1f,
+        spring(dampingRatio = 0.45f, stiffness = 650f),
+        label = "bounce",
+    )
+    return this
+        .graphicsLayer { scaleX = scale; scaleY = scale }
+        .clickable(interactionSource = src, indication = null, onClick = onClick)
+}
+
 /** Aufgeklappte Meldung bei neuer Benachrichtigung. */
 @Composable
-internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, more: Int = 0, onMarkRead: () -> Unit = {}, onReply: () -> Unit) {
+internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, more: Int = 0, onMarkRead: () -> Unit = {}, onCopyCode: () -> Unit = {}, onReply: () -> Unit) {
     Row(
         modifier = modifier.padding(horizontal = (18f * sc).dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1143,8 +1165,13 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
             }
         }
         Spacer(Modifier.width((14f * sc).dp))
-        Column(modifier = Modifier.weight(1f)) {
-            AppLabel(event.app, sc)
+        val reveal = remember(event.id) { Animatable(0f) }
+        LaunchedEffect(event.id) { reveal.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 260f)) }
+        Column(modifier = Modifier.weight(1f).graphicsLayer {
+            alpha = reveal.value.coerceIn(0f, 1f)
+            translationX = (1f - reveal.value) * 16.dp.toPx()
+        }) {
+            AppLabel(if (event.count > 1) "${event.app} · ${event.count}" else event.app, sc)
             if (event.title.isNotBlank()) {
                 Text(
                     text = event.title,
@@ -1174,6 +1201,20 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
                 Text("+$more", color = Fg, fontFamily = Mono, fontSize = (11f * sc).sp, fontWeight = FontWeight.Medium)
             }
         }
+        if (event.code != null) {
+            Spacer(Modifier.width((10f * sc).dp))
+            Box(
+                modifier = Modifier
+                    .height((36f * sc).dp)
+                    .clip(CircleShape)
+                    .background(NothingRed)
+                    .bounceClick(onCopyCode)
+                    .padding(horizontal = (12f * sc).dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(event.code, color = OnAccent, fontFamily = Mono, fontWeight = FontWeight.Medium, fontSize = (13f * sc).sp, maxLines = 1)
+            }
+        }
         if (event.markRead != null) {
             Spacer(Modifier.width((10f * sc).dp))
             Box(
@@ -1181,7 +1222,7 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
                     .size((36f * sc).dp)
                     .clip(CircleShape)
                     .background(ButtonBg)
-                    .clickable(onClick = onMarkRead),
+                    .bounceClick(onMarkRead),
                 contentAlignment = Alignment.Center,
             ) {
                 Image(
@@ -1199,7 +1240,7 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
                     .size((36f * sc).dp)
                     .clip(CircleShape)
                     .background(ButtonBg)
-                    .clickable(onClick = onReply),
+                    .bounceClick(onReply),
                 contentAlignment = Alignment.Center,
             ) {
                 Image(

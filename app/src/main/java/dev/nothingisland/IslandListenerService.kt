@@ -239,6 +239,8 @@ class IslandListenerService : NotificationListenerService() {
                 )
         }?.actionIntent
 
+        val code = if (IslandBus.settings.value.otpCodes && kind == Kind.OTHER) findCode("$title $text") else null
+
         val actions = n.actions.orEmpty()
             .filter { a -> a.remoteInputs.isNullOrEmpty() }
             .take(5)
@@ -342,8 +344,18 @@ class IslandListenerService : NotificationListenerService() {
             canSkipSeconds = canSkip,
             reply = reply,
             markRead = markRead,
+            code = code,
             metrics = metrics,
         )
+    }
+
+    private val codeKey = Regex("""(code|c[oó]digo|otp|tan|pin|passwort|kennwort|verif|best[aä]tig|sicherheits|einmal|one[- ]time|g-)""", RegexOption.IGNORE_CASE)
+    private val codeNum = Regex("""(?<![\d.,:/-])(\d{3}[ -]\d{3}|\d{4,8})(?![\d.,:/-])""")
+
+    /** Bestätigungscode erkennen: Schlüsselwort plus 4-8 Ziffern. */
+    private fun findCode(s: String): String? {
+        if (!codeKey.containsMatchIn(s)) return null
+        return codeNum.find(s)?.value
     }
 
     private val lastEarbuds = HashMap<String, String>()

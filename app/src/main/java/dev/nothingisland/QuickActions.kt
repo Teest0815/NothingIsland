@@ -552,7 +552,27 @@ object QuickActions {
         }
     }
 
+    @Volatile private var ignoreClipUntil = 0L
+
+    /** Code in die Zwischenablage legen (als sensibel markiert) und kurz bestätigen. */
+    fun copyCode(ctx: Context, code: String) {
+        runCatching {
+            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clip = android.content.ClipData.newPlainText("code", code.replace(" ", "").replace("-", ""))
+            clip.description.extras = android.os.PersistableBundle().apply { putBoolean("android.content.extra.IS_SENSITIVE", true) }
+            ignoreClipUntil = System.currentTimeMillis() + 2000
+            cm.setPrimaryClip(clip)
+        }
+        IslandBus.post(
+            IslandEvent(
+                key = "code-copied", app = "CODE", title = "KOPIERT", text = code, icon = icon("copy"),
+                quiet = true, kind = Kind.STATUS,
+            ),
+        )
+    }
+
     fun onClipboard(ctx: Context) {
+        if (System.currentTimeMillis() < ignoreClipUntil) return
         if (!IslandBus.settings.value.clipboard) return
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager ?: return
         val clip = runCatching { cm.primaryClip }.getOrNull()
