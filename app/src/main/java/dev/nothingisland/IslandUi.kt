@@ -1162,8 +1162,7 @@ private fun Chrono(
 
 /** Klick mit federndem Eindrücken (Scale-Bounce) statt starrem Ripple. */
 @Composable
-internal fun Modifier.bounceClick(onClick: () -> Unit): Modifier {
-    val src = remember { MutableInteractionSource() }
+internal fun Modifier.bounceClick(onClick: () -> Unit, src: MutableInteractionSource = remember { MutableInteractionSource() }): Modifier {
     val down by src.collectIsPressedAsState()
     val scale by animateFloatAsState(
         if (down) 0.86f else 1f,
@@ -1482,21 +1481,15 @@ private fun SeekButton(label: String, sc: Float, onClick: () -> Unit) {
 
 @Composable
 private fun RowScope.QuickTile(icon: ImageBitmap, label: String, activeState: Boolean, sc: Float, tint: Boolean = true, anim: Float = 1f, momentary: Boolean = false, onClick: () -> Unit) {
-    // Kurzer Akzent-Blitz bei Tasten ohne zwei Zustände (Szenen, Skripte, Buttons).
-    val flash = remember { Animatable(0f) }
-    val flashScope = rememberCoroutineScope()
-    val active = activeState || flash.value > 0.5f
-    val click = {
-        if (momentary) flashScope.launch {
-            flash.snapTo(1f)
-            delay(260)
-            flash.animateTo(0f, tween(520))
-        }
-        onClick()
-    }
+    // Gedrückt: Kachel wird weiß, beim Loslassen wieder normal.
+    val src = remember { MutableInteractionSource() }
+    val pressedNow by src.collectIsPressedAsState()
+    val active = activeState && !pressedNow
+    val click = onClick
     // Zustandswechsel: Farbe blendet weich über, das Symbol federt kurz.
     val bgColor by androidx.compose.animation.animateColorAsState(
-        if (active) NothingRed else ButtonBg, tween(if (momentary && flash.value > 0.5f) 90 else 260), label = "tilebg",
+        if (pressedNow) Color.White else if (active) NothingRed else ButtonBg,
+        tween(if (pressedNow) 60 else 220), label = "tilebg",
     )
     val iconPop = remember { Animatable(1f) }
     var first by remember { mutableStateOf(true) }
@@ -1509,7 +1502,7 @@ private fun RowScope.QuickTile(icon: ImageBitmap, label: String, activeState: Bo
         modifier = Modifier
             .weight(1f)
             .fillMaxHeight()
-            .bounceClick(click)
+            .bounceClick(click, src)
             .graphicsLayer {
                 alpha = anim.coerceIn(0f, 1f)
                 val k = 0.62f + 0.38f * anim
@@ -1525,7 +1518,7 @@ private fun RowScope.QuickTile(icon: ImageBitmap, label: String, activeState: Bo
         Image(
             bitmap = icon,
             contentDescription = label,
-            colorFilter = if (tint) ColorFilter.tint(if (active) OnAccent else Fg) else null,
+            colorFilter = if (tint) ColorFilter.tint(if (pressedNow) Color.Black else if (active) OnAccent else Fg) else null,
             modifier = Modifier.size(((if (tint) 20f else 26f) * sc).dp).graphicsLayer {
                 val k = iconPop.value
                 scaleX = k; scaleY = k
@@ -1533,7 +1526,7 @@ private fun RowScope.QuickTile(icon: ImageBitmap, label: String, activeState: Bo
         )
         Spacer(Modifier.height((5f * sc).dp))
         Text(
-            label, color = if (active) OnAccent else TextGray, fontFamily = Mono,
+            label, color = if (pressedNow) Color.Black else if (active) OnAccent else TextGray, fontFamily = Mono,
             fontSize = (8f * sc).sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
