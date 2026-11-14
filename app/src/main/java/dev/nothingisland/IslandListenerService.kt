@@ -230,6 +230,15 @@ class IslandListenerService : NotificationListenerService() {
             if (ri != null && pi != null) reply = IslandReply(pi, ri)
         }
 
+        // "Als gelesen markieren": echte Systemaktion, sonst anhand des Namens erkannt.
+        val markRead = n.actions.orEmpty().firstOrNull { a ->
+            a.remoteInputs.isNullOrEmpty() && a.actionIntent != null && (
+                a.semanticAction == Notification.Action.SEMANTIC_ACTION_MARK_AS_READ ||
+                    Regex("""(als gelesen|gelesen markieren|mark as read|mark read)""", RegexOption.IGNORE_CASE)
+                        .containsMatchIn(a.title?.toString().orEmpty())
+                )
+        }?.actionIntent
+
         val actions = n.actions.orEmpty()
             .filter { a -> a.remoteInputs.isNullOrEmpty() }
             .take(5)
@@ -332,6 +341,7 @@ class IslandListenerService : NotificationListenerService() {
             art = art,
             canSkipSeconds = canSkip,
             reply = reply,
+            markRead = markRead,
             metrics = metrics,
         )
     }

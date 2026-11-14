@@ -619,7 +619,13 @@ private fun IslandHostBody() {
                         MessageContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(messageW.dp, smallH.dp))
                     }
                     Mode.ALERT -> (alert ?: lastAlert)?.let {
-                        AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp), if (s.multiNotif) pendingList.size else 0) {
+                        AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp), if (s.multiNotif) pendingList.size else 0, onMarkRead = {
+                            // Als gelesen markieren: Aktion der App auslösen, Meldung verschwindet (nächste kommt nach).
+                            runCatching { it.markRead?.send() }
+                            if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
+                            suppressLinger = true
+                            IslandBus.dismiss()
+                        }) {
                             // Antworten: Eingabe direkt in der Island, die Meldung verschwindet.
                             IslandBus.startReply(it)
                             suppressLinger = true
@@ -1069,7 +1075,7 @@ private fun Chrono(
 
 /** Aufgeklappte Meldung bei neuer Benachrichtigung. */
 @Composable
-internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, more: Int = 0, onReply: () -> Unit) {
+internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, more: Int = 0, onMarkRead: () -> Unit = {}, onReply: () -> Unit) {
     Row(
         modifier = modifier.padding(horizontal = (18f * sc).dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1115,6 +1121,24 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
                 contentAlignment = Alignment.Center,
             ) {
                 Text("+$more", color = Fg, fontFamily = Mono, fontSize = (11f * sc).sp, fontWeight = FontWeight.Medium)
+            }
+        }
+        if (event.markRead != null) {
+            Spacer(Modifier.width((10f * sc).dp))
+            Box(
+                modifier = Modifier
+                    .size((36f * sc).dp)
+                    .clip(CircleShape)
+                    .background(ButtonBg)
+                    .clickable(onClick = onMarkRead),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    bitmap = QuickActions.icon("check"),
+                    contentDescription = "Als gelesen markieren",
+                    colorFilter = ColorFilter.tint(Fg),
+                    modifier = Modifier.size((16f * sc).dp),
+                )
             }
         }
         if (event.reply != null) {

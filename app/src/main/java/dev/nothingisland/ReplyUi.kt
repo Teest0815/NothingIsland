@@ -107,7 +107,7 @@ fun ReplyBar() {
                 .border(1.dp, IslandTheme.hairline, shape),
         ) {
             // Oben dieselbe Meldung wie in der Island, darunter wächst das Eingabefeld heraus.
-            AlertContent(e.copy(reply = null), sc, Modifier.fillMaxWidth().height(alertH.dp)) {}
+            AlertContent(e.copy(reply = null, markRead = null), sc, Modifier.fillMaxWidth().height(alertH.dp)) {}
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)

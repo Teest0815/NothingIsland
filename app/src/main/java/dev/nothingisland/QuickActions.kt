@@ -966,6 +966,12 @@ object QuickActions {
                 c.drawCircle(26f, 48f, 7f, fill)
                 arcs(26f, 48f, -55f, 110f, 22f, 40f, 58f)
             }
+            "check" -> {
+                c.drawPath(
+                    Path().apply { moveTo(16f, 50f); lineTo(38f, 72f); lineTo(80f, 24f) },
+                    line,
+                )
+            }
             "reply" -> {
                 c.drawPath(poly(10f, 44f, 40f, 18f, 40f, 70f), fill)
                 c.drawPath(

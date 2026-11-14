@@ -60,6 +60,8 @@ data class IslandEvent(
     val canSkipSeconds: Boolean = false,
     /** Eigene Aktion beim Antippen der kleinen Meldungs-Pille (statt [action]). */
     val tap: (() -> Unit)? = null,
+    /** "Als gelesen markieren" der Meldung (Messenger bieten die Aktion an). */
+    val markRead: PendingIntent? = null,
 )
 
 data class IslandSettings(
