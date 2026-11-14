@@ -77,6 +77,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -355,15 +356,15 @@ private fun IslandHostBody() {
         else -> minOf(s.expandedCorner * fsc, targetH / 2f)
     }
 
-    val motion = spring<Dp>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow)
+    val motion = spring<Dp>(dampingRatio = 0.9f, stiffness = 500f)
     val growing = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK
     val widthSpec = spring<Dp>(
-        dampingRatio = if (growing) 0.66f else 0.88f,
-        stiffness = if (growing) 380f else 520f,
+        dampingRatio = if (growing) 0.7f else 0.9f,
+        stiffness = if (growing) 460f else 600f,
     )
     val heightSpec = spring<Dp>(
-        dampingRatio = if (growing) 0.74f else 0.92f,
-        stiffness = if (growing) 460f else 620f,
+        dampingRatio = if (growing) 0.76f else 0.94f,
+        stiffness = if (growing) 520f else 680f,
     )
     val width by animateDpAsState(targetW.dp, if (snapNext) snap<Dp>() else widthSpec, label = "w")
     val height by animateDpAsState(targetH.dp, if (snapNext) snap<Dp>() else heightSpec, label = "h")
@@ -629,30 +630,33 @@ private fun IslandHostBody() {
                     if (targetState.first == Mode.QUICK) {
                         // Schnellzugriff: Rahmen wächst zuerst, die Kacheln blenden danach einzeln ein.
                         return@AnimatedContent ContentTransform(
-                            targetContentEnter = fadeIn(tween(110, delayMillis = 30)),
-                            initialContentExit = fadeOut(tween(90)),
+                            targetContentEnter = fadeIn(tween(140, delayMillis = 20)) +
+                                scaleIn(spring(dampingRatio = 0.8f, stiffness = 420f), initialScale = 0.94f, transformOrigin = TransformOrigin(0.5f, 0f)),
+                            initialContentExit = fadeOut(tween(80)),
                             targetContentZIndex = 0f,
                             sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
                         )
                     }
                     if (initialState.first == Mode.QUICK) {
                         return@AnimatedContent ContentTransform(
-                            targetContentEnter = fadeIn(tween(160, delayMillis = 140)),
-                            initialContentExit = fadeOut(tween(80)),
+                            targetContentEnter = fadeIn(tween(150, delayMillis = 100)) +
+                                scaleIn(tween(240, delayMillis = 100, easing = FastOutSlowInEasing), initialScale = 0.9f),
+                            initialContentExit = fadeOut(tween(70)) + scaleOut(tween(120), targetScale = 0.92f),
                             targetContentZIndex = 0f,
                             sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
                         )
                     }
                     val toBig = targetState.first == Mode.ALERT || targetState.first == Mode.EXPANDED || targetState.first == Mode.QUICK
-                    val delay = if (toBig) 120 else 70
+                    val delay = if (toBig) 90 else 60
                     ContentTransform(
-                        targetContentEnter = fadeIn(tween(240, delayMillis = delay)) +
+                        targetContentEnter = fadeIn(tween(200, delayMillis = delay)) +
                             scaleIn(
-                                tween(320, delayMillis = delay, easing = FastOutSlowInEasing),
-                                initialScale = 0.9f,
+                                spring(dampingRatio = 0.78f, stiffness = 380f),
+                                initialScale = if (toBig) 0.88f else 0.94f,
+                                transformOrigin = TransformOrigin(0.5f, if (toBig) 0f else 0.5f),
                             ),
-                        initialContentExit = fadeOut(tween(110)) +
-                            scaleOut(tween(160), targetScale = 0.95f),
+                        initialContentExit = fadeOut(tween(90)) +
+                            scaleOut(tween(140), targetScale = 0.94f),
                         targetContentZIndex = 0f,
                         sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
                     )
@@ -1459,9 +1463,10 @@ private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean
             .fillMaxHeight()
             .graphicsLayer {
                 alpha = anim.coerceIn(0f, 1f)
-                val k = 0.7f + 0.3f * anim
+                val k = 0.62f + 0.38f * anim
                 scaleX = k
                 scaleY = k
+                translationY = (1f - anim) * 14.dp.toPx()
             }
             .clip(RoundedCornerShape((14f * sc).dp))
             .background(if (active) NothingRed else ButtonBg)
@@ -1561,7 +1566,7 @@ private fun QuickPanel(pages: List<List<List<QuickTile>>>, sc: Float, modifier: 
                             settle = scope.launch {
                                 androidx.compose.animation.core.animate(
                                     pos, target.toFloat(),
-                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 340f),
+                                    animationSpec = spring(dampingRatio = 0.78f, stiffness = 300f),
                                 ) { v, _ -> pos = v }
                             }
                         },
@@ -1594,11 +1599,11 @@ private fun QuickPanel(pages: List<List<List<QuickTile>>>, sc: Float, modifier: 
                                     var shown by remember { mutableStateOf(pi != 0) }
                                     LaunchedEffect(Unit) {
                                         if (pi == 0) {
-                                            delay(25L + (r * 4 + c) * 24L)
+                                            delay(10L + (r * 4 + c) * 28L)
                                             shown = true
                                         }
                                     }
-                                    val appear by animateFloatAsState(if (shown) 1f else 0f, spring(dampingRatio = 0.7f, stiffness = 420f), label = "tile")
+                                    val appear by animateFloatAsState(if (shown) 1f else 0f, spring(dampingRatio = 0.62f, stiffness = 380f), label = "tile")
                                     QuickTile(appBmp ?: QuickActions.icon(t.icon), t.label(ctx), t.active(ctx), sc, appBmp == null, appear) {
                                         if (t.click(ctx)) IslandBus.setQuick(false) else onUsed()
                                     }
