@@ -78,6 +78,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -396,6 +397,15 @@ private fun IslandHostBody() {
     )
     // Wischen nach links oder rechts schließt Meldung, aufgeklappte Pille und Nachricht.
     val swipeX = remember { Animatable(0f) }
+    // Neue Inhalte in der kleinen Pille (Taschenlampe, Flugmodus ...) poppen mit Nachfedern auf.
+    val bump = remember { Animatable(1f) }
+    val bumpKey = if (mode == Mode.COMPACT) current?.key else if (mode == Mode.MESSAGE) lingering?.id?.toString() else null
+    LaunchedEffect(mode, bumpKey) {
+        if (mode == Mode.COMPACT || mode == Mode.MESSAGE) {
+            bump.snapTo(0.84f)
+            bump.animateTo(1f, spring(dampingRatio = 0.38f, stiffness = 520f))
+        } else bump.snapTo(1f)
+    }
     val swipeScope = rememberCoroutineScope()
     // Musik: Wischen dehnt die Pille in die Richtung und wechselt den Song.
     var stretchPx by remember { mutableFloatStateOf(0f) }
@@ -461,8 +471,8 @@ private fun IslandHostBody() {
             modifier = Modifier
                 .graphicsLayer {
                     val pop = 0.9f + 0.1f * appear.value
-                    scaleX = pressScale * pop
-                    scaleY = pressScale * pop
+                    scaleX = pressScale * pop * bump.value
+                    scaleY = pressScale * pop * bump.value
                     translationX = swipeX.value + stretchPx / 2f
                     translationY = pullY
                     // Zieht sich beim Ziehen leicht in die Länge.
@@ -786,11 +796,19 @@ private fun IdleDots(sc: Float) {
 @Composable
 private fun SmallIcon(icon: ImageBitmap?, size: Dp) {
     if (icon != null) {
+        // Symbol poppt beim Erscheinen auf und dreht sich leicht ein.
+        val pop = remember(icon) { Animatable(0f) }
+        LaunchedEffect(icon) { pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 380f)) }
         Image(
             bitmap = icon,
             contentDescription = null,
             colorFilter = ColorFilter.tint(Fg),
-            modifier = Modifier.size(size),
+            modifier = Modifier.size(size).graphicsLayer {
+                val p = pop.value
+                scaleX = p; scaleY = p
+                rotationZ = (1f - p) * -40f
+                alpha = p.coerceIn(0f, 1f)
+            },
         )
     } else {
         Box(Modifier.size(size / 2).clip(CircleShape).background(Fg))
@@ -1457,10 +1475,22 @@ private fun SeekButton(label: String, sc: Float, onClick: () -> Unit) {
 
 @Composable
 private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean, sc: Float, tint: Boolean = true, anim: Float = 1f, onClick: () -> Unit) {
+    // Zustandswechsel: Farbe blendet weich über, das Symbol federt kurz.
+    val bgColor by androidx.compose.animation.animateColorAsState(
+        if (active) NothingRed else ButtonBg, tween(260), label = "tilebg",
+    )
+    val iconPop = remember { Animatable(1f) }
+    var first by remember { mutableStateOf(true) }
+    LaunchedEffect(active) {
+        if (first) { first = false; return@LaunchedEffect }
+        iconPop.snapTo(0.55f)
+        iconPop.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 500f))
+    }
     Column(
         modifier = Modifier
             .weight(1f)
             .fillMaxHeight()
+            .bounceClick(onClick)
             .graphicsLayer {
                 alpha = anim.coerceIn(0f, 1f)
                 val k = 0.62f + 0.38f * anim
@@ -1469,8 +1499,7 @@ private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean
                 translationY = (1f - anim) * 14.dp.toPx()
             }
             .clip(RoundedCornerShape((14f * sc).dp))
-            .background(if (active) NothingRed else ButtonBg)
-            .clickable(onClick = onClick),
+            .drawBehind { drawRect(bgColor) },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
@@ -1478,7 +1507,10 @@ private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean
             bitmap = icon,
             contentDescription = label,
             colorFilter = if (tint) ColorFilter.tint(if (active) OnAccent else Fg) else null,
-            modifier = Modifier.size(((if (tint) 20f else 26f) * sc).dp),
+            modifier = Modifier.size(((if (tint) 20f else 26f) * sc).dp).graphicsLayer {
+                val k = iconPop.value
+                scaleX = k; scaleY = k
+            },
         )
         Spacer(Modifier.height((5f * sc).dp))
         Text(
