@@ -542,6 +542,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        SectionLabel("SMART HOME (HOME ASSISTANT)")
+        Card { HomeAssistantSettings() }
+
         SectionLabel("SCHNELLZUGRIFF")
         Card {
             ToggleRow("Schnellzugriff-Panel aktivieren", s.quickPanel) { c ->
@@ -582,9 +585,10 @@ class MainActivity : ComponentActivity() {
                 MiniButton("✕", true) { set(sel.filter { it != key }) }
             }
         }
-        if (sel.size < 12) AppTilePicker(sel) { set(sel + it) }
+        if (sel.size < 24) AppTilePicker(sel) { set(sel + it) }
+        if (sel.size < 24) HaDevicePicker(sel) { set(sel + it) }
         val free = QuickActions.tiles.filter { it.key !in sel }
-        if (free.isNotEmpty() && sel.size < 12) {
+        if (free.isNotEmpty() && sel.size < 24) {
             Spacer(Modifier.height(6.dp))
             Text("Hinzufügen", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
             free.forEach { t ->
@@ -599,6 +603,114 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    /** Verbindung zu Home Assistant: Adresse, Langzeit-Zugriffstoken, Test. */
+    @Composable
+    private fun HomeAssistantSettings() {
+        var url by remember { mutableStateOf(HomeAssistant.url) }
+        var token by remember { mutableStateOf(HomeAssistant.token) }
+        var status by remember { mutableStateOf<String?>(null) }
+        Text(
+            "Zeigt Lampen, Schalter, Szenen u. a. als Kacheln im Schnellzugriff. Adresse z. B. http://homeassistant.local:8123. Das Token erstellst du in Home Assistant unter Profil → Sicherheit → Langzeit-Zugriffstoken. Es bleibt nur auf diesem Handy.",
+            color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp),
+        )
+        @Composable
+        fun field(value: String, hint: String, secret: Boolean, onChange: (String) -> Unit) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+                    .clip(RoundedCornerShape(50))
+                    .border(1.dp, CardBorder, RoundedCornerShape(50))
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            ) {
+                if (value.isEmpty()) Text(hint, color = Muted, fontSize = 14.sp)
+                BasicTextField(
+                    value = value,
+                    onValueChange = onChange,
+                    singleLine = true,
+                    textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                    cursorBrush = SolidColor(AppAccent),
+                    visualTransformation = if (secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+        field(url, "Adresse (http://…:8123)", false) { url = it; HomeAssistant.save(this@MainActivity, url, token) }
+        field(token, "Langzeit-Zugriffstoken", true) { token = it; HomeAssistant.save(this@MainActivity, url, token) }
+        PillButton("VERBINDUNG TESTEN", filled = true, modifier = Modifier.fillMaxWidth()) {
+            status = "Teste …"
+            HomeAssistant.save(this@MainActivity, url, token)
+            HomeAssistant.refresh { err ->
+                runOnUiThread {
+                    status = err?.let { "Fehler: $it" } ?: "Verbunden: ${HomeAssistant.states.value.size} Geräte gefunden"
+                }
+            }
+        }
+        status?.let { Text(it, color = if (it.startsWith("Fehler")) AppAccent else Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp)) }
+        Spacer(Modifier.height(4.dp))
+    }
+
+    /** Smart-Home-Gerät als Kachel oder (bei Lampen) als Helligkeits-Regler hinzufügen. */
+    @Composable
+    private fun HaDevicePicker(selected: List<String>, onPick: (String) -> Unit) {
+        if (!HomeAssistant.configured) return
+        var open by remember { mutableStateOf(false) }
+        var query by remember { mutableStateOf("") }
+        val states by HomeAssistant.states.collectAsState()
+        Spacer(Modifier.height(4.dp))
+        Text(
+            if (open) "Smart-Home-Gerät  ▴" else "+  Smart-Home-Gerät  ▾",
+            color = AppAccent,
+            fontSize = 14.sp,
+            modifier = Modifier.fillMaxWidth().clickable {
+                open = !open
+                if (open) HomeAssistant.refresh()
+            }.padding(vertical = 8.dp),
+        )
+        if (!open) return
+        if (states.isEmpty()) Text("Keine Geräte geladen. Teste oben die Verbindung.", color = Muted, fontSize = 12.sp)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(50))
+                .border(1.dp, CardBorder, RoundedCornerShape(50))
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+        ) {
+            if (query.isEmpty()) Text("Gerät suchen …", color = Muted, fontSize = 14.sp)
+            BasicTextField(
+                value = query,
+                onValueChange = { query = it },
+                singleLine = true,
+                textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                cursorBrush = SolidColor(AppAccent),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        val list = states.values
+            .filter { query.isBlank() || it.name.contains(query, true) || it.id.contains(query, true) }
+            .sortedWith(compareBy({ it.domain }, { it.name.lowercase() }))
+            .take(if (query.isBlank()) 15 else 40)
+        list.forEach { st ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(st.name, color = Color.White, fontSize = 14.sp, maxLines = 1)
+                    Text(st.id, color = Muted, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1)
+                }
+                if (st.domain == "light") {
+                    Text(
+                        "REGLER", color = AppAccent, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                        modifier = Modifier.clickable { if ("hal:${st.id}" !in selected) onPick("hal:${st.id}"); open = false }.padding(10.dp),
+                    )
+                }
+                Text(
+                    "KACHEL", color = AppAccent, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.clickable { if ("ha:${st.id}" !in selected) onPick("ha:${st.id}"); open = false }.padding(10.dp),
+                )
+            }
+        }
+        if (query.isBlank() && states.size > 15) Text("Tippe zum Suchen, um alle Geräte zu sehen.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
     }
 
     /** Eigene Kachel: eine beliebige App aus der Liste als Schnellstart-Kachel hinzufügen. */

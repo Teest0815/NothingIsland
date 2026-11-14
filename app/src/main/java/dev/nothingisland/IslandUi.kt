@@ -24,6 +24,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import android.os.SystemClock
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -320,10 +322,11 @@ private fun IslandHostBody() {
     val bigW = minOf(s.expandedWidth.toFloat(), screenW - 8f)
     val hasActions = current?.actions?.isNotEmpty() == true || (current?.kind == Kind.CALL && current.chronoBase != null)
     val quickKeys = remember(s.quickTiles) {
-        s.quickTiles.split(',').mapNotNull { QuickActions.tile(it) }.take(12)
+        s.quickTiles.split(',').mapNotNull { QuickActions.tile(it) }.take(24)
     }
-    val quickRows = ((quickKeys.size + 3) / 4).coerceIn(1, 3)
-    val quickBaseH = quickRows * 54f + (quickRows - 1) * 10f + 28f
+    val quickPages = remember(quickKeys) { buildQuickPages(quickKeys) }
+    val quickRows = (quickPages.maxOfOrNull { it.size } ?: 1).coerceIn(1, 2)
+    val quickBaseH = quickRows * 54f + (quickRows - 1) * 10f + 28f + (if (quickPages.size > 1) 14f else 0f)
     val isMedia = current?.kind == Kind.MEDIA && current.media != null
     val expandedH = (if (isMedia) BASE_EXPANDED_MEDIA_H else if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H) * fsc
     val idleW = BASE_IDLE_W * sc * s.widthFactor
@@ -394,7 +397,7 @@ private fun IslandHostBody() {
     var stretchRaw by remember { mutableFloatStateOf(0f) }
     val canSkip = mode == Mode.COMPACT && s.swipeSkip && current?.kind == Kind.MEDIA && current.media != null
     val curForSkip by rememberUpdatedState(current)
-    val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || mode == Mode.QUICK
+    val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || (mode == Mode.QUICK && quickPages.size <= 1)
     LaunchedEffect(mode) { swipeX.snapTo(0f) }
     val onSwipeAway: () -> Unit = {
         when (mode) {
@@ -608,7 +611,7 @@ private fun IslandHostBody() {
             ) { st ->
                 when (st.first) {
                     Mode.IDLE -> IdleDots(sc)
-                    Mode.QUICK -> QuickPanel(quickKeys, bsc, Modifier.requiredSize(bigW.dp, (quickBaseH * fsc).dp)) { touch++ }
+                    Mode.QUICK -> QuickPanel(quickPages, bsc, Modifier.requiredSize(bigW.dp, (quickBaseH * fsc).dp)) { touch++ }
                     Mode.COMPACT -> shownCurrent?.let {
                         CompactContent(it, sc, gap, s.iconTextGap.toFloat(), s.equalizer, s.workoutMetric, Modifier.requiredSize(compactW.dp, smallH.dp))
                     }
@@ -1364,9 +1367,32 @@ private fun RowScope.QuickTile(icon: ImageBitmap, label: String, active: Boolean
     }
 }
 
-/** Schnellzugriff: Kacheln nach Auswahl und Reihenfolge aus den Einstellungen, vier pro Reihe. */
+/** Ordnet die Kacheln in Seiten zu je zwei Reihen. Regler ("hal:") brauchen eine ganze Reihe für sich. */
+private fun buildQuickPages(tiles: List<QuickTile>): List<List<List<QuickTile>>> {
+    val rows = ArrayList<List<QuickTile>>()
+    var cur = ArrayList<QuickTile>()
+    for (t in tiles) {
+        if (t.key.startsWith("hal:")) {
+            if (cur.isNotEmpty()) {
+                rows += cur
+                cur = ArrayList()
+            }
+            rows += listOf(t)
+        } else {
+            cur += t
+            if (cur.size == 4) {
+                rows += cur
+                cur = ArrayList()
+            }
+        }
+    }
+    if (cur.isNotEmpty()) rows += cur
+    return rows.chunked(2).ifEmpty { listOf(emptyList()) }
+}
+
+/** Schnellzugriff: Seiten mit Kacheln (zwei Reihen je Seite), seitlich wischbar, Smart-Home-Regler als breite Reihe. */
 @Composable
-private fun QuickPanel(tiles: List<QuickTile>, sc: Float, modifier: Modifier, onUsed: () -> Unit) {
+private fun QuickPanel(pages: List<List<List<QuickTile>>>, sc: Float, modifier: Modifier, onUsed: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var tick by remember { mutableIntStateOf(0) }
     val torch by QuickActions.torch.collectAsState()
@@ -1378,26 +1404,212 @@ private fun QuickPanel(tiles: List<QuickTile>, sc: Float, modifier: Modifier, on
     }
     @Suppress("UNUSED_EXPRESSION") tick
     @Suppress("UNUSED_EXPRESSION") torch
-    Column(
-        modifier = modifier.padding(horizontal = (14f * sc).dp, vertical = (14f * sc).dp),
-        verticalArrangement = Arrangement.spacedBy((10f * sc).dp),
-    ) {
-        tiles.chunked(4).forEachIndexed { r, row ->
-            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy((10f * sc).dp)) {
-                row.forEachIndexed { c, t ->
-                    val appBmp = if (t.key.startsWith("app:")) QuickActions.appIcon(t.key.removePrefix("app:")) else null
-                    var shown by remember { mutableStateOf(false) }
-                    LaunchedEffect(Unit) {
-                        delay(25L + (r * 4 + c) * 24L)
-                        shown = true
+    // Smart Home: Zustände holen, solange das Panel offen ist.
+    val hasHa = remember(pages) { pages.any { p -> p.any { r -> r.any { it.key.startsWith("ha") } } } }
+    LaunchedEffect(hasHa) {
+        if (!hasHa || !HomeAssistant.configured) return@LaunchedEffect
+        while (true) {
+            HomeAssistant.refresh()
+            delay(6000)
+        }
+    }
+    val haStates by HomeAssistant.states.collectAsState()
+    @Suppress("UNUSED_EXPRESSION") haStates
+
+    val rowsPerPage = pages.maxOfOrNull { it.size }?.coerceAtLeast(1) ?: 1
+    val last = (pages.size - 1).coerceAtLeast(0)
+    var pos by remember { mutableFloatStateOf(0f) }
+    var widthPx by remember { mutableIntStateOf(1) }
+    var settle by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val scope = rememberCoroutineScope()
+    val drag = androidx.compose.foundation.gestures.rememberDraggableState { delta ->
+        // Am Rand gibt es Widerstand wie bei einem Gummiband.
+        val resist = if (pos < 0f || pos > last) 0.35f else 1f
+        pos = (pos - delta / widthPx * resist).coerceIn(-0.25f, last + 0.25f)
+        onUsed()
+    }
+    Column(modifier = modifier.padding(horizontal = (14f * sc).dp, vertical = (14f * sc).dp)) {
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .onSizeChanged { widthPx = it.width.coerceAtLeast(1) }
+                .then(
+                    if (pages.size > 1) Modifier.draggable(
+                        state = drag,
+                        orientation = androidx.compose.foundation.gestures.Orientation.Horizontal,
+                        onDragStarted = { settle?.cancel() },
+                        onDragStopped = { velocity ->
+                            // Kurzes Wischen reicht: Schwung zählt mit.
+                            val target = (pos - velocity / widthPx * 0.22f).roundToInt().coerceIn(0, last)
+                            settle = scope.launch {
+                                androidx.compose.animation.core.animate(
+                                    pos, target.toFloat(),
+                                    animationSpec = spring(dampingRatio = 0.82f, stiffness = 340f),
+                                ) { v, _ -> pos = v }
+                            }
+                        },
+                    ) else Modifier,
+                ),
+        ) {
+            pages.forEachIndexed { pi, rows ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            // Seite gleitet seitlich, die daneben blendet aus und schrumpft leicht: das gibt Tiefe.
+                            val d = pi - pos
+                            val a = abs(d).coerceAtMost(1f)
+                            translationX = d * widthPx
+                            alpha = 1f - a
+                            val k = 1f - 0.1f * a
+                            scaleX = k
+                            scaleY = k
+                        },
+                    verticalArrangement = Arrangement.spacedBy((10f * sc).dp),
+                ) {
+                    rows.forEachIndexed { r, row ->
+                        if (row.size == 1 && row[0].key.startsWith("hal:")) {
+                            HaSliderRow(row[0], sc, Modifier.fillMaxWidth().weight(1f), onUsed)
+                        } else {
+                            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy((10f * sc).dp)) {
+                                row.forEachIndexed { c, t ->
+                                    val appBmp = if (t.key.startsWith("app:")) QuickActions.appIcon(t.key.removePrefix("app:")) else null
+                                    var shown by remember { mutableStateOf(pi != 0) }
+                                    LaunchedEffect(Unit) {
+                                        if (pi == 0) {
+                                            delay(25L + (r * 4 + c) * 24L)
+                                            shown = true
+                                        }
+                                    }
+                                    val appear by animateFloatAsState(if (shown) 1f else 0f, spring(dampingRatio = 0.7f, stiffness = 420f), label = "tile")
+                                    QuickTile(appBmp ?: QuickActions.icon(t.icon), t.label(ctx), t.active(ctx), sc, appBmp == null, appear) {
+                                        if (t.click(ctx)) IslandBus.setQuick(false) else onUsed()
+                                    }
+                                }
+                                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                        }
                     }
-                    val appear by animateFloatAsState(if (shown) 1f else 0f, spring(dampingRatio = 0.7f, stiffness = 420f), label = "tile")
-                    QuickTile(appBmp ?: QuickActions.icon(t.icon), t.label(ctx), t.active(ctx), sc, appBmp == null, appear) {
-                        if (t.click(ctx)) IslandBus.setQuick(false) else onUsed()
-                    }
+                    repeat(rowsPerPage - rows.size) { Spacer(Modifier.weight(1f)) }
                 }
-                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
             }
+        }
+        if (pages.size > 1) {
+            val dotOn = Fg
+            val dotOff = DotGray
+            Canvas(Modifier.fillMaxWidth().height((14f * sc).dp)) {
+                val dens = density
+                val h = 4f * sc * dens
+                val gap = 5f * sc * dens
+                val widths = pages.indices.map { i -> (4f + 9f * (1f - abs(i - pos)).coerceIn(0f, 1f)) * sc * dens }
+                var x = (size.width - widths.sum() - gap * (widths.size - 1)) / 2f
+                widths.forEachIndexed { i, w ->
+                    val prox = (1f - abs(i - pos)).coerceIn(0f, 1f)
+                    drawRoundRect(
+                        color = androidx.compose.ui.graphics.lerp(dotOff, dotOn, prox),
+                        topLeft = androidx.compose.ui.geometry.Offset(x, size.height - h - 1f * dens),
+                        size = androidx.compose.ui.geometry.Size(w, h),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(h / 2f),
+                    )
+                    x += w + gap
+                }
+            }
+        }
+    }
+}
+
+/** Smart-Home-Regler: Helligkeit einer Lampe per Ziehen, Symbol links schaltet um. */
+@Composable
+private fun HaSliderRow(t: QuickTile, sc: Float, modifier: Modifier, onUsed: () -> Unit) {
+    val id = t.key.substringAfter(':')
+    val states by HomeAssistant.states.collectAsState()
+    val on = states[id]?.isOn == true
+    val remote = HomeAssistant.brightnessPct(id) ?: if (on) 100 else 0
+    var local by remember { mutableStateOf<Float?>(null) }
+    val shown = local ?: remote.toFloat()
+    var w by remember { mutableIntStateOf(1) }
+    var lastSend by remember { mutableLongStateOf(0L) }
+    val shape = RoundedCornerShape((14f * sc).dp)
+    val send = { v: Float, force: Boolean ->
+        val now = SystemClock.uptimeMillis()
+        if (force || now - lastSend > 220) {
+            lastSend = now
+            HomeAssistant.setBrightness(id, v.roundToInt())
+        }
+    }
+    val filled = shown > 45f
+    val textColor = if (filled) OnAccent else Fg
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(ButtonBg)
+            .onSizeChanged { w = it.width.coerceAtLeast(1) }
+            .pointerInput(Unit) {
+                detectTapGestures { off ->
+                    val v = (off.x / w * 100f).coerceIn(0f, 100f)
+                    send(v, true)
+                    onUsed()
+                }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { off ->
+                        local = (off.x / w * 100f).coerceIn(0f, 100f)
+                        onUsed()
+                    },
+                    onDragEnd = {
+                        local?.let { send(it, true) }
+                        local = null
+                    },
+                    onDragCancel = { local = null },
+                    onHorizontalDrag = { change, _ ->
+                        change.consume()
+                        val v = (change.position.x / w * 100f).coerceIn(0f, 100f)
+                        local = v
+                        send(v, false)
+                        onUsed()
+                    },
+                )
+            },
+    ) {
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .fillMaxWidth((shown / 100f).coerceIn(0f, 1f))
+                .background(NothingRed),
+        )
+        Row(
+            Modifier.fillMaxSize().padding(horizontal = (14f * sc).dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier
+                    .size((34f * sc).dp)
+                    .clip(CircleShape)
+                    .clickable {
+                        HomeAssistant.toggle(id)
+                        onUsed()
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    bitmap = QuickActions.icon(t.icon),
+                    contentDescription = null,
+                    colorFilter = ColorFilter.tint(textColor),
+                    modifier = Modifier.size((20f * sc).dp),
+                )
+            }
+            Spacer(Modifier.width((8f * sc).dp))
+            Text(
+                HomeAssistant.nameOf(id).uppercase(),
+                color = textColor, fontFamily = Mono, fontSize = (10f * sc).sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            )
+            Text(
+                if (shown <= 0f) "AUS" else "${shown.roundToInt()} %",
+                color = textColor, fontFamily = Mono, fontSize = (10f * sc).sp, fontWeight = FontWeight.Bold,
+            )
         }
     }
 }

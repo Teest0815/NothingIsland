@@ -292,7 +292,29 @@ object QuickActions {
     )
 
     fun tile(key: String): QuickTile? =
-        tiles.firstOrNull { it.key == key } ?: if (key.startsWith("app:")) appTile(key) else null
+        tiles.firstOrNull { it.key == key } ?: when {
+            key.startsWith("app:") -> appTile(key)
+            key.startsWith("ha:") || key.startsWith("hal:") -> haTile(key)
+            else -> null
+        }
+
+    /** Home-Assistant-Gerät als Kachel ("ha:") oder Regler ("hal:"). Nicht zwischengespeichert, damit Name und Zustand aktuell sind. */
+    private fun haTile(key: String): QuickTile {
+        val id = key.substringAfter(':')
+        val icon = when (id.substringBefore('.')) {
+            "light" -> "bulb"
+            "fan" -> "fan"
+            "cover" -> "blinds"
+            "scene", "script", "button" -> "scene"
+            "lock" -> "lock"
+            else -> "plug"
+        }
+        return QuickTile(
+            key, HomeAssistant.nameOf(id), { HomeAssistant.nameOf(id).uppercase().take(10) }, icon,
+            { HomeAssistant.isOn(id) },
+            { HomeAssistant.toggle(id); false },
+        )
+    }
 
     // ---- Eigene Kacheln: beliebige App starten ("app:<Paketname>") ----
     @Volatile var appContext: Context? = null
@@ -876,6 +898,45 @@ object QuickActions {
                 c.drawCircle(48f, 58f, 5f, fill)
                 c.drawCircle(62f, 58f, 5f, fill)
                 c.drawCircle(34f, 72f, 5f, fill)
+            }
+            "bulb" -> {
+                c.drawCircle(48f, 38f, 22f, line)
+                c.drawLine(38f, 66f, 58f, 66f, line)
+                c.drawLine(41f, 76f, 55f, 76f, line)
+                c.drawLine(40f, 56f, 56f, 56f, line)
+            }
+            "plug" -> {
+                c.drawRoundRect(RectF(28f, 40f, 68f, 70f), 10f, 10f, line)
+                c.drawLine(39f, 20f, 39f, 40f, line)
+                c.drawLine(57f, 20f, 57f, 40f, line)
+                c.drawLine(48f, 70f, 48f, 86f, line)
+            }
+            "fan" -> {
+                for (i in 0 until 3) {
+                    c.save()
+                    c.rotate(120f * i, 48f, 48f)
+                    c.drawOval(RectF(40f, 12f, 56f, 44f), line)
+                    c.restore()
+                }
+                c.drawCircle(48f, 48f, 5f, fill)
+            }
+            "blinds" -> {
+                c.drawRoundRect(RectF(20f, 18f, 76f, 78f), 6f, 6f, line)
+                c.drawLine(20f, 34f, 76f, 34f, line)
+                c.drawLine(20f, 50f, 76f, 50f, line)
+                c.drawLine(20f, 64f, 76f, 64f, line)
+            }
+            "scene" -> {
+                val p = android.graphics.Path()
+                p.moveTo(34f, 22f)
+                p.lineTo(70f, 48f)
+                p.lineTo(34f, 74f)
+                p.close()
+                c.drawPath(p, line)
+            }
+            "lock" -> {
+                c.drawRoundRect(RectF(26f, 46f, 70f, 80f), 8f, 8f, line)
+                c.drawArc(RectF(34f, 20f, 62f, 56f), 180f, 180f, false, line)
             }
             "pin" -> {
                 c.drawCircle(48f, 36f, 26f, fill)
