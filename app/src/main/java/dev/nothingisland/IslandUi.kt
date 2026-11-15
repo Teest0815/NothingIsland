@@ -249,6 +249,7 @@ private fun IslandHostBody() {
     val leave = remember { Animatable(0f) }
     val stackShift = remember { Animatable(0f) }
     var stackHold by remember { mutableStateOf(false) }
+    val swipeX = remember { Animatable(0f) }
     // Karte hinter der obersten, deren Zeit abläuft: schrumpft und blendet aus, bevor sie entfernt wird.
     val backLeave = remember { Animatable(0f) }
     var backLeaveId by remember { mutableStateOf<Long?>(null) }
@@ -258,6 +259,11 @@ private fun IslandHostBody() {
             launch {
                 val remaining = (ev.postedAt + s.alertSeconds * 1000L - System.currentTimeMillis()).coerceAtLeast(400L)
                 delay(remaining)
+                // Solange gezogen wird, bleibt die Karte; danach noch kurz Zeit zum Lesen.
+                if (abs(swipeX.value) > 0.5f || pullY > 0f) {
+                    while (abs(swipeX.value) > 0.5f || pullY > 0f) delay(150)
+                    delay(900)
+                }
                 try {
                     backLeaveId = ev.id
                     backLeave.snapTo(0f)
@@ -301,7 +307,11 @@ private fun IslandHostBody() {
         try {
             // Jede Karte hat ihre eigene Zeit: nach Ablauf verschwindet nur die oberste, die nächste ist dann dran.
             delay((a.postedAt + s.alertSeconds * 1000L - System.currentTimeMillis()).coerceAtLeast(1500L))
-            while (pullY > 0f) delay(200) // nicht wegklappen, solange gezogen wird
+            // nicht wegklappen, solange gezogen wird (Wischen oder Herunterziehen); danach noch kurz Zeit zum Lesen
+            if (abs(swipeX.value) > 0.5f || pullY > 0f) {
+                while (abs(swipeX.value) > 0.5f || pullY > 0f) delay(150)
+                delay(900)
+            }
         } finally {
             // Bleibt noch eine Weile als Text in der kleinen Pille stehen, außer sie wurde weggewischt.
             if (suppressLinger) suppressLinger = false else if (pendingList.isEmpty()) lingering = a
@@ -488,7 +498,6 @@ private fun IslandHostBody() {
         label = "top",
     )
     // Wischen nach links oder rechts schließt Meldung, aufgeklappte Pille und Nachricht.
-    val swipeX = remember { Animatable(0f) }
     // Neue Inhalte in der kleinen Pille (Taschenlampe, Flugmodus ...) poppen mit Nachfedern auf.
     val bump = remember { Animatable(1f) }
     val bumpKey = if (mode == Mode.COMPACT) current?.key else if (mode == Mode.MESSAGE) lingering?.id?.toString() else null
