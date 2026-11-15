@@ -415,22 +415,7 @@ class MainActivity : ComponentActivity() {
         SectionLabel("TESTEN")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PillButton("MELDUNG", filled = true, modifier = Modifier.weight(1f)) {
-                // Mit Antwort und "Als gelesen markieren", damit man beides ausprobieren kann.
-                val replyPi = android.app.PendingIntent.getBroadcast(
-                    this@MainActivity, 31, Intent(this@MainActivity, TestReceiver::class.java).setAction(TestReceiver.ACTION_REPLY),
-                    android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
-                )
-                val readPi = android.app.PendingIntent.getBroadcast(
-                    this@MainActivity, 32, Intent(this@MainActivity, TestReceiver::class.java).setAction(TestReceiver.ACTION_READ),
-                    android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
-                )
-                IslandBus.post(
-                    IslandEvent(
-                        app = "Nothing Island", title = "Test-Benachrichtigung", text = "So sieht deine Island aus.",
-                        reply = IslandReply(replyPi, android.app.RemoteInput.Builder(TestReceiver.KEY_REPLY).setLabel("Antworten").build()),
-                        markRead = readPi,
-                    ),
-                )
+                postTestMessage("Nothing Island", "Test-Benachrichtigung", "So sieht deine Island aus.", 0)
             }
             PillButton("TIMER", filled = false, modifier = Modifier.weight(1f)) {
                 val left = 5 * 60_000L
@@ -441,6 +426,16 @@ class MainActivity : ComponentActivity() {
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PillButton("NAVI", filled = false, modifier = Modifier.weight(1f)) { IslandBus.upsertOngoing(demoNav()) }
+            PillButton("STAPEL", filled = false, modifier = Modifier.weight(1f)) {
+                // Mehrere Meldungen kurz hintereinander: zum Testen von Stapel, Durchwischen und Zusammenfassen.
+                val tests = listOf(
+                    Triple("Nachrichten", "Lena", "Hast du kurz Zeit?"),
+                    Triple("Kalender", "Termin in 10 Min", "Team-Meeting"),
+                    Triple("Mail", "Rechnung Oktober", "Anbei die Rechnung als PDF."),
+                    Triple("Nachrichten", "Max", "Bin gleich da"),
+                )
+                tests.forEachIndexed { i, t -> postTestMessage(t.first, t.second, t.third, i + 1) }
+            }
             PillButton("LEEREN", filled = false, modifier = Modifier.weight(1f)) {
                 IslandBus.removeOngoing("demo-timer")
                 IslandBus.removeOngoing("demo-music")
@@ -451,9 +446,28 @@ class MainActivity : ComponentActivity() {
         }
         Spacer(Modifier.height(12.dp))
         Text(
-            "Tipp: Tippe auf die kleine Pille, um sie aufzuklappen. Dort findest du die Buttons der App (Pause, Stopp ...). Tippen auf die Ruhe-Pille oder langes Drücken auf die kleine Pille öffnet den Schnellzugriff.",
+            "Tipp: Tippe auf die kleine Pille, um sie aufzuklappen. Dort findest du die Buttons der App (Pause, Stopp ...). Tippen auf die Ruhe-Pille oder langes Drücken auf die kleine Pille öffnet den Schnellzugriff. Mehrere Meldungen liegen wie Karten übereinander: nach links oder rechts wischen blättert durch.",
             color = Muted,
             fontSize = 12.sp,
+        )
+    }
+
+    /** Test-Meldung mit Antwort und "Als gelesen markieren". [n] unterscheidet die Meldungen voneinander. */
+    private fun postTestMessage(app: String, title: String, text: String, n: Int) {
+        val replyPi = android.app.PendingIntent.getBroadcast(
+            this, 31, Intent(this, TestReceiver::class.java).setAction(TestReceiver.ACTION_REPLY),
+            android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val readPi = android.app.PendingIntent.getBroadcast(
+            this, 32, Intent(this, TestReceiver::class.java).setAction(TestReceiver.ACTION_READ),
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        IslandBus.post(
+            IslandEvent(
+                key = "test-$n", app = app, title = title, text = text,
+                reply = IslandReply(replyPi, android.app.RemoteInput.Builder(TestReceiver.KEY_REPLY).setLabel("Antworten").build()),
+                markRead = readPi,
+            ),
         )
     }
 
@@ -525,8 +539,8 @@ class MainActivity : ComponentActivity() {
         }
 
         CardIf(FoldLabel("MELDUNGEN", false)) {
-            ToggleRow("Mehrere Benachrichtigungen nacheinander (Zähler +N)", s.multiNotif) { c -> edit { it.copy(multiNotif = c) } }
-            ToggleRow("Meldungen derselben App zusammenfassen", s.groupNotif) { c -> edit { it.copy(groupNotif = c) } }
+            ToggleRow("Meldungen stapeln (Karten, Wischen blättert durch)", s.multiNotif) { c -> edit { it.copy(multiNotif = c) } }
+            ToggleRow("Meldungen derselben App zu einer Karte zusammenfassen", s.groupNotif) { c -> edit { it.copy(groupNotif = c) } }
             ToggleRow("Bestätigungscodes erkennen (Tippen kopiert)", s.otpCodes) { c -> edit { it.copy(otpCodes = c) } }
             ToggleRow("Meldung nach unten ziehen: als gelesen markieren", s.swipeDownRead) { c -> edit { it.copy(swipeDownRead = c) } }
             ToggleRow("Kopierten Text kurz anzeigen (Zwischenablage)", s.clipboard) { c -> edit { it.copy(clipboard = c) } }
@@ -592,20 +606,35 @@ class MainActivity : ComponentActivity() {
         CardIf(FoldLabel("HAPTIK", false)) {
             ToggleRow("Kurz vibrieren beim Aufklappen", s.haptics) { c ->
                 edit { it.copy(haptics = c) }
-                if (c) QuickActions.haptic(ctx, s.hapticLevel)
+                if (c) QuickActions.hapticPlay(ctx, s.hapticStyle, s.hapticMs, s.hapticAmp)
             }
-            SettingSlider(
-                "Stärke",
-                when (s.hapticLevel) { 1 -> "LEICHT"; 3 -> "STARK"; else -> "MITTEL" },
-                s.hapticLevel.toFloat(),
-                1f..3f,
-            ) { v ->
-                val lv = v.roundToInt().coerceIn(1, 3)
-                if (lv != s.hapticLevel) {
-                    edit { it.copy(hapticLevel = lv) }
-                    QuickActions.haptic(ctx, lv)
+            Text("Art der Vibration", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp, bottom = 6.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "TICK", 1 to "KLICK", 2 to "SCHWER", 3 to "DOPPELT", 4 to "FREI").forEach { (k, n) ->
+                    Chip(n, s.hapticStyle == k) {
+                        edit { it.copy(hapticStyle = k) }
+                        QuickActions.hapticPlay(ctx, k, s.hapticMs, s.hapticAmp)
+                    }
                 }
             }
+            if (s.hapticStyle == 4) {
+                SettingSlider("Dauer", "${s.hapticMs} ms", s.hapticMs.toFloat(), 5f..120f) { v ->
+                    edit { it.copy(hapticMs = v.roundToInt()) }
+                }
+                SettingSlider("Stärke", "${(s.hapticAmp * 100f / 255f).roundToInt()} %", s.hapticAmp.toFloat(), 10f..255f) { v ->
+                    edit { it.copy(hapticAmp = v.roundToInt()) }
+                }
+            } else {
+                Text(
+                    "Tick, Klick, Schwer und Doppelt sind feste Muster des Handys. Bei „Frei“ stellst du Dauer und Stärke selbst ein.",
+                    color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp),
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            PillButton("AUSPROBIEREN", filled = false, modifier = Modifier.fillMaxWidth()) {
+                QuickActions.hapticPlay(ctx, s.hapticStyle, s.hapticMs, s.hapticAmp)
+            }
+            Spacer(Modifier.height(8.dp))
         }
 
         CardIf(FoldLabel("STATUS-ANZEIGEN", false)) {

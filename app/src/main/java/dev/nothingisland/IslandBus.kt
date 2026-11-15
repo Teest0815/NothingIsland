@@ -110,6 +110,10 @@ data class IslandSettings(
     val haptics: Boolean = true,
     /** 1 = leicht, 2 = mittel, 3 = stark. */
     val hapticLevel: Int = 2,
+    /** 0 Tick, 1 Klick, 2 Schwer, 3 Doppelt, 4 Frei (Dauer und Stärke selbst wählen). */
+    val hapticStyle: Int = 1,
+    val hapticMs: Int = 25,
+    val hapticAmp: Int = 150,
     /** Equalizer-Balken bei laufender Musik. */
     val equalizer: Boolean = true,
     /** System-Pop-ups (Heads-up) anderer Apps ausschalten, solange die Island läuft. Braucht WRITE_SECURE_SETTINGS. */
@@ -355,6 +359,26 @@ object IslandBus {
         _current.value = event
     }
 
+    /** Karten stapeln: Oberste Karte nach hinten (dir > 0) oder hinterste nach vorn (dir < 0). */
+    fun cycle(dir: Int) {
+        val cur = _current.value ?: return
+        val list = _pending.value
+        if (list.isEmpty()) return
+        if (dir >= 0) {
+            _pending.value = list.drop(1) + cur
+            _current.value = list.first()
+        } else {
+            _pending.value = listOf(cur) + list.dropLast(1)
+            _current.value = list.last()
+        }
+    }
+
+    /** Ganzen Stapel beenden. */
+    fun dismissAll() {
+        _pending.value = emptyList()
+        _current.value = null
+    }
+
     fun dismiss() {
         val next = _pending.value.firstOrNull()
         if (next != null) {
@@ -416,6 +440,9 @@ object IslandBus {
             statusOff = p.getString("statusOff", d.statusOff) ?: "",
             haptics = p.getBoolean("haptics", d.haptics),
             hapticLevel = p.getInt("hapticLevel", d.hapticLevel),
+            hapticStyle = p.getInt("hapticStyle", d.hapticStyle),
+            hapticMs = p.getInt("hapticMs", d.hapticMs),
+            hapticAmp = p.getInt("hapticAmp", d.hapticAmp),
             equalizer = p.getBoolean("equalizer", d.equalizer),
             suppressPopups = p.getBoolean("suppressPopups", d.suppressPopups),
             hideFullscreen = p.getBoolean("hideFullscreen", d.hideFullscreen),
@@ -470,6 +497,9 @@ object IslandBus {
             .putString("statusOff", s.statusOff)
             .putBoolean("haptics", s.haptics)
             .putInt("hapticLevel", s.hapticLevel)
+            .putInt("hapticStyle", s.hapticStyle)
+            .putInt("hapticMs", s.hapticMs)
+            .putInt("hapticAmp", s.hapticAmp)
             .putBoolean("equalizer", s.equalizer)
             .putBoolean("suppressPopups", s.suppressPopups)
             .putBoolean("hideFullscreen", s.hideFullscreen)

@@ -217,15 +217,27 @@ object QuickActions {
         }.getOrDefault(false)
     }
 
+    /** Haptik nach den frei gewählten Einstellungen. level 1 = leiser Tick (z. B. beim Einrasten). */
     fun haptic(ctx: Context, level: Int) {
+        val st = IslandBus.settings.value
+        hapticPlay(ctx, st.hapticStyle, st.hapticMs, st.hapticAmp, soft = level == 1)
+    }
+
+    fun hapticPlay(ctx: Context, style: Int, ms: Int, amp: Int, soft: Boolean = false) {
         runCatching {
             val v = ctx.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-            val effect = when (level) {
-                1 -> VibrationEffect.EFFECT_TICK
-                3 -> VibrationEffect.EFFECT_HEAVY_CLICK
-                else -> VibrationEffect.EFFECT_CLICK
+            val effect = when (style) {
+                0 -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
+                2 -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
+                3 -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_DOUBLE_CLICK)
+                4 -> {
+                    val a = (if (soft) amp * 0.6f else amp.toFloat()).toInt().coerceIn(1, 255)
+                    val d = (if (soft) ms * 0.6f else ms.toFloat()).toLong().coerceAtLeast(3L)
+                    VibrationEffect.createOneShot(d, a)
+                }
+                else -> VibrationEffect.createPredefined(if (soft) VibrationEffect.EFFECT_TICK else VibrationEffect.EFFECT_CLICK)
             }
-            v.vibrate(VibrationEffect.createPredefined(effect))
+            v.vibrate(effect)
         }
     }
 

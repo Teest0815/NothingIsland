@@ -259,13 +259,14 @@ private fun IslandHostBody() {
         val a = alert ?: return@LaunchedEffect
         lastAlert = a
         try {
-            delay(s.alertSeconds * 1000L)
+            // Mit gestapelten Karten bleibt mehr Zeit zum Durchblättern; jedes Wischen startet die Zeit neu.
+            delay(s.alertSeconds * 1000L + 3000L * pendingList.size)
             while (pullY > 0f) delay(200) // nicht wegklappen, solange gezogen wird
         } finally {
             // Bleibt noch eine Weile als Text in der kleinen Pille stehen, außer sie wurde weggewischt.
             if (suppressLinger) suppressLinger = false else lingering = a
         }
-        IslandBus.dismiss()
+        if (pendingList.isNotEmpty()) IslandBus.dismissAll() else IslandBus.dismiss()
     }
     LaunchedEffect(lingering?.id) {
         if (lingering != null) {
@@ -467,6 +468,7 @@ private fun IslandHostBody() {
     LaunchedEffect(canPullRead) { if (!canPullRead) pullY = 0f }
     val canSkip = mode == Mode.COMPACT && s.swipeSkip && current?.kind == Kind.MEDIA && current.media != null
     val curForSkip by rememberUpdatedState(current)
+    val stackBehind = if (mode == Mode.ALERT && s.multiNotif) minOf(pendingList.size, 2) else 0
     val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || (mode == Mode.QUICK && quickPages.size <= 1)
     LaunchedEffect(mode) { swipeX.snapTo(0f) }
     val onSwipeAway: () -> Unit = {
@@ -493,7 +495,7 @@ private fun IslandHostBody() {
     val slotTarget = if (circleItem != null) slotMax else 0f
     val topTarget = ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
     // Beim Herunterziehen einer Meldung braucht das Fenster Platz nach unten, sonst wird sie abgeschnitten.
-    val winH = topTarget + targetH + WINDOW_MARGIN + (if (canPullRead) 40f else 0f)
+    val winH = topTarget + targetH + WINDOW_MARGIN + (if (canPullRead) 40f else 0f) + (if (mode == Mode.ALERT && s.multiNotif && pendingList.isNotEmpty()) 22f else 0f)
     LaunchedEffect(winH, span) {
         val gh = maxOf(winH, reported.second)
         if (span != reported.first || gh != reported.second) {
@@ -525,6 +527,8 @@ private fun IslandHostBody() {
                     scaleY = pressScale * pop * bump.value.coerceAtMost(1.05f)
                     translationX = swipeX.value + stretchPx / 2f
                     translationY = pullY
+                    // Gestapelte Karten kippen beim Wischen leicht wie beim Kartenmischen.
+                    if (stackBehind > 0) rotationZ = (swipeX.value / size.width.coerceAtLeast(1f)) * 9f
                     // Zieht sich beim Ziehen leicht in die Länge.
                     if (pullY > 0f) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
                     alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value
@@ -538,6 +542,27 @@ private fun IslandHostBody() {
                     val h = if (growing) minOf(height.roundToPx(), (targetH * 1.08f).dp.roundToPx()) else height.roundToPx()
                     val pl = m.measure(Constraints.fixed(w, h))
                     layout(w, h) { pl.place(0, 0) }
+                }
+                .drawBehind {
+                    // Karten darunter: schauen unten als schmale Streifen hervor.
+                    for (i in stackBehind downTo 1) {
+                        val inset = 9.dp.toPx() * i
+                        val off = 7.dp.toPx() * i
+                        val r = androidx.compose.ui.geometry.CornerRadius(corner.toPx().coerceAtMost(size.height / 2f))
+                        drawRoundRect(
+                            color = Color(0xFF1B1B1B).copy(alpha = 1f - 0.18f * i),
+                            topLeft = Offset(inset, off),
+                            size = androidx.compose.ui.geometry.Size((size.width - 2 * inset).coerceAtLeast(0f), size.height),
+                            cornerRadius = r,
+                        )
+                        drawRoundRect(
+                            color = Hairline,
+                            topLeft = Offset(inset, off),
+                            size = androidx.compose.ui.geometry.Size((size.width - 2 * inset).coerceAtLeast(0f), size.height),
+                            cornerRadius = r,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()),
+                        )
+                    }
                 }
                 .clip(shape)
                 .background(Bg)
@@ -580,7 +605,7 @@ private fun IslandHostBody() {
                         },
                     )
                 }
-                .pointerInput(mode, canSkip) {
+                .pointerInput(mode, canSkip, stackBehind) {
                     if (canSkip) {
                         val maxS = 48.dp.toPx()
                         val trigger = 24.dp.toPx()
@@ -622,7 +647,16 @@ private fun IslandHostBody() {
                         onDragEnd = {
                             val x = swipeX.value
                             swipeScope.launch {
-                                if (abs(x) > 80.dp.toPx()) {
+                                if (abs(x) > 80.dp.toPx() && stackBehind > 0) {
+                                    // Kartenmischen: oberste Karte fliegt zur Seite, die nächste rückt nach vorn.
+                                    swipeX.animateTo(sign(x) * size.width * 0.7f, tween(140))
+                                    suppressLinger = true
+                                    IslandBus.cycle(if (x > 0) 1 else -1)
+                                    appear.snapTo(0.5f)
+                                    swipeX.snapTo(0f)
+                                    if (s.haptics) QuickActions.haptic(ctx, 1)
+                                    appear.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 420f))
+                                } else if (abs(x) > 80.dp.toPx()) {
                                     swipeX.animateTo(sign(x) * size.width * 0.8f, tween(160))
                                     // Die kleine Pille erscheint direkt an ihrem Platz und wächst nicht aus der Mitte.
                                     snapNext = true
