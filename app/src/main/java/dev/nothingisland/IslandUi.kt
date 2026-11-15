@@ -363,8 +363,8 @@ private fun IslandHostBody() {
     val motion = spring<Dp>(dampingRatio = 0.9f, stiffness = 500f)
     val growing = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK
     val widthSpec = spring<Dp>(
-        dampingRatio = if (growing) 0.7f else 0.9f,
-        stiffness = if (growing) 460f else 600f,
+        dampingRatio = if (growing) 0.82f else 0.9f,
+        stiffness = if (growing) 400f else 600f,
     )
     val heightSpec = spring<Dp>(
         dampingRatio = if (growing) 0.76f else 0.94f,
@@ -525,7 +525,10 @@ private fun IslandHostBody() {
                 }
                 .layout { m, _ ->
                     // Beim schnellen Auf- und Zuklappen darf die Feder nicht weit über das Ziel schießen.
-                    val w = (if (growing) minOf(width.roundToPx(), (targetW * 1.05f).dp.roundToPx()) else width.roundToPx()) + abs(stretchPx).roundToInt()
+                    // Beim Aufklappen wächst die Breite höchstens so schnell wie die Höhe (kein plötzliches Breitwerden beim Spammen).
+                    val hp = if (growing && targetH > smallH) ((height.value - smallH) / (targetH - smallH)).coerceIn(0f, 1f) else 1f
+                    val wCap = if (growing) minOf(targetW * 1.05f, idleW + (targetW - idleW) * (0.3f + 0.7f * hp)) else Float.MAX_VALUE
+                    val w = (if (growing) minOf(width.roundToPx(), wCap.dp.roundToPx()) else width.roundToPx()) + abs(stretchPx).roundToInt()
                     val h = if (growing) minOf(height.roundToPx(), (targetH * 1.06f).dp.roundToPx()) else height.roundToPx()
                     val pl = m.measure(Constraints.fixed(w, h))
                     layout(w, h) { pl.place(0, 0) }
