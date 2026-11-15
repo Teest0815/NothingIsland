@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
@@ -57,9 +59,29 @@ jobs:
           VERSION="1.${GITHUB_RUN_NUMBER}"
           cp app/build/outputs/apk/debug/app-debug.apk NothingIsland.apk
           cp app/build/outputs/apk/debug/app-debug.apk "NothingIsland-v${VERSION}.apk"
-          MSG="$(git log -1 --pretty=%s)"
+          REPO="${GITHUB_REPOSITORY}"
+          # Änderungen seit dem letzten Release: alle Commits zwischen dem vorherigen und diesem Stand.
+          PREV="$(gh api "repos/${REPO}/releases/tags/latest" --jq .target_commitish 2>/dev/null || true)"
+          if [ -n "$PREV" ] && git cat-file -e "${PREV}^{commit}" 2>/dev/null && [ "$PREV" != "$GITHUB_SHA" ]; then
+            RANGE="${PREV}..${GITHUB_SHA}"
+          else
+            RANGE="-n 8 ${GITHUB_SHA}"
+          fi
+          CHANGES="$(git log --no-merges --pretty='- %s' $RANGE | grep -v -F '[skip ci]' | head -30 || true)"
+          [ -z "$CHANGES" ] && CHANGES="- $(git log -1 --pretty=%s)"
+          {
+            echo "## Nothing Island v${VERSION}"
+            echo
+            echo "### Änderungen"
+            echo "$CHANGES"
+            echo
+            echo "### Installieren"
+            echo "\`NothingIsland.apk\` laden und über die alte App installieren. Die Einstellungen bleiben erhalten."
+            echo
+            echo "<sub>Build ${GITHUB_RUN_NUMBER} · Stand $(git rev-parse --short HEAD) · $(date -u +'%d.%m.%Y %H:%M') UTC</sub>"
+          } > notes.md
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest NothingIsland.apk "NothingIsland-v${VERSION}.apk" \
             --title "Nothing Island v${VERSION}" \
-            --notes "Version ${VERSION} (Build ${GITHUB_RUN_NUMBER}) - ${MSG}" \
+            --notes-file notes.md \
             --target "$GITHUB_SHA"
