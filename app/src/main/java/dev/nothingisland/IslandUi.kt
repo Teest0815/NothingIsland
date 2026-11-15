@@ -495,7 +495,7 @@ private fun IslandHostBody() {
     val slotTarget = if (circleItem != null) slotMax else 0f
     val topTarget = ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
     // Beim Herunterziehen einer Meldung braucht das Fenster Platz nach unten, sonst wird sie abgeschnitten.
-    val winH = topTarget + targetH + WINDOW_MARGIN + (if (canPullRead) 40f else 0f) + (if (mode == Mode.ALERT && s.multiNotif && pendingList.isNotEmpty()) 22f else 0f)
+    val winH = topTarget + targetH + WINDOW_MARGIN + (if (canPullRead) 40f else 0f) + (if (mode == Mode.ALERT && s.multiNotif && pendingList.isNotEmpty()) 12f else 0f)
     LaunchedEffect(winH, span) {
         val gh = maxOf(winH, reported.second)
         if (span != reported.first || gh != reported.second) {
@@ -546,8 +546,8 @@ private fun IslandHostBody() {
                 .drawBehind {
                     // Karten darunter: schauen unten als schmale Streifen hervor.
                     for (i in stackBehind downTo 1) {
-                        val inset = 9.dp.toPx() * i
-                        val off = 7.dp.toPx() * i
+                        val inset = 6.dp.toPx() * i
+                        val off = 4.dp.toPx() * i
                         val r = androidx.compose.ui.geometry.CornerRadius(corner.toPx().coerceAtMost(size.height / 2f))
                         drawRoundRect(
                             color = Color(0xFF1B1B1B).copy(alpha = 1f - 0.18f * i),
@@ -586,7 +586,13 @@ private fun IslandHostBody() {
                                 // Kein Hochgleiten: Versatz sofort weg, die Meldung schrumpft an Ort und Stelle in die kleine Pille.
                                 pullY = 0f
                                 suppressLinger = true
+                                val hadStack = pendingList.isNotEmpty()
                                 IslandBus.dismiss()
+                                if (hadStack) {
+                                    // Nächste Karte rückt weich nach, statt hart zu springen.
+                                    appear.snapTo(0.5f)
+                                    appear.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 420f))
+                                }
                             } else {
                                 androidx.compose.animation.core.animate(y, 0f, animationSpec = spring(dampingRatio = 0.55f, stiffness = 420f)) { v, _ -> pullY = v }
                             }
@@ -648,10 +654,10 @@ private fun IslandHostBody() {
                             val x = swipeX.value
                             swipeScope.launch {
                                 if (abs(x) > 80.dp.toPx() && stackBehind > 0) {
-                                    // Kartenmischen: oberste Karte fliegt zur Seite, die nächste rückt nach vorn.
+                                    // Oberste Karte fliegt zur Seite und ist weg, die nächste rückt nach vorn.
                                     swipeX.animateTo(sign(x) * size.width * 0.7f, tween(140))
                                     suppressLinger = true
-                                    IslandBus.cycle(if (x > 0) 1 else -1)
+                                    IslandBus.dismiss()
                                     appear.snapTo(0.5f)
                                     swipeX.snapTo(0f)
                                     if (s.haptics) QuickActions.haptic(ctx, 1)
@@ -777,7 +783,12 @@ private fun IslandHostBody() {
                             runCatching { it.markRead?.send() }
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                             suppressLinger = true
+                            val hadStack = pendingList.isNotEmpty()
                             IslandBus.dismiss()
+                            if (hadStack) swipeScope.launch {
+                                appear.snapTo(0.5f)
+                                appear.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 420f))
+                            }
                         }, onCopyCode = {
                             it.code?.let { c ->
                                 if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
