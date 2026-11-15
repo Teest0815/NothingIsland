@@ -266,10 +266,10 @@ private fun IslandHostBody() {
         lastAlert = a
         if (prev != null && prev.id != a.id && pendingList.any { it.id == prev.id }) {
             // Neue Meldung landet oben auf dem Stapel, die bisherige rutscht dahinter.
-            dropY.snapTo(with(dens) { -30.dp.toPx() })
-            appear.snapTo(0.6f)
-            launch { dropY.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 380f)) }
-            launch { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = 380f)) }
+            dropY.snapTo(with(dens) { -52.dp.toPx() })
+            appear.snapTo(0.2f)
+            launch { dropY.animateTo(0f, spring(dampingRatio = 0.52f, stiffness = 300f)) }
+            launch { appear.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 320f)) }
             // Alle Karten dahinter rutschen eine Stufe zurück und werden dabei weich kleiner.
             stackShift.snapTo(-1f)
             launch { stackShift.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = 260f)) }
@@ -587,17 +587,21 @@ private fun IslandHostBody() {
                     scaleY = pressScale * pop * bump.value.coerceAtMost(1.05f)
                     translationX = swipeX.value + stretchPx / 2f
                     translationY = pullY + dropY.value
-                    // Gestapelte Karten kippen beim Wischen leicht.
+                    // Gestapelte Karten kippen beim Wischen leicht, fallen mit leichter Schräglage ein.
                     if (stackBehind > 0) {
-                        rotationZ = (swipeX.value / size.width.coerceAtLeast(1f)) * 9f
+                        rotationZ = (swipeX.value / size.width.coerceAtLeast(1f)) * 9f +
+                            (dropY.value / 52.dp.toPx()) * 5f
+                        // Gelesen: kurz anwachsen, dann nach oben zur Pille zusammenschrumpfen.
                         val lv = leave.value
-                        scaleX *= 1f - 0.12f * lv
-                        scaleY *= 1f - 0.12f * lv
+                        scaleX *= 1f - 0.45f * lv
+                        scaleY *= 1f - 0.28f * lv
+                        translationY -= lv * 28.dp.toPx()
+                        transformOrigin = TransformOrigin(0.5f, 0f)
                     }
                     // Zieht sich beim Ziehen leicht in die Länge.
                     if (pullY > 0f) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
                     alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value *
-                        (if (stackBehind > 0) 1f - leave.value else 1f)
+                        (if (stackBehind > 0) 1f - leave.value.coerceAtLeast(0f).let { it * it } else 1f)
                 }
                 .layout { m, _ ->
                     // Beim schnellen Auf- und Zuklappen darf die Feder nicht weit über das Ziel schießen.
@@ -633,7 +637,7 @@ private fun IslandHostBody() {
                                 suppressLinger = true
                                 if (pendingList.isNotEmpty()) {
                                     // Gelesene Karte schrumpft und blendet aus, die nächste rückt nach vorn.
-                                    leave.animateTo(1f, tween(190, easing = FastOutSlowInEasing))
+                                    leave.animateTo(1f, androidx.compose.animation.core.keyframes<Float> { durationMillis = 330; 0f at 0; -0.1f at 80 using FastOutSlowInEasing; 1f at 330 using FastOutSlowInEasing })
                                     IslandBus.dismiss()
                                     leave.snapTo(0f)
                                 } else IslandBus.dismiss()
@@ -827,7 +831,7 @@ private fun IslandHostBody() {
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                             suppressLinger = true
                             if (pendingList.isNotEmpty()) swipeScope.launch {
-                                leave.animateTo(1f, tween(190, easing = FastOutSlowInEasing))
+                                leave.animateTo(1f, androidx.compose.animation.core.keyframes<Float> { durationMillis = 330; 0f at 0; -0.1f at 80 using FastOutSlowInEasing; 1f at 330 using FastOutSlowInEasing })
                                 IslandBus.dismiss()
                                 leave.snapTo(0f)
                             } else IslandBus.dismiss()
