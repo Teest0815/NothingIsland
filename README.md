@@ -1,97 +1,177 @@
-# Nothing Island
+<div align="center">
 
-Eine Dynamic Island für Android im Nothing-OS-Look: schwarz, Monospace-Schrift, roter Akzent, Punktmatrix-Ring.
-Gebaut mit Kotlin und Jetpack Compose, getestet auf Xiaomi/HyperOS.
+# ● NOTHING ISLAND
 
-<p align="center">
-  <img src="docs/demo.gif" alt="Nothing Island: Musik-Pille klappt auf und wieder zu" width="420">
-</p>
+**Eine Dynamic Island für Android im Nothing-OS-Look.**<br>
+Schwarz, Monospace, roter Akzent, Punktmatrix-Ring.
 
-## Im Einsatz
+![Android](https://img.shields.io/badge/Android-10%2B-black?style=flat-square&logo=android&logoColor=white)
+![Kotlin](https://img.shields.io/badge/Kotlin-Jetpack%20Compose-D71921?style=flat-square&logo=kotlin&logoColor=white)
+![Build](https://img.shields.io/badge/Build-GitHub%20Actions-black?style=flat-square&logo=githubactions&logoColor=white)
+
+<br>
+
+<img src="docs/demo.gif" alt="Musik-Pille klappt auf und wieder zu" width="380">
+
+</div>
+
+<br>
+
+## ✦ Auf einen Blick
+
+| | |
+|---|---|
+| **Live-Pille** | Musik, Timer, Anruf, Navigation, Training und Downloads bleiben dauerhaft in der kleinen Pille. |
+| **Meldungen** | Aufklappen, direkt antworten, als gelesen markieren, zusammenfassen, Codes kopieren. |
+| **Schnellzugriff** | Kacheln auf mehreren Seiten, frei wählbar, mit Home-Assistant-Geräten. |
+| **Animationen** | Federn, Pop-Effekte, rollende Ziffern, Squash beim Einklappen. |
+| **Akku** | Sparmodus mit Stufen, Ausblenden bei Vollbild und Querformat. |
+
+<br>
+
+## ▶ Im Einsatz
 
 <table>
   <tr>
-    <td align="center"><b>Schnellzugriff</b><br>mehrere Seiten, Smart Home<br><img src="docs/quickpanel.gif" width="300"></td>
-    <td align="center"><b>Navigation</b><br>Live-Pille und aufgeklappt<br><img src="docs/navigation.gif" width="300"></td>
+    <td align="center"><b>Schnellzugriff</b><br><sub>mehrere Seiten, Smart Home</sub><br><br><img src="docs/quickpanel.gif" width="300"></td>
+    <td align="center"><b>Navigation</b><br><sub>Live-Pille und aufgeklappt</sub><br><br><img src="docs/navigation.gif" width="300"></td>
   </tr>
   <tr>
-    <td align="center" colspan="2"><b>Timer und Musik</b><br>zwei Aktivitäten: Pille und Kreis tauschen<br><img src="docs/timer-musik.gif" width="300"></td>
+    <td align="center" colspan="2"><b>Timer und Musik</b><br><sub>zwei Aktivitäten, Pille und Kreis tauschen</sub><br><br><img src="docs/timer-musik.gif" width="300"></td>
   </tr>
 </table>
 
-## Installieren
+<br>
 
-1. Unter **Releases → latest** die `NothingIsland.apk` laden (jede Version gibt es zusätzlich als `NothingIsland-v1.N.apk`).
-2. Installieren. Eine vorhandene Version wird einfach überschrieben, Einstellungen bleiben erhalten.
-3. App öffnen und die Berechtigungen vergeben:
+## ⬇ Installieren
+
+1. Unter **Releases → latest** die `NothingIsland.apk` laden. Jede Version gibt es zusätzlich als `NothingIsland-v1.N.apk`.
+2. Installieren. Eine vorhandene Version wird überschrieben, deine Einstellungen bleiben.
+3. App öffnen und drei Berechtigungen vergeben:
    - **Über anderen Apps anzeigen**
    - **Zugriff auf Benachrichtigungen**
-   - **Bedienungshilfe** (damit die Island auch über der Statusleiste liegt)
-4. Mit **TEST ANZEIGEN** im START-Tab ausprobieren.
+   - **Bedienungshilfe**, damit die Island auch über der Statusleiste liegt
+4. Im START-Tab mit **TEST ANZEIGEN** ausprobieren.
 
-Die Versionsnummer steht im START-Tab und im Dateinamen. Android 10 oder neuer wird benötigt.
+> Die Versionsnummer steht im START-Tab und im Dateinamen. Du brauchst Android 10 oder neuer.
 
-## Was die Island kann
+<br>
 
-**Kleine Pille und Live-Aktivitäten**
-- Ruhe-Pille, die um die Frontkamera sitzt, und kompakte Pille für laufende Dinge: Musik, Timer, Anruf, Navigation, Training, Downloads.
-- Mehrere Aktivitäten: ein Kreis daneben zeigt die zweite, Antippen tauscht sie.
+## ✦ Funktionen
+
+<details open>
+<summary><b>Kleine Pille und Live-Aktivitäten</b></summary>
+<br>
+
+- Ruhe-Pille um die Frontkamera, kompakte Pille für laufende Aktivitäten.
+- Bei mehreren Aktivitäten zeigt ein Kreis daneben die zweite, Antippen tauscht sie.
 - Statuspillen für Taschenlampe, Flugmodus, Hotspot, Ladegerät, Bluetooth-Kopfhörer, Akku-Warnung (20 % und 10 %), nächsten Termin und Zwischenablage.
 
-**Meldungen**
+</details>
+
+<details open>
+<summary><b>Meldungen</b></summary>
+<br>
+
 - Neue Benachrichtigungen klappen auf, mit App-Name, Titel und Text.
-- Direkt antworten, ohne die App zu öffnen.
-- **Als gelesen markieren:** per Haken oder indem du die Meldung nach unten ziehst (nur bei Meldungen, die das unterstützen).
-- Mehrere Meldungen nacheinander mit Zähler „+N", Meldungen derselben App werden zusammengefasst.
-- **Bestätigungscodes** werden erkannt, ein Tipp kopiert den Code.
+- **Antworten**, ohne die App zu öffnen.
+- **Als gelesen markieren** per Haken oder indem du die Meldung nach unten ziehst (nur bei Meldungen, die das unterstützen).
+- **Mehrere Meldungen** nacheinander mit Zähler „+N". Meldungen derselben App werden zusammengefasst.
+- **Bestätigungscodes** werden erkannt, ein Tipp kopiert sie.
 - Regeln pro App.
 
-**Aufgeklappte Ansichten**
-- **Musik:** Cover, Titel, Spulleiste mit ziehbarem Strich, Play/Pause, Vor/Zurück, Spulen-Tasten für Podcasts. Wischen links und rechts auf der Pille wechselt den Song.
-- **Anruf:** Details, Stumm und Lautsprecher.
-- **Laden:** erweiterte Ansicht mit Leistung, Temperatur und Restzeit.
-- **Training:** Zeit und Werte wie Puls, Distanz und Tempo.
+</details>
 
-**Schnellzugriff**
-- Tippen auf die Ruhe-Pille öffnet ein Panel mit Kacheln, mit mehreren Seiten zum Wischen.
+<details open>
+<summary><b>Aufgeklappte Ansichten</b></summary>
+<br>
+
+| Ansicht | Inhalt |
+|---|---|
+| **Musik** | Cover, Titel, Spulleiste mit ziehbarem Strich, Play/Pause, Vor/Zurück, Spulen-Tasten für Podcasts. Wischen links und rechts auf der Pille wechselt den Song. |
+| **Anruf** | Details, Stumm, Lautsprecher. |
+| **Laden** | Erweiterte Ansicht mit Leistung, Temperatur und Restzeit. |
+| **Training** | Zeit und Werte wie Puls, Distanz und Tempo. |
+| **Navigation** | Nächste Abbiegung, Beenden-Taste. |
+
+</details>
+
+<details open>
+<summary><b>Schnellzugriff und Smart Home</b></summary>
+<br>
+
+- Tippen auf die Ruhe-Pille öffnet ein Panel mit Kacheln, mehrere Seiten zum Wischen.
 - Kacheln frei wählbar, auch beliebige Apps.
-- **Smart Home:** Home-Assistant-Geräte als Kacheln, Lampen mit Helligkeitsregler. Anmeldung direkt über Home Assistant, der Server wird automatisch gefunden.
+- **Home Assistant:** Geräte als Kacheln, Lampen mit Helligkeitsregler. Die Anmeldung läuft direkt über Home Assistant, der Server wird automatisch gefunden.
 
-**Animationen**
-- Federn mit leichtem Nachschwingen, ruhiger bei großer Pille.
+</details>
+
+<details open>
+<summary><b>Animationen</b></summary>
+<br>
+
+- Federn mit leichtem Nachschwingen, bei großer Pille ruhiger.
 - Neue Inhalte poppen in der kleinen Pille auf, Symbole federn.
-- Optional: große Bubble schrumpft zur Pille erst kleiner, dann kurz breiter (Squash).
+- Große Bubble schrumpft zur Pille erst kleiner, dann kurz breiter (Squash, abschaltbar).
 - Rollende Ziffern bei Timern, animierte Ladeanzeige, pulsierendes Symbol bei klingelndem Anruf.
 - Tasten drücken sich federnd ein, Kacheln werden beim Drücken weiß.
 
-**Anpassen** (Tabs START, LAYOUT, FUNKTION, DESIGN, APPS)
-- Position, Größe, Breite und Rundung, Anzeigedauer, Haptik.
+</details>
+
+<details>
+<summary><b>Anpassen</b></summary>
+<br>
+
+Fünf Tabs: **START**, **LAYOUT**, **FUNKTION**, **DESIGN**, **APPS**.
+
+- Position, Größe, Breite, Rundung, Anzeigedauer, Haptik.
 - Themen, Akzentfarbe und eigene Farben, gut lesbar auch bei hellen Farben.
 - Für fast jede Funktion gibt es einen Schalter.
 
-**Akku**
-- Sparmodus mit Stufen im START-Tab, ausgeschaltet im Hintergrund, wenn der Bildschirm aus ist.
+</details>
+
+<details>
+<summary><b>Akku</b></summary>
+<br>
+
+- Sparmodus mit Stufen im START-Tab.
+- Im Hintergrund wird nichts abgefragt, wenn der Bildschirm aus ist.
 - Optional ausblenden bei Vollbild (Video, Spiele) und im Querformat.
 
-## So funktioniert es
+</details>
+
+<br>
+
+## ⚙ So funktioniert es
+
+```
+Benachrichtigung ─► IslandListenerService ─► IslandBus ─► IslandUi (Compose) ─► Overlay
+```
 
 - `IslandListenerService` ist ein `NotificationListenerService` und liest die Benachrichtigungen.
 - Ein Bedienungshilfe-Dienst zeigt die Island als Overlay über der Statusleiste.
 - Drei Fenster: ein sichtbares ohne Touch, ein kleines unsichtbares für Berührungen (leitet sie weiter) und eines für die Antwort-Eingabe. Auf dem Sperrbildschirm gibt es keinen Touch.
 - Die Oberfläche ist komplett in Compose (`IslandUi.kt`), der Zustand läuft über `IslandBus`.
-- Einstellungen liegen in SharedPreferences, Home-Assistant-Zugang in privatem App-Speicher.
+- Einstellungen liegen in SharedPreferences, der Home-Assistant-Zugang im privaten App-Speicher.
 
-## Selbst bauen
+<br>
 
-Der Workflow `.github/workflows/build.yml` baut bei jedem Push und veröffentlicht die APK unter **Releases → latest**.
-Die Versionsnummer ist `1.<Lauf-Nummer>`.
+## 🛠 Selbst bauen
 
-Lokal: Projekt in Android Studio öffnen oder `gradle assembleDebug` ausführen.
+Der Workflow `.github/workflows/build.yml` baut bei jedem Push und veröffentlicht die APK unter **Releases → latest**. Die Versionsnummer ist `1.<Lauf-Nummer>`.
 
-## Bekannte Grenzen
+Lokal geht es mit Android Studio oder:
 
-- Auf manchen Herstellersystemen beendet das System Hintergrunddienste. Dann Akku-Optimierung für die App ausschalten und sie im Autostart erlauben.
+```bash
+gradle assembleDebug
+```
+
+<br>
+
+## ⚠ Bekannte Grenzen
+
+- Manche Hersteller beenden Hintergrunddienste. Dann Akku-Optimierung für die App ausschalten und Autostart erlauben.
 - Stumm und Lautsprecher bei Anrufen können von Android blockiert werden.
 - Zwischenablage lesen und Vollbild-Erkennung hängen vom Gerät ab. Der START-Tab zeigt Diagnose-Karten.
 - Die echte Nothing-Schrift ist lizenziert und nicht enthalten, als Ersatz dient eine Monospace-Schrift.
-- Home-Assistant-Anmeldung läuft über eine lokale Rückleitung auf dem Handy und wurde nur auf einem Gerät getestet.
+- Die Home-Assistant-Anmeldung läuft über eine lokale Rückleitung auf dem Handy und wurde nur auf einem Gerät getestet.
