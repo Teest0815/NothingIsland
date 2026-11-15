@@ -249,6 +249,29 @@ private fun IslandHostBody() {
     val leave = remember { Animatable(0f) }
     val stackShift = remember { Animatable(0f) }
     var stackHold by remember { mutableStateOf(false) }
+    // Karte hinter der obersten, deren Zeit abläuft: schrumpft und blendet aus, bevor sie entfernt wird.
+    val backLeave = remember { Animatable(0f) }
+    var backLeaveId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(pendingList.map { it.id }) {
+        // Jede Karte läuft nach ihrer eigenen Zeit ab: die älteste (hinterste) verschwindet zuerst.
+        pendingList.forEach { ev ->
+            launch {
+                val remaining = (ev.postedAt + s.alertSeconds * 1000L - System.currentTimeMillis()).coerceAtLeast(400L)
+                delay(remaining)
+                try {
+                    backLeaveId = ev.id
+                    backLeave.snapTo(0f)
+                    backLeave.animateTo(1f, tween(190, easing = FastOutSlowInEasing))
+                    IslandBus.removePending(ev.id)
+                } finally {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                        backLeaveId = null
+                        backLeave.snapTo(0f)
+                    }
+                }
+            }
+        }
+    }
     val dens = androidx.compose.ui.platform.LocalDensity.current
     var suppressLinger by remember { mutableStateOf(false) }
 
@@ -277,7 +300,7 @@ private fun IslandHostBody() {
         }
         try {
             // Jede Karte hat ihre eigene Zeit: nach Ablauf verschwindet nur die oberste, die nächste ist dann dran.
-            delay(s.alertSeconds * 1000L)
+            delay((a.postedAt + s.alertSeconds * 1000L - System.currentTimeMillis()).coerceAtLeast(1500L))
             while (pullY > 0f) delay(200) // nicht wegklappen, solange gezogen wird
         } finally {
             // Bleibt noch eine Weile als Text in der kleinen Pille stehen, außer sie wurde weggewischt.
@@ -565,12 +588,13 @@ private fun IslandHostBody() {
                             val d = (i - stackP() + stackShift.value).coerceAtLeast(0f)
                             val inset = stackInsetDp.dp.toPx()
                             val step = (2f * inset / size.width.coerceAtLeast(1f)).coerceAtMost(0.3f)
-                            val k = (1f - step * d).coerceIn(0.4f, 1f)
+                            val bl = if (ev.id == backLeaveId) backLeave.value else 0f
+                            val k = (1f - step * d).coerceIn(0.4f, 1f) * (1f - 0.1f * bl)
                             scaleX = k
                             scaleY = k
                             transformOrigin = TransformOrigin(0.5f, 0f)
-                            translationY = stackOffDp.dp.toPx() * d
-                            alpha = ((1f - 0.3f * (d - 1f).coerceAtLeast(0f)) * (3.4f - d).coerceIn(0f, 1f)).coerceIn(0f, 1f)
+                            translationY = stackOffDp.dp.toPx() * d + bl * 6.dp.toPx()
+                            alpha = ((1f - 0.3f * (d - 1f).coerceAtLeast(0f)) * (3.4f - d).coerceIn(0f, 1f)).coerceIn(0f, 1f) * (1f - bl)
                         }
                         .clip(shape)
                         .drawBehind {

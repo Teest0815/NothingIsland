@@ -66,6 +66,8 @@ data class IslandEvent(
     val count: Int = 1,
     /** Erkannter Bestätigungscode (OTP). */
     val code: String? = null,
+    /** Wann die Meldung eintraf (für den eigenen Ablauf jeder Karte im Stapel). */
+    val postedAt: Long = System.currentTimeMillis(),
 )
 
 data class IslandSettings(
@@ -375,6 +377,11 @@ object IslandBus {
             _pending.value = listOf(cur) + list.dropLast(1)
             _current.value = list.last()
         }
+    }
+
+    /** Eine Karte hinter der obersten entfernen (ihre Zeit ist abgelaufen). */
+    fun removePending(id: Long) {
+        _pending.update { list -> list.filterNot { it.id == id } }
     }
 
     /** Ganzen Stapel beenden. */
