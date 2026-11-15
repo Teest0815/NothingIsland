@@ -250,6 +250,8 @@ private fun IslandHostBody() {
     val stackShift = remember { Animatable(0f) }
     var stackHold by remember { mutableStateOf(false) }
     val swipeX = remember { Animatable(0f) }
+    // Eigener Scope für Stapel-Animationen: sie laufen immer bis zum Ende, auch wenn der Effekt neu startet (Spam).
+    val arriveScope = rememberCoroutineScope()
     // Karte hinter der obersten, deren Zeit abläuft: schrumpft und blendet aus, bevor sie entfernt wird.
     val backLeave = remember { Animatable(0f) }
     var backLeaveId by remember { mutableStateOf<Long?>(null) }
@@ -291,18 +293,34 @@ private fun IslandHostBody() {
     }
     // Neue Meldung: aufklappen, nach X Sekunden (oder Tippen außerhalb) in die kleine Pille schrumpfen.
     LaunchedEffect(alert?.id) {
-        val a = alert ?: return@LaunchedEffect
+        val a = alert
+        if (a == null) {
+            // Nichts mehr zu zeigen: Stapel-Versatz sicher zurücksetzen (sonst bleibt die Island verschoben).
+            arriveScope.launch {
+                dropY.snapTo(0f)
+                stackShift.snapTo(0f)
+                leave.snapTo(0f)
+            }
+            return@LaunchedEffect
+        }
         val prev = lastAlert
         lastAlert = a
         if (prev != null && prev.id != a.id && pendingList.any { it.id == prev.id }) {
             // Neue Meldung landet oben auf dem Stapel, die bisherige rutscht dahinter.
-            dropY.snapTo(with(dens) { -52.dp.toPx() })
-            appear.snapTo(0.2f)
-            launch { dropY.animateTo(0f, spring(dampingRatio = 0.52f, stiffness = 300f)) }
-            launch { appear.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 320f)) }
+            val fromY = with(dens) { -52.dp.toPx() }
+            arriveScope.launch {
+                dropY.snapTo(fromY)
+                dropY.animateTo(0f, spring(dampingRatio = 0.52f, stiffness = 300f))
+            }
+            arriveScope.launch {
+                appear.snapTo(0.2f)
+                appear.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 320f))
+            }
             // Alle Karten dahinter rutschen eine Stufe zurück und werden dabei weich kleiner.
-            stackShift.snapTo(-1f)
-            launch { stackShift.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = 260f)) }
+            arriveScope.launch {
+                stackShift.snapTo(-1f)
+                stackShift.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = 260f))
+            }
         }
         try {
             // Jede Karte hat ihre eigene Zeit: nach Ablauf verschwindet nur die oberste, die nächste ist dann dran.
