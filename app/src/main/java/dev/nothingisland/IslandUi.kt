@@ -380,7 +380,7 @@ private fun IslandHostBody() {
         lastMode = mode
         val small = mode == Mode.IDLE || mode == Mode.COMPACT || mode == Mode.MESSAGE
         val big = was == Mode.ALERT || was == Mode.EXPANDED || was == Mode.QUICK
-        if (s.squashEntry && !lowPowerNow && small && big) {
+        if (s.squashEntry && small && big) {
             squashBounce = false
             squashHold = true
             delay(140)
@@ -515,8 +515,8 @@ private fun IslandHostBody() {
             modifier = Modifier
                 .graphicsLayer {
                     val pop = 0.9f + 0.1f * appear.value
-                    scaleX = pressScale * pop * bump.value
-                    scaleY = pressScale * pop * bump.value
+                    scaleX = pressScale * pop * bump.value.coerceAtMost(1.05f)
+                    scaleY = pressScale * pop * bump.value.coerceAtMost(1.05f)
                     translationX = swipeX.value + stretchPx / 2f
                     translationY = pullY
                     // Zieht sich beim Ziehen leicht in die Länge.
@@ -524,8 +524,9 @@ private fun IslandHostBody() {
                     alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value
                 }
                 .layout { m, _ ->
-                    val w = width.roundToPx() + abs(stretchPx).roundToInt()
-                    val h = height.roundToPx()
+                    // Beim schnellen Auf- und Zuklappen darf die Feder nicht weit über das Ziel schießen.
+                    val w = (if (growing) minOf(width.roundToPx(), (targetW * 1.05f).dp.roundToPx()) else width.roundToPx()) + abs(stretchPx).roundToInt()
+                    val h = if (growing) minOf(height.roundToPx(), (targetH * 1.06f).dp.roundToPx()) else height.roundToPx()
                     val pl = m.measure(Constraints.fixed(w, h))
                     layout(w, h) { pl.place(0, 0) }
                 }
@@ -841,8 +842,7 @@ private fun IdleDots(sc: Float) {
 private fun SmallIcon(icon: ImageBitmap?, size: Dp, pulse: Boolean = false) {
     if (icon != null) {
         // Klingelnder Anruf: Symbol pulsiert wie ein Herzschlag.
-        val lpIcon by IslandBus.lowPower.collectAsState()
-        val beat = if (pulse && !lpIcon) {
+        val beat = if (pulse) {
             val tr = rememberInfiniteTransition(label = "ring")
             tr.animateFloat(
                 1f, 1.28f,
@@ -1196,9 +1196,8 @@ private fun Chrono(
     }
     val base = e.chronoBase ?: return
     val ms = if (e.countDown) base - now else now - base
-    val lp by IslandBus.lowPower.collectAsState()
     val rollSetting = IslandBus.settings.collectAsState().value.rollDigits
-    RollingText(formatClock(ms), size, color, rollSetting && !lp, modifier)
+    RollingText(formatClock(ms), size, color, rollSetting, modifier)
 }
 
 /** Ersetzt die Prozentzahl am Anfang des Titels ("62 % · LÄDT") durch den animierten Wert. */
@@ -1389,7 +1388,7 @@ private fun OngoingExpanded(
         tween(if (chargeOn) 1100 else 0, easing = FastOutSlowInEasing), label = "chg",
     )
     val shownPct = (shownProg * 100f).roundToInt()
-    val glowOn = chargeOn && e.title.contains("LÄDT") && !IslandBus.lowPower.collectAsState().value
+    val glowOn = chargeOn && e.title.contains("LÄDT")
     val glow = if (glowOn) rememberInfiniteTransition(label = "glow").animateFloat(
         0.45f, 1f, infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "g",
     ).value else 1f
