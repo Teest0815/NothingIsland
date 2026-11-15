@@ -248,6 +248,7 @@ private fun IslandHostBody() {
     val dropY = remember { Animatable(0f) }
     val leave = remember { Animatable(0f) }
     val stackShift = remember { Animatable(0f) }
+    var stackHold by remember { mutableStateOf(false) }
     val dens = androidx.compose.ui.platform.LocalDensity.current
     var suppressLinger by remember { mutableStateOf(false) }
 
@@ -491,7 +492,7 @@ private fun IslandHostBody() {
     val stackP: () -> Float = {
         val sw = abs(swipeX.value) / with(dens) { 110.dp.toPx() }
         val pl = pullY / with(dens) { 18.dp.toPx() }
-        maxOf(sw, pl, leave.value).coerceIn(0f, 1f)
+        maxOf(sw, pl, leave.value, if (stackHold) 1f else 0f).coerceIn(0f, 1f)
     }
     val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || (mode == Mode.QUICK && quickPages.size <= 1)
     LaunchedEffect(mode) { swipeX.snapTo(0f) }
@@ -632,15 +633,22 @@ private fun IslandHostBody() {
                                 a?.markRead?.let { runCatching { it.send() } }
                                 if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                                 armed = false
-                                // Kein Hochgleiten: Versatz sofort weg, die Meldung schrumpft an Ort und Stelle in die kleine Pille.
-                                pullY = 0f
                                 suppressLinger = true
                                 if (pendingList.isNotEmpty()) {
-                                    // Gelesene Karte schrumpft und blendet aus, die nächste rückt nach vorn.
-                                    leave.animateTo(1f, androidx.compose.animation.core.keyframes<Float> { durationMillis = 330; 0f at 0; -0.1f at 80 using FastOutSlowInEasing; 1f at 330 using FastOutSlowInEasing })
+                                    // Gelesene Karte schrumpft aus der gezogenen Position heraus (kein Zurückspringen),
+                                    // die nächste bleibt vorn.
+                                    stackHold = true
+                                    launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(330, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
+                                    leave.animateTo(1f, androidx.compose.animation.core.keyframes<Float> { durationMillis = 330; 0f at 0; 1f at 330 using FastOutSlowInEasing })
                                     IslandBus.dismiss()
+                                    pullY = 0f
                                     leave.snapTo(0f)
-                                } else IslandBus.dismiss()
+                                    stackHold = false
+                                } else {
+                                    // Kein Hochgleiten: Versatz sofort weg, die Meldung schrumpft an Ort und Stelle in die kleine Pille.
+                                    pullY = 0f
+                                    IslandBus.dismiss()
+                                }
                             } else {
                                 androidx.compose.animation.core.animate(y, 0f, animationSpec = spring(dampingRatio = 0.55f, stiffness = 420f)) { v, _ -> pullY = v }
                             }
