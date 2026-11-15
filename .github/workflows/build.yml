@@ -22,6 +22,24 @@ jobs:
         with:
           gradle-version: 8.9
 
+      # Signierschlüssel aus den Repository-Secrets KEYSTORE_BASE64 und KEYSTORE_PASSWORD.
+      - name: Signierschlüssel einrichten
+        env:
+          KS_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          KS_PW: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KS_B64" ] || [ -z "$KS_PW" ]; then
+            if [ "${{ github.repository }}" = "Teest0815/NothingIsland" ]; then
+              echo "::error::Secrets KEYSTORE_BASE64 / KEYSTORE_PASSWORD fehlen. Ohne festen Schlüssel ließe sich die APK nicht über die alte installieren."
+              exit 1
+            fi
+            echo "Kein Schlüssel hinterlegt: Standard-Debug-Signatur (Fork)."
+          else
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$KS_PW" >> "$GITHUB_ENV"
+          fi
+
       - name: Build debug APK
         run: gradle assembleDebug
 

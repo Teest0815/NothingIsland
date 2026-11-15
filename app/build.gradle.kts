@@ -18,23 +18,28 @@ android {
         versionName = "1." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
     }
 
-    // Fester Schlüssel: Nur so lassen sich neue Versionen über die alte App installieren.
+    // Fester Schlüssel aus der Umgebung (GitHub-Secrets): Nur so lassen sich neue Versionen über die alte App installieren.
+    // Ohne diese Variablen (lokaler Build, Forks) wird mit dem Standard-Debug-Schlüssel signiert.
+    val ksFile = System.getenv("KEYSTORE_FILE")
+    val ksPass = System.getenv("KEYSTORE_PASSWORD")
     signingConfigs {
-        create("shared") {
-            storeFile = rootProject.file("keystore/nothingisland.jks")
-            storePassword = "nothingisland"
-            keyAlias = "nothingisland"
-            keyPassword = "nothingisland"
+        if (ksFile != null && ksPass != null) {
+            create("shared") {
+                storeFile = file(ksFile)
+                storePassword = ksPass
+                keyAlias = "nothingisland"
+                keyPassword = ksPass
+            }
         }
     }
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("shared")
+            signingConfigs.findByName("shared")?.let { signingConfig = it }
         }
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("shared")
+            signingConfigs.findByName("shared")?.let { signingConfig = it }
         }
     }
     compileOptions {
