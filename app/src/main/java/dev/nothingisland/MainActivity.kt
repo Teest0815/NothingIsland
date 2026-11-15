@@ -544,6 +544,12 @@ class MainActivity : ComponentActivity() {
             ToggleRow("Meldungen stapeln (Wischen entfernt die oberste Karte)", s.multiNotif) { c -> edit { it.copy(multiNotif = c) } }
             ToggleRow("Meldungen derselben App zu einer Karte zusammenfassen", s.groupNotif) { c -> edit { it.copy(groupNotif = c) } }
             ToggleRow("Bestätigungscodes erkennen (Tippen kopiert)", s.otpCodes) { c -> edit { it.copy(otpCodes = c) } }
+            SettingSlider("Stapel: Kompaktheit", "${(s.stackCompact * 100).roundToInt()} %", s.stackCompact, 0f..1f) { v ->
+                edit { it.copy(stackCompact = (v * 20f).roundToInt() / 20f) }
+            }
+            SettingSlider("Stapel: Deckkraft der Karten dahinter", "${(s.stackAlpha * 100).roundToInt()} %", s.stackAlpha, 0.15f..1f) { v ->
+                edit { it.copy(stackAlpha = (v * 20f).roundToInt() / 20f) }
+            }
             ToggleRow("Meldung nach unten ziehen: als gelesen markieren", s.swipeDownRead) { c -> edit { it.copy(swipeDownRead = c) } }
             ToggleRow("Kopierten Text kurz anzeigen (Zwischenablage)", s.clipboard) { c -> edit { it.copy(clipboard = c) } }
             ToggleRow("System-Pop-ups anderer Apps ausblenden", s.suppressPopups) { c ->

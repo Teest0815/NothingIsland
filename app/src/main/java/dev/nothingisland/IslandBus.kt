@@ -110,6 +110,10 @@ data class IslandSettings(
     val haptics: Boolean = true,
     /** 1 = leicht, 2 = mittel, 3 = stark. */
     val hapticLevel: Int = 2,
+    /** Kartenstapel: 0 = locker, 1 = ganz kompakt. */
+    val stackCompact: Float = 0.5f,
+    /** Deckkraft der Karten hinter der obersten (0.15 .. 1). */
+    val stackAlpha: Float = 0.55f,
     /** 0 Tick, 1 Klick, 2 Schwer, 3 Doppelt, 4 Frei (Dauer und Stärke selbst wählen). */
     val hapticStyle: Int = 1,
     val hapticMs: Int = 25,
@@ -343,16 +347,14 @@ object IslandBus {
             } else if (event.key.isNotEmpty() && cur.key == event.key) {
                 _current.value = event // Aktualisierung derselben Unterhaltung
             } else {
-                _pending.update { list ->
-                    val same = if (group && event.kind == Kind.OTHER && event.code == null)
-                        list.firstOrNull { it.app == event.app && it.kind == Kind.OTHER && it.code == null } else null
-                    if (same != null) {
-                        list.map { if (it === same) event.copy(count = if (event.key == same.key) same.count else same.count + 1) else it }
-                    } else {
-                        val rest = if (event.key.isEmpty()) list else list.filterNot { it.key == event.key }
-                        (rest + event).takeLast(6)
-                    }
-                }
+                // Neueste Meldung kommt nach oben, die bisherige oberste rutscht direkt dahinter.
+                val list = _pending.value
+                val same = if (group && event.kind == Kind.OTHER && event.code == null)
+                    list.firstOrNull { it.app == event.app && it.kind == Kind.OTHER && it.code == null } else null
+                val top = if (same != null) event.copy(count = if (event.key == same.key) same.count else same.count + 1) else event
+                val rest = list.filterNot { it === same || (event.key.isNotEmpty() && it.key == event.key) }
+                _pending.value = (listOf(cur) + rest).take(5)
+                _current.value = top
             }
             return
         }
@@ -440,6 +442,8 @@ object IslandBus {
             statusOff = p.getString("statusOff", d.statusOff) ?: "",
             haptics = p.getBoolean("haptics", d.haptics),
             hapticLevel = p.getInt("hapticLevel", d.hapticLevel),
+            stackCompact = p.getFloat("stackCompact", d.stackCompact),
+            stackAlpha = p.getFloat("stackAlpha", d.stackAlpha),
             hapticStyle = p.getInt("hapticStyle", d.hapticStyle),
             hapticMs = p.getInt("hapticMs", d.hapticMs),
             hapticAmp = p.getInt("hapticAmp", d.hapticAmp),
@@ -497,6 +501,8 @@ object IslandBus {
             .putString("statusOff", s.statusOff)
             .putBoolean("haptics", s.haptics)
             .putInt("hapticLevel", s.hapticLevel)
+            .putFloat("stackCompact", s.stackCompact)
+            .putFloat("stackAlpha", s.stackAlpha)
             .putInt("hapticStyle", s.hapticStyle)
             .putInt("hapticMs", s.hapticMs)
             .putInt("hapticAmp", s.hapticAmp)

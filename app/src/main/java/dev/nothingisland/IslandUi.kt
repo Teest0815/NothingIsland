@@ -244,6 +244,10 @@ private fun IslandHostBody() {
     var reported by remember { mutableStateOf(Triple(0f, 0f, 0f)) }
     var snapNext by remember { mutableStateOf(false) }
     val appear = remember { Animatable(1f) }
+    // Kartenstapel: neue Meldung fällt von oben auf den Stapel, gelesene Karte schrumpft weg.
+    val dropY = remember { Animatable(0f) }
+    val leave = remember { Animatable(0f) }
+    val dens = androidx.compose.ui.platform.LocalDensity.current
     var suppressLinger by remember { mutableStateOf(false) }
 
     // Leise Meldungen (App-Regel) gehen direkt in die kleine Pille.
@@ -257,7 +261,15 @@ private fun IslandHostBody() {
     // Neue Meldung: aufklappen, nach X Sekunden (oder Tippen außerhalb) in die kleine Pille schrumpfen.
     LaunchedEffect(alert?.id) {
         val a = alert ?: return@LaunchedEffect
+        val prev = lastAlert
         lastAlert = a
+        if (prev != null && prev.id != a.id && pendingList.any { it.id == prev.id }) {
+            // Neue Meldung landet oben auf dem Stapel, die bisherige rutscht dahinter.
+            dropY.snapTo(with(dens) { -30.dp.toPx() })
+            appear.snapTo(0.6f)
+            launch { dropY.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 380f)) }
+            launch { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = 380f)) }
+        }
         try {
             // Mit gestapelten Karten bleibt mehr Zeit zum Durchblättern; jedes Wischen startet die Zeit neu.
             delay(s.alertSeconds * 1000L + 3000L * pendingList.size)
@@ -469,6 +481,14 @@ private fun IslandHostBody() {
     val canSkip = mode == Mode.COMPACT && s.swipeSkip && current?.kind == Kind.MEDIA && current.media != null
     val curForSkip by rememberUpdatedState(current)
     val stackBehind = if (mode == Mode.ALERT && s.multiNotif) minOf(pendingList.size, 2) else 0
+    val stackOffDp = 9f - 7f * s.stackCompact
+    val stackInsetDp = 12f - 9f * s.stackCompact
+    // Fortschritt 0..1: je weiter die oberste Karte weggezogen wird, desto mehr rückt die nächste nach vorn.
+    val stackP: () -> Float = {
+        val sw = abs(swipeX.value) / with(dens) { 110.dp.toPx() }
+        val pl = pullY / with(dens) { 18.dp.toPx() }
+        maxOf(sw, pl, leave.value).coerceIn(0f, 1f)
+    }
     val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || (mode == Mode.QUICK && quickPages.size <= 1)
     LaunchedEffect(mode) { swipeX.snapTo(0f) }
     val onSwipeAway: () -> Unit = {
@@ -495,7 +515,7 @@ private fun IslandHostBody() {
     val slotTarget = if (circleItem != null) slotMax else 0f
     val topTarget = ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
     // Beim Herunterziehen einer Meldung braucht das Fenster Platz nach unten, sonst wird sie abgeschnitten.
-    val winH = topTarget + targetH + WINDOW_MARGIN + (if (canPullRead) 40f else 0f) + (if (mode == Mode.ALERT && s.multiNotif && pendingList.isNotEmpty()) 12f else 0f)
+    val winH = topTarget + targetH + WINDOW_MARGIN + (if (canPullRead) 40f else 0f) + (if (mode == Mode.ALERT && s.multiNotif && pendingList.isNotEmpty()) stackOffDp * 2f + 6f else 0f)
     LaunchedEffect(winH, span) {
         val gh = maxOf(winH, reported.second)
         if (span != reported.first || gh != reported.second) {
@@ -519,6 +539,36 @@ private fun IslandHostBody() {
     Row(modifier = Modifier.padding(top = maxOf(topPad, 0.dp)), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.width(slot))
 
+        Box {
+        // Nächste Karte: liegt hinter der obersten, wird beim Wegziehen größer, deckend und zeigt ihren Text.
+        val nextEv = pendingList.firstOrNull()
+        if (stackBehind > 0 && nextEv != null) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        val p = stackP()
+                        val inset = stackInsetDp.dp.toPx()
+                        val k0 = ((size.width - 2f * inset) / size.width.coerceAtLeast(1f)).coerceIn(0.5f, 1f)
+                        val k = k0 + (1f - k0) * p
+                        scaleX = k
+                        scaleY = k
+                        transformOrigin = TransformOrigin(0.5f, 0f)
+                        translationY = stackOffDp.dp.toPx() * (1f - p)
+                    }
+                    .clip(shape)
+                    .drawBehind {
+                        val p = stackP()
+                        drawRect(Bg.copy(alpha = s.stackAlpha + (1f - s.stackAlpha) * p))
+                    }
+                    .border(1.dp, Hairline, shape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(Modifier.graphicsLayer { val p = stackP(); alpha = p * p }) {
+                    AlertContent(nextEv, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp)) { }
+                }
+            }
+        }
         Box(
             modifier = Modifier
                 .graphicsLayer {
@@ -526,12 +576,18 @@ private fun IslandHostBody() {
                     scaleX = pressScale * pop * bump.value.coerceAtMost(1.05f)
                     scaleY = pressScale * pop * bump.value.coerceAtMost(1.05f)
                     translationX = swipeX.value + stretchPx / 2f
-                    translationY = pullY
-                    // Gestapelte Karten kippen beim Wischen leicht wie beim Kartenmischen.
-                    if (stackBehind > 0) rotationZ = (swipeX.value / size.width.coerceAtLeast(1f)) * 9f
+                    translationY = pullY + dropY.value
+                    // Gestapelte Karten kippen beim Wischen leicht.
+                    if (stackBehind > 0) {
+                        rotationZ = (swipeX.value / size.width.coerceAtLeast(1f)) * 9f
+                        val lv = leave.value
+                        scaleX *= 1f - 0.12f * lv
+                        scaleY *= 1f - 0.12f * lv
+                    }
                     // Zieht sich beim Ziehen leicht in die Länge.
                     if (pullY > 0f) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
-                    alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value
+                    alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value *
+                        (if (stackBehind > 0) 1f - leave.value else 1f)
                 }
                 .layout { m, _ ->
                     // Beim schnellen Auf- und Zuklappen darf die Feder nicht weit über das Ziel schießen.
@@ -544,19 +600,22 @@ private fun IslandHostBody() {
                     layout(w, h) { pl.place(0, 0) }
                 }
                 .drawBehind {
-                    // Karten darunter: schauen unten als schmale Streifen hervor.
-                    for (i in stackBehind downTo 1) {
-                        val inset = 6.dp.toPx() * i
-                        val off = 4.dp.toPx() * i
+                    // Dritte Karte: nur als Streifen, rückt beim Wegwischen der obersten nach.
+                    if (stackBehind >= 2) {
+                        val p = stackP()
+                        val k = 2f - p
+                        val inset = stackInsetDp.dp.toPx() * k
+                        val off = stackOffDp.dp.toPx() * k
                         val r = androidx.compose.ui.geometry.CornerRadius(corner.toPx().coerceAtMost(size.height / 2f))
+                        val a = s.stackAlpha * 0.7f
                         drawRoundRect(
-                            color = Color(0xFF1B1B1B).copy(alpha = 1f - 0.18f * i),
+                            color = Color(0xFF1B1B1B).copy(alpha = a),
                             topLeft = Offset(inset, off),
                             size = androidx.compose.ui.geometry.Size((size.width - 2 * inset).coerceAtLeast(0f), size.height),
                             cornerRadius = r,
                         )
                         drawRoundRect(
-                            color = Hairline,
+                            color = Hairline.copy(alpha = a),
                             topLeft = Offset(inset, off),
                             size = androidx.compose.ui.geometry.Size((size.width - 2 * inset).coerceAtLeast(0f), size.height),
                             cornerRadius = r,
@@ -586,13 +645,12 @@ private fun IslandHostBody() {
                                 // Kein Hochgleiten: Versatz sofort weg, die Meldung schrumpft an Ort und Stelle in die kleine Pille.
                                 pullY = 0f
                                 suppressLinger = true
-                                val hadStack = pendingList.isNotEmpty()
-                                IslandBus.dismiss()
-                                if (hadStack) {
-                                    // Nächste Karte rückt weich nach, statt hart zu springen.
-                                    appear.snapTo(0.5f)
-                                    appear.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 420f))
-                                }
+                                if (pendingList.isNotEmpty()) {
+                                    // Gelesene Karte schrumpft und blendet aus, die nächste rückt nach vorn.
+                                    leave.animateTo(1f, tween(190, easing = FastOutSlowInEasing))
+                                    IslandBus.dismiss()
+                                    leave.snapTo(0f)
+                                } else IslandBus.dismiss()
                             } else {
                                 androidx.compose.animation.core.animate(y, 0f, animationSpec = spring(dampingRatio = 0.55f, stiffness = 420f)) { v, _ -> pullY = v }
                             }
@@ -655,13 +713,12 @@ private fun IslandHostBody() {
                             swipeScope.launch {
                                 if (abs(x) > 80.dp.toPx() && stackBehind > 0) {
                                     // Oberste Karte fliegt zur Seite und ist weg, die nächste rückt nach vorn.
-                                    swipeX.animateTo(sign(x) * size.width * 0.7f, tween(140))
+                                    swipeX.animateTo(sign(x) * size.width * 0.7f, tween(150))
                                     suppressLinger = true
+                                    // Die nächste Karte ist durch das Wegziehen schon groß und deckend: nahtlos übernehmen.
                                     IslandBus.dismiss()
-                                    appear.snapTo(0.5f)
                                     swipeX.snapTo(0f)
                                     if (s.haptics) QuickActions.haptic(ctx, 1)
-                                    appear.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 420f))
                                 } else if (abs(x) > 80.dp.toPx()) {
                                     swipeX.animateTo(sign(x) * size.width * 0.8f, tween(160))
                                     // Die kleine Pille erscheint direkt an ihrem Platz und wächst nicht aus der Mitte.
@@ -783,12 +840,11 @@ private fun IslandHostBody() {
                             runCatching { it.markRead?.send() }
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                             suppressLinger = true
-                            val hadStack = pendingList.isNotEmpty()
-                            IslandBus.dismiss()
-                            if (hadStack) swipeScope.launch {
-                                appear.snapTo(0.5f)
-                                appear.animateTo(1f, spring(dampingRatio = 0.6f, stiffness = 420f))
-                            }
+                            if (pendingList.isNotEmpty()) swipeScope.launch {
+                                leave.animateTo(1f, tween(190, easing = FastOutSlowInEasing))
+                                IslandBus.dismiss()
+                                leave.snapTo(0f)
+                            } else IslandBus.dismiss()
                         }, onCopyCode = {
                             it.code?.let { c ->
                                 if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
@@ -833,6 +889,7 @@ private fun IslandHostBody() {
                     }
                 }
             }
+        }
         }
 
         Box(
