@@ -7,6 +7,18 @@ Gebaut mit Kotlin und Jetpack Compose, getestet auf Xiaomi/HyperOS.
   <img src="docs/demo.gif" alt="Nothing Island: Musik-Pille klappt auf und wieder zu" width="420">
 </p>
 
+## Im Einsatz
+
+<table>
+  <tr>
+    <td align="center"><b>Schnellzugriff</b><br>mehrere Seiten, Smart Home<br><img src="docs/quickpanel.gif" width="300"></td>
+    <td align="center"><b>Navigation</b><br>Live-Pille und aufgeklappt<br><img src="docs/navigation.gif" width="300"></td>
+  </tr>
+  <tr>
+    <td align="center" colspan="2"><b>Timer und Musik</b><br>zwei Aktivitäten: Pille und Kreis tauschen<br><img src="docs/timer-musik.gif" width="300"></td>
+  </tr>
+</table>
+
 ## Installieren
 
 1. Unter **Releases → latest** die `NothingIsland.apk` laden (jede Version gibt es zusätzlich als `NothingIsland-v1.N.apk`).
