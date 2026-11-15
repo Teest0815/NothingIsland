@@ -583,7 +583,7 @@ private fun IslandHostBody() {
         Box(
             modifier = Modifier
                 .graphicsLayer {
-                    val pop = 0.9f + 0.1f * appear.value
+                    val pop = 0.6f + 0.4f * appear.value
                     scaleX = pressScale * pop * bump.value.coerceAtMost(1.05f)
                     scaleY = pressScale * pop * bump.value.coerceAtMost(1.05f)
                     translationX = swipeX.value + stretchPx / 2f
@@ -601,7 +601,7 @@ private fun IslandHostBody() {
                     }
                     // Zieht sich beim Ziehen leicht in die Länge.
                     if (pullY > 0f) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
-                    alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value *
+                    alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f) *
                         (if (stackBehind > 0) 1f - leave.value.coerceAtLeast(0f).let { it * it } else 1f)
                 }
                 .layout { m, _ ->
@@ -638,8 +638,8 @@ private fun IslandHostBody() {
                                     // Gelesene Karte schrumpft aus der gezogenen Position heraus (kein Zurückspringen),
                                     // die nächste bleibt vorn.
                                     stackHold = true
-                                    launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(330, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
-                                    leave.animateTo(1f, androidx.compose.animation.core.keyframes<Float> { durationMillis = 330; 0f at 0; 1f at 330 using FastOutSlowInEasing })
+                                    launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(190, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
+                                    leave.animateTo(1f, androidx.compose.animation.core.keyframes<Float> { durationMillis = 190; 0f at 0; 1f at 190 using FastOutSlowInEasing })
                                     IslandBus.dismiss()
                                     pullY = 0f
                                     leave.snapTo(0f)
@@ -724,7 +724,9 @@ private fun IslandHostBody() {
                                     appear.snapTo(0f)
                                     onSwipeAway()
                                     swipeX.snapTo(0f)
-                                    appear.animateTo(1f, tween(260))
+                                    launch { delay(60); snapNext = false }
+                                    // Kleine Pille poppt federnd wieder auf.
+                                    appear.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 360f))
                                     snapNext = false
                                 } else {
                                     swipeX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f))
@@ -839,7 +841,7 @@ private fun IslandHostBody() {
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                             suppressLinger = true
                             if (pendingList.isNotEmpty()) swipeScope.launch {
-                                leave.animateTo(1f, androidx.compose.animation.core.keyframes<Float> { durationMillis = 330; 0f at 0; -0.1f at 80 using FastOutSlowInEasing; 1f at 330 using FastOutSlowInEasing })
+                                leave.animateTo(1f, androidx.compose.animation.core.keyframes<Float> { durationMillis = 200; 0f at 0; -0.06f at 40 using FastOutSlowInEasing; 1f at 200 using FastOutSlowInEasing })
                                 IslandBus.dismiss()
                                 leave.snapTo(0f)
                             } else IslandBus.dismiss()
@@ -1374,8 +1376,9 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
             }
         }
         Spacer(Modifier.width((14f * sc).dp))
-        val reveal = remember(event.id) { Animatable(0f) }
-        LaunchedEffect(event.id) { reveal.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 260f)) }
+        // Nur beim ersten Erscheinen einblenden, nicht bei jedem Kartenwechsel im Stapel (sonst blitzt der Text auf).
+        val reveal = remember { Animatable(0f) }
+        LaunchedEffect(Unit) { reveal.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 260f)) }
         Column(modifier = Modifier.weight(1f).graphicsLayer {
             alpha = reveal.value.coerceIn(0f, 1f)
             translationX = (1f - reveal.value) * 16.dp.toPx()
