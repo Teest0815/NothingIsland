@@ -1527,16 +1527,43 @@ private enum class TransportIcon { PLAY, PAUSE, PREV, NEXT }
 @Composable
 private fun TransportButton(kind: TransportIcon, sc: Float, big: Boolean, onClick: () -> Unit) {
     val d = (if (big) 52f else 40f) * sc
+    val nudge = remember { Animatable(0f) }
+    val pop = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
+    // Play/Pause: Symbol dreht und poppt beim Wechsel. Vor/Zurück: Symbol schnippt in Richtung.
+    var firstKind by remember { mutableStateOf(true) }
+    LaunchedEffect(kind) {
+        if (firstKind) { firstKind = false; return@LaunchedEffect }
+        if (kind == TransportIcon.PLAY || kind == TransportIcon.PAUSE) {
+            pop.snapTo(0f)
+            pop.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 420f))
+        }
+    }
     Box(
         modifier = Modifier
             .size(d.dp)
+            .bounceClick({
+                if (kind == TransportIcon.NEXT || kind == TransportIcon.PREV) scope.launch {
+                    nudge.snapTo(if (kind == TransportIcon.NEXT) 1f else -1f)
+                    nudge.animateTo(0f, spring(dampingRatio = 0.35f, stiffness = 380f))
+                }
+                onClick()
+            })
             .clip(CircleShape)
-            .background(if (big) Fg else ButtonBg)
-            .clickable(onClick = onClick),
+            .background(if (big) Fg else ButtonBg),
         contentAlignment = Alignment.Center,
     ) {
         val tint = if (big) Bg else Fg
-        Canvas(Modifier.size((d * 0.42f).dp)) {
+        Canvas(
+            Modifier.size((d * 0.42f).dp).graphicsLayer {
+                translationX = nudge.value * d * 0.22f * density
+                if (kind == TransportIcon.PLAY || kind == TransportIcon.PAUSE) {
+                    val p = pop.value
+                    scaleX = 0.4f + 0.6f * p; scaleY = 0.4f + 0.6f * p
+                    rotationZ = (1f - p) * (if (kind == TransportIcon.PAUSE) -70f else 70f)
+                }
+            },
+        ) {
             val w = size.width
             val h = size.height
             when (kind) {
@@ -1562,15 +1589,27 @@ private fun TransportButton(kind: TransportIcon, sc: Float, big: Boolean, onClic
 
 @Composable
 private fun SeekButton(label: String, sc: Float, onClick: () -> Unit) {
+    val nudge = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val dir = if (label.startsWith("-") || label.startsWith("«")) -1f else 1f
     Box(
         modifier = Modifier
             .size((38f * sc).dp)
+            .bounceClick({
+                scope.launch {
+                    nudge.snapTo(dir)
+                    nudge.animateTo(0f, spring(dampingRatio = 0.35f, stiffness = 380f))
+                }
+                onClick()
+            })
             .clip(CircleShape)
-            .background(ButtonBg)
-            .clickable(onClick = onClick),
+            .background(ButtonBg),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = Fg, fontFamily = Mono, fontSize = (11f * sc).sp)
+        Text(
+            label, color = Fg, fontFamily = Mono, fontSize = (11f * sc).sp,
+            modifier = Modifier.graphicsLayer { translationX = nudge.value * 7.dp.toPx() },
+        )
     }
 }
 
@@ -1787,7 +1826,13 @@ private fun HaSliderRow(t: QuickTile, sc: Float, modifier: Modifier, onUsed: () 
     val on = states[id]?.isOn == true
     val remote = HomeAssistant.brightnessPct(id) ?: if (on) 100 else 0
     var local by remember { mutableStateOf<Float?>(null) }
-    val shown = local ?: remote.toFloat()
+    val target = local ?: remote.toFloat()
+    // Beim Ziehen direkt, sonst weich mit leichtem Nachfedern (Tippen, Loslassen, Antwort von Home Assistant).
+    val shown by animateFloatAsState(
+        target,
+        if (local != null) snap() else spring(dampingRatio = 0.55f, stiffness = 260f),
+        label = "ha",
+    )
     var w by remember { mutableIntStateOf(1) }
     var lastSend by remember { mutableLongStateOf(0L) }
     val shape = RoundedCornerShape((14f * sc).dp)
@@ -1846,11 +1891,11 @@ private fun HaSliderRow(t: QuickTile, sc: Float, modifier: Modifier, onUsed: () 
             Box(
                 Modifier
                     .size((34f * sc).dp)
-                    .clip(CircleShape)
-                    .clickable {
+                    .bounceClick({
                         HomeAssistant.toggle(id)
                         onUsed()
-                    },
+                    })
+                    .clip(CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Image(
@@ -1891,6 +1936,8 @@ private fun MediaExpanded(
     // Titelwechsel: Cover blendet über, Text gleitet seitlich aus und ein (nur bei neuem Titel).
     var track by remember { mutableStateOf(Triple(e.title, e.text, e.art)) }
     if (track.first != e.title || (track.third == null && e.art != null)) track = Triple(e.title, e.text, e.art)
+    val seekPulse = remember { Animatable(0f) }
+    val seekScope = rememberCoroutineScope()
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     var base by remember(e.positionMs, e.positionStamp) { mutableStateOf(e.positionMs to e.positionStamp) }
     val screenOnM by IslandBus.screenOn.collectAsState()
@@ -1982,8 +2029,8 @@ private fun MediaExpanded(
                     fontFamily = Mono,
                     fontSize = (11f * sc).sp,
                     modifier = Modifier
+                        .bounceClick(onCycle)
                         .clip(RoundedCornerShape(50))
-                        .clickable(onClick = onCycle)
                         .padding(horizontal = (8f * sc).dp, vertical = (6f * sc).dp),
                 )
             }
@@ -2003,14 +2050,19 @@ private fun MediaExpanded(
                             runCatching { mc.transportControls.seekTo(target.toLong()) }
                             base = target.toLong() to SystemClock.elapsedRealtime()
                             now = SystemClock.elapsedRealtime()
+                            seekScope.launch {
+                                seekPulse.snapTo(1f)
+                                seekPulse.animateTo(0f, spring(dampingRatio = 0.4f, stiffness = 300f))
+                            }
                             onAction()
                         }
                     },
                 contentAlignment = Alignment.CenterStart,
             ) {
-                Box(Modifier.fillMaxWidth().height((3f * sc).dp).clip(RoundedCornerShape(50)).background(DotGray))
+                val barH = ((3f + 4f * seekPulse.value) * sc).dp
+                Box(Modifier.fillMaxWidth().height(barH).clip(RoundedCornerShape(50)).background(DotGray))
                 Box(
-                    Modifier.fillMaxWidth(frac.coerceIn(0f, 1f)).height((3f * sc).dp)
+                    Modifier.fillMaxWidth(frac.coerceIn(0f, 1f)).height(barH)
                         .clip(RoundedCornerShape(50)).background(NothingRed),
                 )
             }
