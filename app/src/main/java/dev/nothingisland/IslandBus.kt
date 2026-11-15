@@ -140,7 +140,7 @@ data class IslandSettings(
     /** Ladeanzeige: Balken füllt sich, Prozent zählen hoch. */
     val chargeAnim: Boolean = true,
     /** Mehrere Meldungen derselben App zusammenfassen. */
-    val groupNotif: Boolean = true,
+    val groupNotif: Boolean = false,
     /** Bestätigungscodes erkennen und Kopieren anbieten. */
     val otpCodes: Boolean = true,
     /** Kopierten Text kurz in der Pille zeigen. */
@@ -344,15 +344,17 @@ object IslandBus {
             ) {
                 // Gleiche App: zusammenfassen, neueste Meldung zeigen, Zähler hochzählen.
                 _current.value = event.copy(count = if (event.key == cur.key) cur.count else cur.count + 1)
-            } else if (event.key.isNotEmpty() && cur.key == event.key) {
-                _current.value = event // Aktualisierung derselben Unterhaltung
+            } else if (event.key.isNotEmpty() && cur.key == event.key && cur.title == event.title && cur.text == event.text) {
+                _current.value = event // gleiche Meldung nur erneut gemeldet: ersetzen statt doppelt stapeln
             } else {
                 // Neueste Meldung kommt nach oben, die bisherige oberste rutscht direkt dahinter.
                 val list = _pending.value
                 val same = if (group && event.kind == Kind.OTHER && event.code == null)
                     list.firstOrNull { it.app == event.app && it.kind == Kind.OTHER && it.code == null } else null
                 val top = if (same != null) event.copy(count = if (event.key == same.key) same.count else same.count + 1) else event
-                val rest = list.filterNot { it === same || (event.key.isNotEmpty() && it.key == event.key) }
+                val rest = list.filterNot {
+                    it === same || (event.key.isNotEmpty() && it.key == event.key && it.title == event.title && it.text == event.text)
+                }
                 _pending.value = (listOf(cur) + rest).take(5)
                 _current.value = top
             }
@@ -458,7 +460,7 @@ object IslandBus {
             squashEntry = p.getBoolean("squashEntry", d.squashEntry),
             rollDigits = p.getBoolean("rollDigits", d.rollDigits),
             chargeAnim = p.getBoolean("chargeAnim", d.chargeAnim),
-            groupNotif = p.getBoolean("groupNotif", d.groupNotif),
+            groupNotif = p.getBoolean("groupNotif2", d.groupNotif),
             otpCodes = p.getBoolean("otpCodes", d.otpCodes),
             clipboard = p.getBoolean("clipboard", d.clipboard),
             workoutMetric = p.getString("workoutMetric", d.workoutMetric) ?: d.workoutMetric,
@@ -517,7 +519,7 @@ object IslandBus {
             .putBoolean("squashEntry", s.squashEntry)
             .putBoolean("rollDigits", s.rollDigits)
             .putBoolean("chargeAnim", s.chargeAnim)
-            .putBoolean("groupNotif", s.groupNotif)
+            .putBoolean("groupNotif2", s.groupNotif)
             .putBoolean("otpCodes", s.otpCodes)
             .putBoolean("clipboard", s.clipboard)
             .putString("workoutMetric", s.workoutMetric)

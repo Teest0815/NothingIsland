@@ -276,14 +276,22 @@ private fun IslandHostBody() {
             launch { stackShift.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = 260f)) }
         }
         try {
-            // Mit gestapelten Karten bleibt mehr Zeit zum Durchblättern; jedes Wischen startet die Zeit neu.
-            delay(s.alertSeconds * 1000L + 3000L * pendingList.size)
+            // Jede Karte hat ihre eigene Zeit: nach Ablauf verschwindet nur die oberste, die nächste ist dann dran.
+            delay(s.alertSeconds * 1000L)
             while (pullY > 0f) delay(200) // nicht wegklappen, solange gezogen wird
         } finally {
             // Bleibt noch eine Weile als Text in der kleinen Pille stehen, außer sie wurde weggewischt.
-            if (suppressLinger) suppressLinger = false else lingering = a
+            if (suppressLinger) suppressLinger = false else if (pendingList.isEmpty()) lingering = a
         }
-        if (pendingList.isNotEmpty()) IslandBus.dismissAll() else IslandBus.dismiss()
+        if (pendingList.isNotEmpty()) {
+            // Nur diese Karte geht weg (schrumpft nach oben), die nächste rückt nach vorn.
+            try {
+                leave.animateTo(1f, androidx.compose.animation.core.keyframes<Float> { durationMillis = 190; 0f at 0; 1f at 190 using FastOutSlowInEasing })
+                IslandBus.dismiss()
+            } finally {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { leave.snapTo(0f) }
+            }
+        } else IslandBus.dismiss()
     }
     LaunchedEffect(lingering?.id) {
         if (lingering != null) {

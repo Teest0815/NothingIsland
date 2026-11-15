@@ -542,7 +542,7 @@ class MainActivity : ComponentActivity() {
 
         CardIf(FoldLabel("MELDUNGEN", false)) {
             ToggleRow("Meldungen stapeln (Wischen entfernt die oberste Karte)", s.multiNotif) { c -> edit { it.copy(multiNotif = c) } }
-            ToggleRow("Meldungen derselben App zu einer Karte zusammenfassen", s.groupNotif) { c -> edit { it.copy(groupNotif = c) } }
+            ToggleRow("Meldungen derselben App zu einer Karte zusammenfassen (statt stapeln)", s.groupNotif) { c -> edit { it.copy(groupNotif = c) } }
             ToggleRow("Bestätigungscodes erkennen (Tippen kopiert)", s.otpCodes) { c -> edit { it.copy(otpCodes = c) } }
             SettingSlider("Stapel: Kompaktheit", "${(s.stackCompact * 100).roundToInt()} %", s.stackCompact, 0f..1f) { v ->
                 edit { it.copy(stackCompact = (v * 20f).roundToInt() / 20f) }
