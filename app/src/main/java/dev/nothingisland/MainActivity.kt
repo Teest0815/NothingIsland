@@ -105,6 +105,25 @@ class MainActivity : ComponentActivity() {
     private val btPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
     private val calPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
 
+    private val backupSave = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri == null) return@registerForActivityResult
+        val ok = runCatching {
+            contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(SettingsBackup.export(this)) } != null
+        }.getOrDefault(false)
+        android.widget.Toast.makeText(this, if (ok) "Backup gespeichert" else "Backup fehlgeschlagen", android.widget.Toast.LENGTH_LONG).show()
+    }
+    private val backupLoad = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@registerForActivityResult
+        val text = runCatching { contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } }.getOrNull()
+        val n = if (text == null) -1 else SettingsBackup.import(this, text)
+        android.widget.Toast.makeText(
+            this,
+            if (n >= 0) "$n Einstellungen wiederhergestellt" else "Keine gültige Backup-Datei",
+            android.widget.Toast.LENGTH_LONG,
+        ).show()
+        refresh++
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         IslandBus.loadPrefs(this)
@@ -280,6 +299,22 @@ class MainActivity : ComponentActivity() {
                 alarmDump = null
             }
         }
+
+        SectionLabel("BACKUP")
+        Text(
+            "Sichert Layout, Schalter, Kacheln und App-Regeln in eine Datei. Der Home-Assistant-Zugang ist nicht enthalten.",
+            color = Muted, fontFamily = FontFamily.Monospace, fontSize = 10.sp,
+            modifier = Modifier.padding(bottom = 10.dp),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PillButton("SICHERN", filled = true, modifier = Modifier.weight(1f)) {
+                backupSave.launch("nothingisland-backup.json")
+            }
+            PillButton("WIEDERHERSTELLEN", filled = false, modifier = Modifier.weight(1f)) {
+                backupLoad.launch(arrayOf("application/json", "text/*", "application/octet-stream"))
+            }
+        }
+        Spacer(Modifier.height(18.dp))
 
         SectionLabel("SETUP")
         StepRow("01", "Über anderen Apps anzeigen", overlayOk) {

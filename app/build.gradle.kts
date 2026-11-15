@@ -22,8 +22,17 @@ android {
     // Ohne diese Variablen (lokaler Build, Forks) wird mit dem Standard-Debug-Schlüssel signiert.
     val ksFile = System.getenv("KEYSTORE_FILE")
     val ksPass = System.getenv("KEYSTORE_PASSWORD")
+    // Übergang: Liegt der alte Schlüssel im Repo, wird er verwendet, damit Updates über die installierte App möglich sind.
+    val legacy = rootProject.file("keystore/nothingisland.jks")
     signingConfigs {
-        if (ksFile != null && ksPass != null) {
+        if (legacy.exists()) {
+            create("shared") {
+                storeFile = legacy
+                storePassword = "nothingisland"
+                keyAlias = "nothingisland"
+                keyPassword = "nothingisland"
+            }
+        } else if (ksFile != null && ksPass != null) {
             create("shared") {
                 storeFile = file(ksFile)
                 storePassword = ksPass
