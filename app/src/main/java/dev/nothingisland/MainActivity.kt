@@ -35,6 +35,23 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
@@ -179,22 +196,39 @@ class MainActivity : ComponentActivity() {
                     TABS.forEachIndexed { i, name -> Chip(name, tab == i) { tab = i } }
                 }
                 Spacer(Modifier.height(4.dp))
-                if (tab == 4) {
-                    AppRulesTab(s)
-                } else {
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .verticalScroll(scroll)
-                            .padding(horizontal = 24.dp),
-                    ) {
-                        when (tab) {
-                            0 -> StartTab()
-                            1 -> LayoutTab(s)
-                            2 -> FunctionTab(s)
-                            else -> DesignTab(s)
+                LaunchedEffect(tab) { scroll.scrollTo(0) }
+                // Tabwechsel: Inhalt gleitet in Richtung des neuen Tabs ein und blendet über.
+                AnimatedContent(
+                    targetState = tab,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    transitionSpec = {
+                        val dir = if (targetState > initialState) 1 else -1
+                        ContentTransform(
+                            targetContentEnter = slideInHorizontally(spring(dampingRatio = 0.85f, stiffness = 380f)) { it / 6 * dir } +
+                                fadeIn(tween(220, delayMillis = 60)),
+                            initialContentExit = slideOutHorizontally(tween(160, easing = FastOutSlowInEasing)) { -it / 8 * dir } +
+                                fadeOut(tween(110)),
+                        )
+                    },
+                    label = "tab",
+                ) { t ->
+                    if (t == 4) {
+                        AppRulesTab(s)
+                    } else {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(scroll)
+                                .padding(horizontal = 24.dp),
+                        ) {
+                            when (t) {
+                                0 -> StartTab()
+                                1 -> LayoutTab(s)
+                                2 -> FunctionTab(s)
+                                else -> DesignTab(s)
+                            }
+                            Spacer(Modifier.height(48.dp))
                         }
-                        Spacer(Modifier.height(48.dp))
                     }
                 }
             }
@@ -358,8 +392,7 @@ class MainActivity : ComponentActivity() {
         }
 
         val sv by IslandBus.settings.collectAsState()
-        SectionLabel("SPARMODUS")
-        Card {
+        CardIf(FoldLabel("SPARMODUS", false)) {
             Text(
                 "Spart Akku: keine Dauer-Animationen (Equalizer, Puls), Zustände werden seltener geprüft. Bei ausgeschaltetem Bildschirm pausiert die Prüfung immer.",
                 color = Muted,
@@ -429,8 +462,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun LayoutTab(s: IslandSettings) {
         val widthCap = (resources.configuration.screenWidthDp - 8).coerceAtLeast(220)
-        SectionLabel("POSITION & GRÖSSE")
-        Card {
+        CardIf(FoldLabel("POSITION & GRÖSSE", true)) {
             SettingSlider("Horizontal", "${s.offsetX} dp", s.offsetX.toFloat(), -150f..150f) { v -> edit { it.copy(offsetX = v.roundToInt()) } }
             SettingSlider("Abstand von oben", "${s.offsetY} dp", s.offsetY.toFloat(), 0f..300f) { v -> edit { it.copy(offsetY = v.roundToInt()) } }
             SettingSlider("Größe", "${(s.scale * 100).roundToInt()} %", s.scale, 0.7f..1.5f) { v -> edit { it.copy(scale = (v * 20f).roundToInt() / 20f) } }
@@ -441,8 +473,7 @@ class MainActivity : ComponentActivity() {
             SettingSlider("Abstand Symbol → Text (links)", "${s.iconTextGap} dp", s.iconTextGap.toFloat(), 0f..24f) { v -> edit { it.copy(iconTextGap = v.roundToInt()) } }
         }
 
-        SectionLabel("AUFGEKLAPPTE PILLE")
-        Card {
+        CardIf(FoldLabel("AUFGEKLAPPTE PILLE", false)) {
             SettingSlider("Größe", "${(s.expandedScale * 100).roundToInt()} %", s.expandedScale, 0.7f..2f) { v ->
                 edit { it.copy(expandedScale = (v * 20f).roundToInt() / 20f) }
                 IslandBus.post(previewAlert())
@@ -484,24 +515,21 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun FunctionTab(s: IslandSettings) {
         val ctx = this@MainActivity
-        SectionLabel("ALLGEMEIN")
-        Card {
+        CardIf(FoldLabel("ANZEIGE", true)) {
             ToggleRow("Ruhe-Pille anzeigen", s.idleVisible) { c -> edit { it.copy(idleVisible = c) } }
             ToggleRow("Musik, Timer & Co. dauerhaft anzeigen", s.showOngoing) { c -> edit { it.copy(showOngoing = c) } }
             ToggleRow("Auf dem Sperrbildschirm antippbar", s.lockTouch) { c -> edit { it.copy(lockTouch = c) } }
             ToggleRow("Bei Vollbild ausblenden (Video, Spiele)", s.hideFullscreen) { c -> edit { it.copy(hideFullscreen = c) } }
             ToggleRow("Im Querformat ausblenden", s.hideLandscape) { c -> edit { it.copy(hideLandscape = c) } }
+            SettingSlider("Neue Meldung sichtbar für", "${s.alertSeconds} s", s.alertSeconds.toFloat(), 2f..15f) { v -> edit { it.copy(alertSeconds = v.roundToInt()) } }
+        }
+
+        CardIf(FoldLabel("MELDUNGEN", false)) {
             ToggleRow("Mehrere Benachrichtigungen nacheinander (Zähler +N)", s.multiNotif) { c -> edit { it.copy(multiNotif = c) } }
-            ToggleRow("Zahlen rollen (Timer, Stoppuhr, Anruf)", s.rollDigits) { c -> edit { it.copy(rollDigits = c) } }
-            ToggleRow("Große Bubble wird klein: erst kleiner, dann breiter (Squash)", s.squashEntry) { c -> edit { it.copy(squashEntry = c) } }
-            ToggleRow("Ladeanzeige animieren (Balken & Prozent)", s.chargeAnim) { c -> edit { it.copy(chargeAnim = c) } }
             ToggleRow("Meldungen derselben App zusammenfassen", s.groupNotif) { c -> edit { it.copy(groupNotif = c) } }
             ToggleRow("Bestätigungscodes erkennen (Tippen kopiert)", s.otpCodes) { c -> edit { it.copy(otpCodes = c) } }
+            ToggleRow("Meldung nach unten ziehen: als gelesen markieren", s.swipeDownRead) { c -> edit { it.copy(swipeDownRead = c) } }
             ToggleRow("Kopierten Text kurz anzeigen (Zwischenablage)", s.clipboard) { c -> edit { it.copy(clipboard = c) } }
-            ToggleRow("Im Hintergrund aktiv halten (stille Benachrichtigung)", s.keepAlive) { c ->
-                edit { it.copy(keepAlive = c) }
-                if (c) KeepAliveService.start(ctx) else KeepAliveService.stop(ctx)
-            }
             ToggleRow("System-Pop-ups anderer Apps ausblenden", s.suppressPopups) { c ->
                 edit { it.copy(suppressPopups = c) }
                 QuickActions.applyHeadsUp(ctx, c)
@@ -521,19 +549,28 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.padding(bottom = 6.dp),
                 )
             }
-            SettingSlider("Neue Meldung sichtbar für", "${s.alertSeconds} s", s.alertSeconds.toFloat(), 2f..15f) { v -> edit { it.copy(alertSeconds = v.roundToInt()) } }
         }
 
-        SectionLabel("MUSIK")
-        Card {
+        CardIf(FoldLabel("ANIMATIONEN", false)) {
+            ToggleRow("Zahlen rollen (Timer, Stoppuhr, Anruf)", s.rollDigits) { c -> edit { it.copy(rollDigits = c) } }
+            ToggleRow("Große Bubble wird klein: erst kleiner, dann breiter (Squash)", s.squashEntry) { c -> edit { it.copy(squashEntry = c) } }
+            ToggleRow("Ladeanzeige animieren (Balken & Prozent)", s.chargeAnim) { c -> edit { it.copy(chargeAnim = c) } }
+        }
+
+        CardIf(FoldLabel("HINTERGRUND", false)) {
+            ToggleRow("Im Hintergrund aktiv halten (stille Benachrichtigung)", s.keepAlive) { c ->
+                edit { it.copy(keepAlive = c) }
+                if (c) KeepAliveService.start(ctx) else KeepAliveService.stop(ctx)
+            }
+        }
+
+        CardIf(FoldLabel("MUSIK", false)) {
             ToggleRow("Equalizer-Balken bei laufender Musik", s.equalizer) { c -> edit { it.copy(equalizer = c) } }
             ToggleRow("Podcast: Vor-/Zurückspulen-Tasten", s.mediaSeek) { c -> edit { it.copy(mediaSeek = c) } }
-            ToggleRow("Meldung nach unten ziehen: als gelesen markieren", s.swipeDownRead) { c -> edit { it.copy(swipeDownRead = c) } }
             ToggleRow("Wischen links/rechts: Song zurück/vor", s.swipeSkip) { c -> edit { it.copy(swipeSkip = c) } }
         }
 
-        SectionLabel("TRAINING (STRAVA, POLAR, WAHOO, KOMOOT)")
-        Card {
+        CardIf(FoldLabel("TRAINING (STRAVA, POLAR, WAHOO, KOMOOT)", false)) {
             Text(
                 "Während einer Aufzeichnung zeigt die kleine Pille links die Zeit und rechts diesen Wert. Er wird aus der Benachrichtigung der App gelesen, die Anzeige hängt also davon ab, was die App dort mitteilt. Fehlt der Wert, zeigt die Pille den ersten vorhandenen.",
                 color = Muted,
@@ -552,8 +589,7 @@ class MainActivity : ComponentActivity() {
             Spacer(Modifier.height(8.dp))
         }
 
-        SectionLabel("HAPTIK")
-        Card {
+        CardIf(FoldLabel("HAPTIK", false)) {
             ToggleRow("Kurz vibrieren beim Aufklappen", s.haptics) { c ->
                 edit { it.copy(haptics = c) }
                 if (c) QuickActions.haptic(ctx, s.hapticLevel)
@@ -572,8 +608,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        SectionLabel("STATUS-ANZEIGEN")
-        Card {
+        CardIf(FoldLabel("STATUS-ANZEIGEN", false)) {
             ToggleRow("Status in der Pille anzeigen", s.statusPills) { c -> edit { it.copy(statusPills = c) } }
             Text(
                 "Die Pille zeigt es, solange es aktiv ist. Wähle, was angezeigt wird:",
@@ -606,11 +641,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        SectionLabel("SMART HOME (HOME ASSISTANT)")
-        Card { HomeAssistantSettings() }
+        CardIf(FoldLabel("SMART HOME (HOME ASSISTANT)", false)) { HomeAssistantSettings() }
 
-        SectionLabel("SCHNELLZUGRIFF")
-        Card {
+        CardIf(FoldLabel("SCHNELLZUGRIFF", false)) {
             ToggleRow("Schnellzugriff-Panel aktivieren", s.quickPanel) { c ->
                 edit { it.copy(quickPanel = c) }
                 if (!c) IslandBus.setQuick(false)
@@ -1022,20 +1055,23 @@ class MainActivity : ComponentActivity() {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .bounceClick(onClick)
                 .clip(RoundedCornerShape(20.dp))
                 .border(1.dp, CardBorder, RoundedCornerShape(20.dp))
-                .clickable(onClick = onClick)
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text(index, color = AppAccent, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
             Text(title, color = Color.White, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            val dot by animateColorAsState(if (done) Color.White else Color(0xFF3A3A3A), tween(300), label = "dot")
+            val pop by animateFloatAsState(if (done) 1f else 0.8f, spring(dampingRatio = 0.35f, stiffness = 400f), label = "pop")
             Box(
                 Modifier
                     .size(10.dp)
+                    .graphicsLayer { scaleX = pop; scaleY = pop }
                     .clip(CircleShape)
-                    .background(if (done) Color.White else Color(0xFF3A3A3A))
+                    .background(dot)
             )
         }
     }
@@ -1045,17 +1081,21 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
+    val bg by animateColorAsState(if (selected) NothingRed else Color.Transparent, tween(220), label = "chipbg")
+    val line by animateColorAsState(if (selected) NothingRed else CardBorder, tween(220), label = "chipline")
+    val fg by animateColorAsState(if (selected) IslandTheme.onAccent else Muted, tween(220), label = "chipfg")
     Box(
         modifier = Modifier
+            .bounceClick(onClick)
             .clip(shape)
-            .then(if (selected) Modifier.background(NothingRed) else Modifier.border(1.dp, CardBorder, shape))
-            .clickable(onClick = onClick)
+            .background(bg)
+            .border(1.dp, line, shape)
             .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text,
-            color = if (selected) IslandTheme.onAccent else Muted,
+            color = fg,
             fontFamily = FontFamily.Monospace,
             fontWeight = FontWeight.Bold,
             fontSize = 11.sp,
@@ -1079,6 +1119,44 @@ private fun MiniButton(text: String, enabled: Boolean, onClick: () -> Unit) {
 }
 
 // ------------------------------------------------------------------ UI-Bausteine
+
+/** Aufklappbare Überschrift. Gibt zurück, ob der Abschnitt offen ist. Der Zustand bleibt beim Tabwechsel erhalten. */
+@Composable
+private fun FoldLabel(text: String, defaultOpen: Boolean): Boolean {
+    var open by rememberSaveable(text) { mutableStateOf(defaultOpen) }
+    val rot by animateFloatAsState(if (open) 90f else 0f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "chev")
+    Spacer(Modifier.height(20.dp))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .bounceClick({ open = !open })
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text,
+            color = AppAccent,
+            fontFamily = FontFamily.Monospace,
+            fontSize = 12.sp,
+            letterSpacing = 2.sp,
+            modifier = Modifier.weight(1f),
+        )
+        Text("›", color = Muted, fontSize = 20.sp, modifier = Modifier.graphicsLayer { rotationZ = rot })
+    }
+    Spacer(Modifier.height(2.dp))
+    return open
+}
+
+/** Karte, die sich weich auf- und zuklappt. */
+@Composable
+private fun CardIf(open: Boolean, content: @Composable () -> Unit) {
+    AnimatedVisibility(
+        visible = open,
+        enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = 400f)) + fadeIn(tween(220, delayMillis = 40)),
+        exit = shrinkVertically(tween(220, easing = FastOutSlowInEasing)) + fadeOut(tween(120)),
+    ) { Card(content) }
+}
 
 @Composable
 private fun SectionLabel(text: String) {
@@ -1155,9 +1233,9 @@ private fun PillButton(text: String, filled: Boolean, modifier: Modifier = Modif
     val shape = RoundedCornerShape(50)
     Box(
         modifier = modifier
+            .bounceClick(onClick)
             .clip(shape)
             .then(if (filled) Modifier.background(NothingRed) else Modifier.border(1.dp, CardBorder, shape))
-            .clickable(onClick = onClick)
             .padding(vertical = 14.dp, horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {

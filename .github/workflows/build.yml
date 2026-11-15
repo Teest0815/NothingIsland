@@ -30,9 +30,7 @@ jobs:
           KS_B64: ${{ secrets.KEYSTORE_BASE64 }}
           KS_PW: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
-          if [ -f keystore/nothingisland.jks ]; then
-            echo "Übergang: alter Schlüssel aus dem Repo wird verwendet."
-          elif [ -z "$KS_B64" ] || [ -z "$KS_PW" ]; then
+          if [ -z "$KS_B64" ] || [ -z "$KS_PW" ]; then
             if [ "${{ github.repository }}" = "Teest0815/NothingIsland" ]; then
               echo "::error::Secrets KEYSTORE_BASE64 / KEYSTORE_PASSWORD fehlen. Ohne festen Schlüssel ließe sich die APK nicht über die alte installieren."
               exit 1
