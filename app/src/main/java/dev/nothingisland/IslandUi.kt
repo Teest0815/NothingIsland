@@ -82,6 +82,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -1536,7 +1538,7 @@ private fun TransportButton(kind: TransportIcon, sc: Float, big: Boolean, onClic
         if (firstKind) { firstKind = false; return@LaunchedEffect }
         if (kind == TransportIcon.PLAY || kind == TransportIcon.PAUSE) {
             pop.snapTo(0f)
-            pop.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 420f))
+            pop.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 500f))
         }
     }
     Box(
@@ -1559,8 +1561,7 @@ private fun TransportButton(kind: TransportIcon, sc: Float, big: Boolean, onClic
                 translationX = nudge.value * d * 0.22f * density
                 if (kind == TransportIcon.PLAY || kind == TransportIcon.PAUSE) {
                     val p = pop.value
-                    scaleX = 0.4f + 0.6f * p; scaleY = 0.4f + 0.6f * p
-                    rotationZ = (1f - p) * (if (kind == TransportIcon.PAUSE) -70f else 70f)
+                    scaleX = 0.8f + 0.2f * p; scaleY = 0.8f + 0.2f * p
                 }
             },
         ) {
@@ -1830,7 +1831,7 @@ private fun HaSliderRow(t: QuickTile, sc: Float, modifier: Modifier, onUsed: () 
     // Beim Ziehen direkt, sonst weich mit leichtem Nachfedern (Tippen, Loslassen, Antwort von Home Assistant).
     val shown by animateFloatAsState(
         target,
-        if (local != null) snap() else spring(dampingRatio = 0.55f, stiffness = 260f),
+        if (local != null) snap() else spring(dampingRatio = 0.9f, stiffness = 300f),
         label = "ha",
     )
     var w by remember { mutableIntStateOf(1) }
@@ -1843,8 +1844,6 @@ private fun HaSliderRow(t: QuickTile, sc: Float, modifier: Modifier, onUsed: () 
             HomeAssistant.setBrightness(id, v.roundToInt())
         }
     }
-    val filled = shown > 45f
-    val textColor = if (filled) OnAccent else Fg
     Box(
         modifier = modifier
             .clip(shape)
@@ -1878,44 +1877,59 @@ private fun HaSliderRow(t: QuickTile, sc: Float, modifier: Modifier, onUsed: () 
                 )
             },
     ) {
+        val fillFrac = (shown / 100f).coerceIn(0f, 1f)
         Box(
             Modifier
                 .fillMaxHeight()
-                .fillMaxWidth((shown / 100f).coerceIn(0f, 1f))
+                .fillMaxWidth(fillFrac)
                 .background(NothingRed),
         )
-        Row(
-            Modifier.fillMaxSize().padding(horizontal = (14f * sc).dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier
-                    .size((34f * sc).dp)
-                    .bounceClick({
+        // Zwei Schichten: normale Schrift, darüber die Schrift auf Akzent, nur im gefüllten Bereich sichtbar.
+        HaSliderContent(t, id, sc, shown, Fg, true, onUsed, Modifier.fillMaxSize())
+        HaSliderContent(
+            t, id, sc, shown, OnAccent, false, onUsed,
+            Modifier.fillMaxSize().drawWithContent {
+                clipRect(right = size.width * fillFrac) { this@drawWithContent.drawContent() }
+            },
+        )
+    }
+}
+
+@Composable
+private fun HaSliderContent(t: QuickTile, id: String, sc: Float, shown: Float, textColor: Color, interactive: Boolean, onUsed: () -> Unit, modifier: Modifier) {
+    Row(
+        modifier.padding(horizontal = (14f * sc).dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size((34f * sc).dp)
+                .then(
+                    if (interactive) Modifier.bounceClick({
                         HomeAssistant.toggle(id)
                         onUsed()
-                    })
-                    .clip(CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Image(
-                    bitmap = QuickActions.icon(t.icon),
-                    contentDescription = null,
-                    colorFilter = ColorFilter.tint(textColor),
-                    modifier = Modifier.size((20f * sc).dp),
+                    }) else Modifier,
                 )
-            }
-            Spacer(Modifier.width((8f * sc).dp))
-            Text(
-                HomeAssistant.nameOf(id).uppercase(),
-                color = textColor, fontFamily = Mono, fontSize = (10f * sc).sp,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
-            )
-            Text(
-                if (shown <= 0f) "AUS" else "${shown.roundToInt()} %",
-                color = textColor, fontFamily = Mono, fontSize = (10f * sc).sp, fontWeight = FontWeight.Bold,
+                .clip(CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                bitmap = QuickActions.icon(t.icon),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(textColor),
+                modifier = Modifier.size((20f * sc).dp),
             )
         }
+        Spacer(Modifier.width((8f * sc).dp))
+        Text(
+            HomeAssistant.nameOf(id).uppercase(),
+            color = textColor, fontFamily = Mono, fontSize = (10f * sc).sp,
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+        )
+        Text(
+            if (shown <= 0f) "AUS" else "${shown.roundToInt()} %",
+            color = textColor, fontFamily = Mono, fontSize = (10f * sc).sp, fontWeight = FontWeight.Bold,
+        )
     }
 }
 
@@ -1952,7 +1966,8 @@ private fun MediaExpanded(
     val dur = e.durationMs
     val raw = if (base.first < 0) 0L else base.first + (if (e.playing) (now - base.second) else 0L)
     val pos = if (dur > 0) raw.coerceIn(0L, dur) else raw.coerceAtLeast(0L)
-    val frac = if (dur > 0) pos.toFloat() / dur else 0f
+    var dragFrac by remember { mutableStateOf<Float?>(null) }
+    val frac = dragFrac ?: if (dur > 0) pos.toFloat() / dur else 0f
 
     Column(
         modifier = modifier.padding(horizontal = (18f * sc).dp, vertical = (12f * sc).dp),
@@ -2045,6 +2060,31 @@ private fun MediaExpanded(
                     .height((22f * sc).dp)
                     .pointerInput(mc, dur) {
                         if (dur <= 0) return@pointerInput
+                        // Ziehen am Strich spult, ohne die große Bubble zu schließen.
+                        detectHorizontalDragGestures(
+                            onDragStart = { o ->
+                                dragFrac = (o.x / size.width).coerceIn(0f, 1f)
+                                onAction()
+                            },
+                            onDragEnd = {
+                                dragFrac?.let { f ->
+                                    val target = f * dur
+                                    runCatching { mc.transportControls.seekTo(target.toLong()) }
+                                    base = target.toLong() to SystemClock.elapsedRealtime()
+                                    now = SystemClock.elapsedRealtime()
+                                }
+                                dragFrac = null
+                            },
+                            onDragCancel = { dragFrac = null },
+                            onHorizontalDrag = { change, _ ->
+                                change.consume()
+                                dragFrac = (change.position.x / size.width).coerceIn(0f, 1f)
+                                onAction()
+                            },
+                        )
+                    }
+                    .pointerInput(mc, dur) {
+                        if (dur <= 0) return@pointerInput
                         detectTapGestures { o ->
                             val target = (o.x / size.width).coerceIn(0f, 1f) * dur
                             runCatching { mc.transportControls.seekTo(target.toLong()) }
@@ -2065,6 +2105,11 @@ private fun MediaExpanded(
                     Modifier.fillMaxWidth(frac.coerceIn(0f, 1f)).height(barH)
                         .clip(RoundedCornerShape(50)).background(NothingRed),
                 )
+                // Kleiner Strich zum Ziehen.
+                Box(Modifier.fillMaxWidth(frac.coerceIn(0.02f, 1f)), contentAlignment = Alignment.CenterEnd) {
+                    val thumbH by animateDpAsState(((if (dragFrac != null) 18f else 12f) * sc).dp, spring(dampingRatio = 0.7f, stiffness = 500f), label = "thumb")
+                    Box(Modifier.width((3f * sc).dp).height(thumbH).clip(RoundedCornerShape(50)).background(Fg))
+                }
             }
             Spacer(Modifier.width((8f * sc).dp))
             Text(
