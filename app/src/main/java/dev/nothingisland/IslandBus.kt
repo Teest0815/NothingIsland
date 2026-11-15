@@ -125,7 +125,9 @@ data class IslandSettings(
     val swipeDownRead: Boolean = true,
     /** Mehrere Benachrichtigungen nacheinander zeigen statt die vorige zu überschreiben. */
     val multiNotif: Boolean = true,
-    /** Neue Inhalte: Pille wird erst kleiner, dann etwas breiter, dann normal. */
+    /** Ziffern von Timern und Zählern rollen beim Wechsel. */
+    val rollDigits: Boolean = true,
+    /** Große Bubble wird zur kleinen: erst kleiner, dann etwas breiter, dann normal. */
     val squashEntry: Boolean = true,
     /** Ladeanzeige: Balken füllt sich, Prozent zählen hoch. */
     val chargeAnim: Boolean = true,
@@ -423,6 +425,7 @@ object IslandBus {
             swipeDownRead = p.getBoolean("swipeDownRead", d.swipeDownRead),
             multiNotif = p.getBoolean("multiNotif", d.multiNotif),
             squashEntry = p.getBoolean("squashEntry", d.squashEntry),
+            rollDigits = p.getBoolean("rollDigits", d.rollDigits),
             chargeAnim = p.getBoolean("chargeAnim", d.chargeAnim),
             groupNotif = p.getBoolean("groupNotif", d.groupNotif),
             otpCodes = p.getBoolean("otpCodes", d.otpCodes),
@@ -476,6 +479,7 @@ object IslandBus {
             .putBoolean("swipeDownRead", s.swipeDownRead)
             .putBoolean("multiNotif", s.multiNotif)
             .putBoolean("squashEntry", s.squashEntry)
+            .putBoolean("rollDigits", s.rollDigits)
             .putBoolean("chargeAnim", s.chargeAnim)
             .putBoolean("groupNotif", s.groupNotif)
             .putBoolean("otpCodes", s.otpCodes)

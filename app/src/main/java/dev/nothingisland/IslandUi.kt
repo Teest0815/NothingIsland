@@ -371,24 +371,36 @@ private fun IslandHostBody() {
         stiffness = if (growing) 520f else 680f,
     )
     // Squash-Eintritt: Pille zieht sich kurz zusammen, federt dann etwas breiter und setzt sich.
+    // Gilt, wenn die große Bubble zur kleinen Pille wird.
     var squashHold by remember { mutableStateOf(false) }
-    val squashKey = if (mode == Mode.COMPACT) current?.key else if (mode == Mode.MESSAGE) lingering?.id?.toString() else null
-    val squashOn = s.squashEntry && !lowPowerNow && (mode == Mode.COMPACT || mode == Mode.MESSAGE)
-    LaunchedEffect(mode, squashKey, squashOn) {
-        if (squashOn) {
+    var squashBounce by remember { mutableStateOf(false) }
+    var lastMode by remember { mutableStateOf(mode) }
+    LaunchedEffect(mode) {
+        val was = lastMode
+        lastMode = mode
+        val small = mode == Mode.IDLE || mode == Mode.COMPACT || mode == Mode.MESSAGE
+        val big = was == Mode.ALERT || was == Mode.EXPANDED || was == Mode.QUICK
+        if (s.squashEntry && !lowPowerNow && small && big) {
+            squashBounce = false
             squashHold = true
-            delay(120)
+            delay(140)
             squashHold = false
-        } else squashHold = false
+            squashBounce = true
+            delay(800)
+            squashBounce = false
+        } else {
+            squashHold = false
+            squashBounce = false
+        }
     }
-    val holding = squashOn && squashHold && !snapNext
-    val widthTarget = if (holding) minOf(idleW, targetW) * 0.82f else targetW
+    val holding = squashHold && !snapNext
+    val widthTarget = if (holding) targetW * 0.82f else targetW
     val width by animateDpAsState(
         widthTarget.dp,
         when {
             snapNext -> snap<Dp>()
             holding -> tween(110, easing = FastOutSlowInEasing)
-            squashOn -> spring(dampingRatio = 0.5f, stiffness = 420f)
+            squashBounce -> spring(dampingRatio = 0.48f, stiffness = 430f)
             else -> widthSpec
         },
         label = "w",
@@ -1185,7 +1197,8 @@ private fun Chrono(
     val base = e.chronoBase ?: return
     val ms = if (e.countDown) base - now else now - base
     val lp by IslandBus.lowPower.collectAsState()
-    RollingText(formatClock(ms), size, color, !lp, modifier)
+    val rollSetting = IslandBus.settings.collectAsState().value.rollDigits
+    RollingText(formatClock(ms), size, color, rollSetting && !lp, modifier)
 }
 
 /** Ersetzt die Prozentzahl am Anfang des Titels ("62 % · LÄDT") durch den animierten Wert. */

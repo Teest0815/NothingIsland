@@ -457,7 +457,8 @@ class MainActivity : ComponentActivity() {
             ToggleRow("Bei Vollbild ausblenden (Video, Spiele)", s.hideFullscreen) { c -> edit { it.copy(hideFullscreen = c) } }
             ToggleRow("Im Querformat ausblenden", s.hideLandscape) { c -> edit { it.copy(hideLandscape = c) } }
             ToggleRow("Mehrere Benachrichtigungen nacheinander (Zähler +N)", s.multiNotif) { c -> edit { it.copy(multiNotif = c) } }
-            ToggleRow("Neue Inhalte: Pille erst kleiner, dann breiter (Squash)", s.squashEntry) { c -> edit { it.copy(squashEntry = c) } }
+            ToggleRow("Zahlen rollen (Timer, Stoppuhr, Anruf)", s.rollDigits) { c -> edit { it.copy(rollDigits = c) } }
+            ToggleRow("Große Bubble wird klein: erst kleiner, dann breiter (Squash)", s.squashEntry) { c -> edit { it.copy(squashEntry = c) } }
             ToggleRow("Ladeanzeige animieren (Balken & Prozent)", s.chargeAnim) { c -> edit { it.copy(chargeAnim = c) } }
             ToggleRow("Meldungen derselben App zusammenfassen", s.groupNotif) { c -> edit { it.copy(groupNotif = c) } }
             ToggleRow("Bestätigungscodes erkennen (Tippen kopiert)", s.otpCodes) { c -> edit { it.copy(otpCodes = c) } }
