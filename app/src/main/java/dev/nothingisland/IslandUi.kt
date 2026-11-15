@@ -367,11 +367,11 @@ private fun IslandHostBody() {
     val slow = (1f / bigK).coerceIn(0.5f, 1f)
     val calm = (bigK - 1f).coerceIn(0f, 0.6f) * 0.15f
     val widthSpec = spring<Dp>(
-        dampingRatio = (if (growing) 0.82f else 0.9f) + calm,
+        dampingRatio = (if (growing) 0.6f else 0.88f) + calm * 0.3f,
         stiffness = (if (growing) 400f else 600f) * slow,
     )
     val heightSpec = spring<Dp>(
-        dampingRatio = (if (growing) 0.76f else 0.94f) + calm,
+        dampingRatio = (if (growing) 0.64f else 0.92f) + calm * 0.3f,
         stiffness = (if (growing) 520f else 680f) * slow,
     )
     // Squash-Eintritt: Pille zieht sich kurz zusammen, federt dann etwas breiter und setzt sich.
@@ -531,9 +531,9 @@ private fun IslandHostBody() {
                     // Beim schnellen Auf- und Zuklappen darf die Feder nicht weit über das Ziel schießen.
                     // Beim Aufklappen wächst die Breite höchstens so schnell wie die Höhe (kein plötzliches Breitwerden beim Spammen).
                     val hp = if (growing && targetH > smallH) ((height.value - smallH) / (targetH - smallH)).coerceIn(0f, 1f) else 1f
-                    val wCap = if (growing) minOf(targetW * 1.03f, idleW + (targetW - idleW) * (0.3f + 0.7f * hp)) else Float.MAX_VALUE
+                    val wCap = if (growing) minOf(targetW * 1.07f, idleW + (targetW - idleW) * (0.3f + 0.7f * hp)) else Float.MAX_VALUE
                     val w = (if (growing) minOf(width.roundToPx(), wCap.dp.roundToPx()) else width.roundToPx()) + abs(stretchPx).roundToInt()
-                    val h = if (growing) minOf(height.roundToPx(), (targetH * 1.03f).dp.roundToPx()) else height.roundToPx()
+                    val h = if (growing) minOf(height.roundToPx(), (targetH * 1.08f).dp.roundToPx()) else height.roundToPx()
                     val pl = m.measure(Constraints.fixed(w, h))
                     layout(w, h) { pl.place(0, 0) }
                 }
