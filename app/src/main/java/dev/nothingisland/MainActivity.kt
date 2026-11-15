@@ -434,7 +434,9 @@ class MainActivity : ComponentActivity() {
                     Triple("Mail", "Rechnung Oktober", "Anbei die Rechnung als PDF."),
                     Triple("Nachrichten", "Max", "Bin gleich da"),
                 )
-                tests.forEachIndexed { i, t -> postTestMessage(t.first, t.second, t.third, i + 1) }
+                // Nacheinander, nicht alle auf einmal.
+                val h = android.os.Handler(android.os.Looper.getMainLooper())
+                tests.forEachIndexed { i, t -> h.postDelayed({ postTestMessage(t.first, t.second, t.third, i + 1) }, i * 900L) }
             }
             PillButton("LEEREN", filled = false, modifier = Modifier.weight(1f)) {
                 IslandBus.removeOngoing("demo-timer")
@@ -446,7 +448,7 @@ class MainActivity : ComponentActivity() {
         }
         Spacer(Modifier.height(12.dp))
         Text(
-            "Tipp: Tippe auf die kleine Pille, um sie aufzuklappen. Dort findest du die Buttons der App (Pause, Stopp ...). Tippen auf die Ruhe-Pille oder langes Drücken auf die kleine Pille öffnet den Schnellzugriff. Mehrere Meldungen liegen wie Karten übereinander: nach links oder rechts wischen blättert durch.",
+            "Tipp: Tippe auf die kleine Pille, um sie aufzuklappen. Dort findest du die Buttons der App (Pause, Stopp ...). Tippen auf die Ruhe-Pille oder langes Drücken auf die kleine Pille öffnet den Schnellzugriff. Mehrere Meldungen liegen wie Karten übereinander: Wischen entfernt die oberste, die nächste rückt nach.",
             color = Muted,
             fontSize = 12.sp,
         )
@@ -539,7 +541,7 @@ class MainActivity : ComponentActivity() {
         }
 
         CardIf(FoldLabel("MELDUNGEN", false)) {
-            ToggleRow("Meldungen stapeln (Karten, Wischen blättert durch)", s.multiNotif) { c -> edit { it.copy(multiNotif = c) } }
+            ToggleRow("Meldungen stapeln (Wischen entfernt die oberste Karte)", s.multiNotif) { c -> edit { it.copy(multiNotif = c) } }
             ToggleRow("Meldungen derselben App zu einer Karte zusammenfassen", s.groupNotif) { c -> edit { it.copy(groupNotif = c) } }
             ToggleRow("Bestätigungscodes erkennen (Tippen kopiert)", s.otpCodes) { c -> edit { it.copy(otpCodes = c) } }
             ToggleRow("Meldung nach unten ziehen: als gelesen markieren", s.swipeDownRead) { c -> edit { it.copy(swipeDownRead = c) } }
