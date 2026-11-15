@@ -247,6 +247,7 @@ private fun IslandHostBody() {
     // Kartenstapel: neue Meldung fällt von oben auf den Stapel, gelesene Karte schrumpft weg.
     val dropY = remember { Animatable(0f) }
     val leave = remember { Animatable(0f) }
+    val stackShift = remember { Animatable(0f) }
     val dens = androidx.compose.ui.platform.LocalDensity.current
     var suppressLinger by remember { mutableStateOf(false) }
 
@@ -269,6 +270,9 @@ private fun IslandHostBody() {
             appear.snapTo(0.6f)
             launch { dropY.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 380f)) }
             launch { appear.animateTo(1f, spring(dampingRatio = 0.75f, stiffness = 380f)) }
+            // Alle Karten dahinter rutschen eine Stufe zurück und werden dabei weich kleiner.
+            stackShift.snapTo(-1f)
+            launch { stackShift.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = 260f)) }
         }
         try {
             // Mit gestapelten Karten bleibt mehr Zeit zum Durchblättern; jedes Wischen startet die Zeit neu.
@@ -480,7 +484,7 @@ private fun IslandHostBody() {
     LaunchedEffect(canPullRead) { if (!canPullRead) pullY = 0f }
     val canSkip = mode == Mode.COMPACT && s.swipeSkip && current?.kind == Kind.MEDIA && current.media != null
     val curForSkip by rememberUpdatedState(current)
-    val stackBehind = if (mode == Mode.ALERT && s.multiNotif) minOf(pendingList.size, 2) else 0
+    val stackBehind = if (mode == Mode.ALERT && s.multiNotif) minOf(pendingList.size, 3) else 0
     val stackOffDp = 9f - 7f * s.stackCompact
     val stackInsetDp = 12f - 9f * s.stackCompact
     // Fortschritt 0..1: je weiter die oberste Karte weggezogen wird, desto mehr rückt die nächste nach vorn.
@@ -515,7 +519,7 @@ private fun IslandHostBody() {
     val slotTarget = if (circleItem != null) slotMax else 0f
     val topTarget = ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
     // Beim Herunterziehen einer Meldung braucht das Fenster Platz nach unten, sonst wird sie abgeschnitten.
-    val winH = topTarget + targetH + WINDOW_MARGIN + (if (canPullRead) 40f else 0f) + (if (mode == Mode.ALERT && s.multiNotif && pendingList.isNotEmpty()) stackOffDp * 2f + 6f else 0f)
+    val winH = topTarget + targetH + WINDOW_MARGIN + (if (canPullRead) 40f else 0f) + (if (mode == Mode.ALERT && s.multiNotif && pendingList.isNotEmpty()) stackOffDp * stackBehind + 6f else 0f)
     LaunchedEffect(winH, span) {
         val gh = maxOf(winH, reported.second)
         if (span != reported.first || gh != reported.second) {
@@ -540,32 +544,38 @@ private fun IslandHostBody() {
         Spacer(Modifier.width(slot))
 
         Box {
-        // Nächste Karte: liegt hinter der obersten, wird beim Wegziehen größer, deckend und zeigt ihren Text.
-        val nextEv = pendingList.firstOrNull()
-        if (stackBehind > 0 && nextEv != null) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .graphicsLayer {
-                        val p = stackP()
-                        val inset = stackInsetDp.dp.toPx()
-                        val k0 = ((size.width - 2f * inset) / size.width.coerceAtLeast(1f)).coerceIn(0.5f, 1f)
-                        val k = k0 + (1f - k0) * p
-                        scaleX = k
-                        scaleY = k
-                        transformOrigin = TransformOrigin(0.5f, 0f)
-                        translationY = stackOffDp.dp.toPx() * (1f - p)
+        // Karten dahinter: eigene Ebenen (bewegen sich nicht mit der obersten). Tiefe d: 0 = vorn, 1 = erste dahinter ...
+        // Beim Wegziehen rückt jede Karte nach vorn, bei neuer Meldung rutschen alle eine Stufe zurück (smooth).
+        for (i in stackBehind downTo 1) {
+            val ev = pendingList.getOrNull(i - 1) ?: continue
+            androidx.compose.runtime.key(i) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .graphicsLayer {
+                            val d = (i - stackP() + stackShift.value).coerceAtLeast(0f)
+                            val inset = stackInsetDp.dp.toPx()
+                            val step = (2f * inset / size.width.coerceAtLeast(1f)).coerceAtMost(0.3f)
+                            val k = (1f - step * d).coerceIn(0.4f, 1f)
+                            scaleX = k
+                            scaleY = k
+                            transformOrigin = TransformOrigin(0.5f, 0f)
+                            translationY = stackOffDp.dp.toPx() * d
+                            alpha = ((1f - 0.3f * (d - 1f).coerceAtLeast(0f)) * (3.4f - d).coerceIn(0f, 1f)).coerceIn(0f, 1f)
+                        }
+                        .clip(shape)
+                        .drawBehind {
+                            val d = (i - stackP() + stackShift.value).coerceIn(0f, 1f)
+                            drawRect(Bg.copy(alpha = 1f - (1f - s.stackAlpha) * d))
+                        }
+                        .border(1.dp, Hairline, shape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (i == 1) {
+                        Box(Modifier.graphicsLayer { val d = (1f - stackP() + stackShift.value).coerceIn(0f, 1f); alpha = (1f - d) * (1f - d) }) {
+                            AlertContent(ev, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp)) { }
+                        }
                     }
-                    .clip(shape)
-                    .drawBehind {
-                        val p = stackP()
-                        drawRect(Bg.copy(alpha = s.stackAlpha + (1f - s.stackAlpha) * p))
-                    }
-                    .border(1.dp, Hairline, shape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(Modifier.graphicsLayer { val p = stackP(); alpha = p * p }) {
-                    AlertContent(nextEv, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp)) { }
                 }
             }
         }
@@ -598,30 +608,6 @@ private fun IslandHostBody() {
                     val h = if (growing) minOf(height.roundToPx(), (targetH * 1.08f).dp.roundToPx()) else height.roundToPx()
                     val pl = m.measure(Constraints.fixed(w, h))
                     layout(w, h) { pl.place(0, 0) }
-                }
-                .drawBehind {
-                    // Dritte Karte: nur als Streifen, rückt beim Wegwischen der obersten nach.
-                    if (stackBehind >= 2) {
-                        val p = stackP()
-                        val k = 2f - p
-                        val inset = stackInsetDp.dp.toPx() * k
-                        val off = stackOffDp.dp.toPx() * k
-                        val r = androidx.compose.ui.geometry.CornerRadius(corner.toPx().coerceAtMost(size.height / 2f))
-                        val a = s.stackAlpha * 0.7f
-                        drawRoundRect(
-                            color = Color(0xFF1B1B1B).copy(alpha = a),
-                            topLeft = Offset(inset, off),
-                            size = androidx.compose.ui.geometry.Size((size.width - 2 * inset).coerceAtLeast(0f), size.height),
-                            cornerRadius = r,
-                        )
-                        drawRoundRect(
-                            color = Hairline.copy(alpha = a),
-                            topLeft = Offset(inset, off),
-                            size = androidx.compose.ui.geometry.Size((size.width - 2 * inset).coerceAtLeast(0f), size.height),
-                            cornerRadius = r,
-                            style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()),
-                        )
-                    }
                 }
                 .clip(shape)
                 .background(Bg)
