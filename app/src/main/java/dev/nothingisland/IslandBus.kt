@@ -125,6 +125,10 @@ data class IslandSettings(
     val swipeDownRead: Boolean = true,
     /** Mehrere Benachrichtigungen nacheinander zeigen statt die vorige zu überschreiben. */
     val multiNotif: Boolean = true,
+    /** Neue Inhalte: Pille wird erst kleiner, dann etwas breiter, dann normal. */
+    val squashEntry: Boolean = true,
+    /** Ladeanzeige: Balken füllt sich, Prozent zählen hoch. */
+    val chargeAnim: Boolean = true,
     /** Mehrere Meldungen derselben App zusammenfassen. */
     val groupNotif: Boolean = true,
     /** Bestätigungscodes erkennen und Kopieren anbieten. */
@@ -418,6 +422,8 @@ object IslandBus {
             swipeSkip = p.getBoolean("swipeSkip", d.swipeSkip),
             swipeDownRead = p.getBoolean("swipeDownRead", d.swipeDownRead),
             multiNotif = p.getBoolean("multiNotif", d.multiNotif),
+            squashEntry = p.getBoolean("squashEntry", d.squashEntry),
+            chargeAnim = p.getBoolean("chargeAnim", d.chargeAnim),
             groupNotif = p.getBoolean("groupNotif", d.groupNotif),
             otpCodes = p.getBoolean("otpCodes", d.otpCodes),
             clipboard = p.getBoolean("clipboard", d.clipboard),
@@ -469,6 +475,8 @@ object IslandBus {
             .putBoolean("swipeSkip", s.swipeSkip)
             .putBoolean("swipeDownRead", s.swipeDownRead)
             .putBoolean("multiNotif", s.multiNotif)
+            .putBoolean("squashEntry", s.squashEntry)
+            .putBoolean("chargeAnim", s.chargeAnim)
             .putBoolean("groupNotif", s.groupNotif)
             .putBoolean("otpCodes", s.otpCodes)
             .putBoolean("clipboard", s.clipboard)

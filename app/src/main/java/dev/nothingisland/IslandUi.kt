@@ -9,6 +9,9 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -367,7 +370,29 @@ private fun IslandHostBody() {
         dampingRatio = if (growing) 0.76f else 0.94f,
         stiffness = if (growing) 520f else 680f,
     )
-    val width by animateDpAsState(targetW.dp, if (snapNext) snap<Dp>() else widthSpec, label = "w")
+    // Squash-Eintritt: Pille zieht sich kurz zusammen, federt dann etwas breiter und setzt sich.
+    var squashHold by remember { mutableStateOf(false) }
+    val squashKey = if (mode == Mode.COMPACT) current?.key else if (mode == Mode.MESSAGE) lingering?.id?.toString() else null
+    val squashOn = s.squashEntry && !lowPowerNow && (mode == Mode.COMPACT || mode == Mode.MESSAGE)
+    LaunchedEffect(mode, squashKey, squashOn) {
+        if (squashOn) {
+            squashHold = true
+            delay(120)
+            squashHold = false
+        } else squashHold = false
+    }
+    val holding = squashOn && squashHold && !snapNext
+    val widthTarget = if (holding) minOf(idleW, targetW) * 0.82f else targetW
+    val width by animateDpAsState(
+        widthTarget.dp,
+        when {
+            snapNext -> snap<Dp>()
+            holding -> tween(110, easing = FastOutSlowInEasing)
+            squashOn -> spring(dampingRatio = 0.5f, stiffness = 420f)
+            else -> widthSpec
+        },
+        label = "w",
+    )
     val height by animateDpAsState(targetH.dp, if (snapNext) snap<Dp>() else heightSpec, label = "h")
     val corner by animateDpAsState(targetCorner.dp, if (snapNext) snap<Dp>() else motion, label = "c")
     // Gleich großer freier Platz links und rechts, damit die Pille mittig (über der Kamera) bleibt.
@@ -801,8 +826,18 @@ private fun IdleDots(sc: Float) {
 }
 
 @Composable
-private fun SmallIcon(icon: ImageBitmap?, size: Dp) {
+private fun SmallIcon(icon: ImageBitmap?, size: Dp, pulse: Boolean = false) {
     if (icon != null) {
+        // Klingelnder Anruf: Symbol pulsiert wie ein Herzschlag.
+        val lpIcon by IslandBus.lowPower.collectAsState()
+        val beat = if (pulse && !lpIcon) {
+            val tr = rememberInfiniteTransition(label = "ring")
+            tr.animateFloat(
+                1f, 1.28f,
+                infiniteRepeatable(tween(520, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+                label = "beat",
+            ).value
+        } else 1f
         // Symbol poppt beim Erscheinen auf und dreht sich leicht ein.
         val pop = remember(icon) { Animatable(0f) }
         LaunchedEffect(icon) { pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 380f)) }
@@ -811,7 +846,7 @@ private fun SmallIcon(icon: ImageBitmap?, size: Dp) {
             contentDescription = null,
             colorFilter = ColorFilter.tint(Fg),
             modifier = Modifier.size(size).graphicsLayer {
-                val p = pop.value
+                val p = pop.value * beat
                 scaleX = p; scaleY = p
                 rotationZ = (1f - p) * -40f
                 alpha = p.coerceIn(0f, 1f)
@@ -863,7 +898,7 @@ private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float
         iconGap = iconGap,
         modifier = modifier,
         left = {
-            SmallIcon(e.icon, (14f * sc).dp)
+            SmallIcon(e.icon, (14f * sc).dp, pulse = e.kind == Kind.CALL && e.chronoBase == null)
             if (workout) {
                 // Links die Zeit (läuft live mit, wenn die App einen Zähler liefert).
                 Box(Modifier.weight(1f)) {
@@ -1149,15 +1184,40 @@ private fun Chrono(
     }
     val base = e.chronoBase ?: return
     val ms = if (e.countDown) base - now else now - base
-    Text(
-        text = formatClock(ms),
-        color = color,
-        fontFamily = Mono,
-        fontWeight = FontWeight.Medium,
-        fontSize = size,
-        maxLines = 1,
-        modifier = modifier,
-    )
+    val lp by IslandBus.lowPower.collectAsState()
+    RollingText(formatClock(ms), size, color, !lp, modifier)
+}
+
+/** Ersetzt die Prozentzahl am Anfang des Titels ("62 % · LÄDT") durch den animierten Wert. */
+private fun chargeTitle(title: String, pct: Int): String {
+    val i = title.indexOf('%')
+    return if (i < 0) title else "$pct" + " " + title.substring(i)
+}
+
+/** Ziffern rollen einzeln nach oben, wenn sie sich ändern (Zählwerk). */
+@Composable
+private fun RollingText(text: String, size: TextUnit, color: Color, roll: Boolean, modifier: Modifier = Modifier) {
+    if (!roll) {
+        Text(text, color = color, fontFamily = Mono, fontWeight = FontWeight.Medium, fontSize = size, maxLines = 1, modifier = modifier)
+        return
+    }
+    Row(modifier.clipToBounds()) {
+        text.forEach { ch ->
+            AnimatedContent(
+                targetState = ch,
+                transitionSpec = {
+                    ContentTransform(
+                        targetContentEnter = slideInVertically(tween(240, easing = FastOutSlowInEasing)) { it } + fadeIn(tween(160)),
+                        initialContentExit = slideOutVertically(tween(240, easing = FastOutSlowInEasing)) { -it } + fadeOut(tween(120)),
+                        sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
+                    )
+                },
+                label = "digit",
+            ) { c ->
+                Text(c.toString(), color = color, fontFamily = Mono, fontWeight = FontWeight.Medium, fontSize = size, maxLines = 1)
+            }
+        }
+    }
 }
 
 /** Klick mit federndem Eindrücken (Scale-Bounce) statt starrem Ripple. */
@@ -1306,6 +1366,20 @@ private fun OngoingExpanded(
     onAction: () -> Unit,
     modifier: Modifier,
 ) {
+    // Ladeanzeige: Balken füllt sich von 0, Prozent zählen hoch, Glow pulsiert beim Laden.
+    val chargeOn = e.key == "charge-detail" && IslandBus.settings.collectAsState().value.chargeAnim
+    var go by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { go = true }
+    val target = e.progress ?: 0f
+    val shownProg by animateFloatAsState(
+        if (!chargeOn || go) target else 0f,
+        tween(if (chargeOn) 1100 else 0, easing = FastOutSlowInEasing), label = "chg",
+    )
+    val shownPct = (shownProg * 100f).roundToInt()
+    val glowOn = chargeOn && e.title.contains("LÄDT") && !IslandBus.lowPower.collectAsState().value
+    val glow = if (glowOn) rememberInfiniteTransition(label = "glow").animateFloat(
+        0.45f, 1f, infiniteRepeatable(tween(1100, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "g",
+    ).value else 1f
     Box(modifier) {
         Column(
             modifier = Modifier
@@ -1356,7 +1430,7 @@ private fun OngoingExpanded(
                     } else {
                         if (e.title.isNotBlank()) {
                             Text(
-                                text = e.title,
+                                text = if (chargeOn) chargeTitle(e.title, shownPct) else e.title,
                                 color = Fg,
                                 fontSize = (14f * sc).sp,
                                 fontWeight = FontWeight.Medium,
@@ -1400,7 +1474,8 @@ private fun OngoingExpanded(
                 }
             }
         }
-        e.progress?.let { p ->
+        e.progress?.let { _ ->
+            val p = shownProg
             Box(
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -1414,6 +1489,7 @@ private fun OngoingExpanded(
                     Modifier
                         .fillMaxWidth(p.coerceIn(0f, 1f))
                         .fillMaxHeight()
+                        .graphicsLayer { alpha = glow }
                         .background(NothingRed),
                 )
             }
@@ -1793,6 +1869,9 @@ private fun MediaExpanded(
     modifier: Modifier,
 ) {
     val mc = e.media ?: return
+    // Titelwechsel: Cover blendet über, Text gleitet seitlich aus und ein (nur bei neuem Titel).
+    var track by remember { mutableStateOf(Triple(e.title, e.text, e.art)) }
+    if (track.first != e.title || (track.third == null && e.art != null)) track = Triple(e.title, e.text, e.art)
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     var base by remember(e.positionMs, e.positionStamp) { mutableStateOf(e.positionMs to e.positionStamp) }
     val screenOnM by IslandBus.screenOn.collectAsState()
@@ -1818,36 +1897,62 @@ private fun MediaExpanded(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size((50f * sc).dp).clip(RoundedCornerShape((12f * sc).dp)).background(ButtonBg),
             ) {
-                if (e.art != null) {
-                    Image(
-                        bitmap = e.art,
-                        contentDescription = null,
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    DotRing(Modifier.fillMaxSize())
-                    e.icon?.let {
-                        Image(
-                            bitmap = it, contentDescription = null,
-                            colorFilter = ColorFilter.tint(Fg),
-                            modifier = Modifier.size((20f * sc).dp),
+                AnimatedContent(
+                    targetState = track.third,
+                    transitionSpec = {
+                        ContentTransform(
+                            targetContentEnter = fadeIn(tween(320)) + scaleIn(tween(320, easing = FastOutSlowInEasing), initialScale = 1.15f),
+                            initialContentExit = fadeOut(tween(320)),
+                            sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
                         )
+                    },
+                    label = "art",
+                ) { art ->
+                    if (art != null) {
+                        Image(
+                            bitmap = art,
+                            contentDescription = null,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        DotRing(Modifier.fillMaxSize())
+                        e.icon?.let {
+                            Image(
+                                bitmap = it, contentDescription = null,
+                                colorFilter = ColorFilter.tint(Fg),
+                                modifier = Modifier.size((20f * sc).dp),
+                            )
+                        }
                     }
                 }
             }
             Spacer(Modifier.width((12f * sc).dp))
-            Column(modifier = Modifier.weight(1f)) {
-                AppLabel(e.app, sc)
-                Text(
-                    text = e.title, color = Fg, fontSize = (14f * sc).sp,
-                    fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
-                if (e.text.isNotBlank()) {
-                    Text(
-                        text = e.text, color = TextGray, fontSize = (12f * sc).sp,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
+            Box(modifier = Modifier.weight(1f).clipToBounds()) {
+                AnimatedContent(
+                    targetState = track.first to track.second,
+                    transitionSpec = {
+                        ContentTransform(
+                            targetContentEnter = slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { it / 3 } + fadeIn(tween(260, delayMillis = 60)),
+                            initialContentExit = slideOutHorizontally(tween(260, easing = FastOutSlowInEasing)) { -it / 3 } + fadeOut(tween(160)),
+                            sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
+                        )
+                    },
+                    label = "track",
+                ) { (title, text) ->
+                    Column(Modifier.fillMaxWidth()) {
+                        AppLabel(e.app, sc)
+                        Text(
+                            text = title, color = Fg, fontSize = (14f * sc).sp,
+                            fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                        if (text.isNotBlank()) {
+                            Text(
+                                text = text, color = TextGray, fontSize = (12f * sc).sp,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
                 }
             }
             if (eq) Equalizer(e.playing, sc)
