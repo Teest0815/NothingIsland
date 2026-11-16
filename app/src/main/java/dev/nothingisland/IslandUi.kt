@@ -1039,6 +1039,34 @@ private fun SmallIcon(icon: ImageBitmap?, size: Dp, pulse: Boolean = false) {
     }
 }
 
+/** Symbol der kleinen Pille je nach Einstellung: App-Symbol, Musiknote, Cover oder Profilbild. */
+@Composable
+private fun PillIcon(e: IslandEvent, size: Dp, pulse: Boolean = false) {
+    val s by IslandBus.settings.collectAsState()
+    val pic: ImageBitmap? = when {
+        e.kind == Kind.MEDIA && s.pillIconMedia == 2 -> e.art
+        e.kind == Kind.OTHER && s.pillIconNotif == 1 -> e.avatar
+        else -> null
+    }
+    val note = e.kind == Kind.MEDIA && s.pillIconMedia == 1
+    when {
+        pic != null -> {
+            val pop = remember(pic) { Animatable(0f) }
+            LaunchedEffect(pic) { pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 380f)) }
+            Image(
+                bitmap = pic,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.size(size * 1.15f).graphicsLayer {
+                    scaleX = pop.value; scaleY = pop.value; alpha = pop.value.coerceIn(0f, 1f)
+                }.clip(CircleShape),
+            )
+        }
+        note -> SmallIcon(QuickActions.icon("music"), size, pulse)
+        else -> SmallIcon(e.icon, size, pulse)
+    }
+}
+
 /** Kleine Pille: links Symbol + Text/Zeit direkt am Symbol, in der Mitte Platz für die Kamera. */
 @Composable
 private fun SplitRow(
@@ -1080,7 +1108,7 @@ private fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float
         iconGap = iconGap,
         modifier = modifier,
         left = {
-            SmallIcon(e.icon, (14f * sc).dp, pulse = e.kind == Kind.CALL && e.chronoBase == null)
+            PillIcon(e, (14f * sc).dp, pulse = e.kind == Kind.CALL && e.chronoBase == null)
             if (workout) {
                 // Links die Zeit (läuft live mit, wenn die App einen Zähler liefert).
                 Box(Modifier.weight(1f)) {
@@ -1294,7 +1322,7 @@ private fun MessageContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float
         modifier = modifier,
         rightAlignStart = e.kind != Kind.STATUS,
         left = {
-            SmallIcon(e.icon, (14f * sc).dp)
+            PillIcon(e, (14f * sc).dp)
             Text(
                 text = e.title.ifBlank { e.app },
                 color = Fg,
@@ -1334,7 +1362,7 @@ private fun CircleBubble(e: IslandEvent, sc: Float, size: Float, onClick: () -> 
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        SmallIcon(e.icon, (14f * sc).dp)
+        PillIcon(e, (14f * sc).dp)
     }
 }
 
@@ -1425,7 +1453,15 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
     ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size((48f * sc).dp)) {
             DotRing(Modifier.fillMaxSize())
-            event.icon?.let {
+            val usePic = IslandBus.settings.collectAsState().value.pillIconNotif == 1 && event.avatar != null
+            if (usePic) {
+                Image(
+                    bitmap = event.avatar!!,
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.size((34f * sc).dp).clip(CircleShape),
+                )
+            } else event.icon?.let {
                 Image(
                     bitmap = it,
                     contentDescription = null,

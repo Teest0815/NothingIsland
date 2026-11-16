@@ -329,6 +329,7 @@ class IslandListenerService : NotificationListenerService() {
             title = title,
             text = text,
             icon = loadIcon(n.smallIcon),
+            avatar = if (kind == Kind.OTHER) loadAvatar(n, ex) else null,
             action = n.contentIntent,
             actions = actions,
             chronoBase = chronoBase,
@@ -460,6 +461,18 @@ class IslandListenerService : NotificationListenerService() {
         return if (t >= 3600) String.format(java.util.Locale.ROOT, "%d:%02d:%02d", t / 3600, (t % 3600) / 60, t % 60)
         else String.format(java.util.Locale.ROOT, "%02d:%02d", t / 60, t % 60)
     }
+
+    /** Profil- oder Gruppenbild: großes Symbol, sonst Bild des letzten Absenders (MessagingStyle). */
+    private fun loadAvatar(n: Notification, ex: android.os.Bundle): ImageBitmap? = runCatching {
+        fun bmp(i: Icon?) = i?.loadDrawable(this)?.toBitmap(128, 128)?.asImageBitmap()
+        bmp(n.getLargeIcon())?.let { return@runCatching it }
+        @Suppress("DEPRECATION")
+        val msgs = ex.getParcelableArray(Notification.EXTRA_MESSAGES)
+        val last = msgs?.lastOrNull() as? android.os.Bundle
+        @Suppress("DEPRECATION")
+        val p = last?.getParcelable<android.app.Person>("sender_person")
+        bmp(p?.icon)
+    }.getOrNull()
 
     private fun loadIcon(icon: Icon?): ImageBitmap? = runCatching {
         icon?.loadDrawable(this)?.toBitmap(96, 96)?.asImageBitmap()

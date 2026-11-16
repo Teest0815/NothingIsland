@@ -852,6 +852,13 @@ object QuickActions {
                 c.drawRoundRect(RectF(34f, 36f, 62f, 88f), 8f, 8f, fill)
                 c.drawRoundRect(RectF(44f, 46f, 52f, 62f), 4f, 4f, clear)
             }
+            "music" -> {
+                c.drawOval(RectF(18f, 58f, 44f, 78f), fill)
+                c.drawOval(RectF(52f, 50f, 78f, 70f), fill)
+                c.drawLine(42f, 66f, 42f, 20f, line)
+                c.drawLine(76f, 58f, 76f, 14f, line)
+                c.drawLine(42f, 20f, 76f, 14f, line)
+            }
             "bell" -> {
                 val p = Path().apply {
                     moveTo(22f, 68f); lineTo(22f, 46f)

@@ -32,6 +32,8 @@ data class IslandEvent(
     val title: String,
     val text: String,
     val icon: ImageBitmap? = null,
+    /** Profil-/Gruppenbild des Absenders (Messenger), falls vorhanden. */
+    val avatar: ImageBitmap? = null,
     val action: PendingIntent? = null,
     val actions: List<IslandAction> = emptyList(),
     /** Basiszeit (Notification.when) falls die Benachrichtigung ein Chronometer zeigt. */
@@ -145,6 +147,10 @@ data class IslandSettings(
     val groupNotif: Boolean = false,
     /** Bestätigungscodes erkennen und Kopieren anbieten. */
     val otpCodes: Boolean = true,
+    /** Symbol der kleinen Pille bei Musik: 0 App-Symbol, 1 Musiknote, 2 Cover. */
+    val pillIconMedia: Int = 0,
+    /** Symbol der kleinen Pille bei Meldungen: 0 App-Symbol, 1 Profil-/Gruppenbild. */
+    val pillIconNotif: Int = 0,
     /** Kopierten Text kurz in der Pille zeigen. */
     val clipboard: Boolean = true,
     /** Training: Wert rechts in der Pille (bpm, dist, pace, speed, power, cad, kcal). */
@@ -469,6 +475,8 @@ object IslandBus {
             chargeAnim = p.getBoolean("chargeAnim", d.chargeAnim),
             groupNotif = p.getBoolean("groupNotif2", d.groupNotif),
             otpCodes = p.getBoolean("otpCodes", d.otpCodes),
+            pillIconMedia = p.getInt("pillIconMedia", d.pillIconMedia),
+            pillIconNotif = p.getInt("pillIconNotif", d.pillIconNotif),
             clipboard = p.getBoolean("clipboard", d.clipboard),
             workoutMetric = p.getString("workoutMetric", d.workoutMetric) ?: d.workoutMetric,
             quickTiles = p.getString("quickTiles", d.quickTiles) ?: d.quickTiles,
@@ -528,6 +536,8 @@ object IslandBus {
             .putBoolean("chargeAnim", s.chargeAnim)
             .putBoolean("groupNotif2", s.groupNotif)
             .putBoolean("otpCodes", s.otpCodes)
+            .putInt("pillIconMedia", s.pillIconMedia)
+            .putInt("pillIconNotif", s.pillIconNotif)
             .putBoolean("clipboard", s.clipboard)
             .putString("workoutMetric", s.workoutMetric)
             .putString("quickTiles", s.quickTiles)

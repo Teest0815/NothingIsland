@@ -544,6 +544,18 @@ class MainActivity : ComponentActivity() {
             ToggleRow("Meldungen stapeln (Wischen entfernt die oberste Karte)", s.multiNotif) { c -> edit { it.copy(multiNotif = c) } }
             ToggleRow("Meldungen derselben App zu einer Karte zusammenfassen (statt stapeln)", s.groupNotif) { c -> edit { it.copy(groupNotif = c) } }
             ToggleRow("Bestätigungscodes erkennen (Tippen kopiert)", s.otpCodes) { c -> edit { it.copy(otpCodes = c) } }
+            Text("Symbol in der kleinen Pille: Meldungen", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp, bottom = 6.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "APP-SYMBOL", 1 to "PROFIL-/GRUPPENBILD").forEach { (k, n) ->
+                    Chip(n, s.pillIconNotif == k) { edit { it.copy(pillIconNotif = k) } }
+                }
+            }
+            Text("Symbol in der kleinen Pille: Musik", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp, bottom = 6.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "APP-SYMBOL", 1 to "MUSIKNOTE", 2 to "COVER").forEach { (k, n) ->
+                    Chip(n, s.pillIconMedia == k) { edit { it.copy(pillIconMedia = k) } }
+                }
+            }
             SettingSlider("Stapel: Kompaktheit", "${(s.stackCompact * 100).roundToInt()} %", s.stackCompact, 0f..1f) { v ->
                 edit { it.copy(stackCompact = (v * 20f).roundToInt() / 20f) }
             }
