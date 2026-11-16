@@ -967,7 +967,7 @@ private fun IslandHostBody() {
             ) { st ->
                 when (st.first) {
                     Mode.IDLE -> IdleDots(sc)
-                    Mode.NOTE -> NotePanel(s.notes, bsc, Modifier.requiredSize(bigW.dp, (250f * fsc).dp)) { touch++ }
+                    Mode.NOTE -> NotePanel(s.notes, bsc, Modifier.requiredSize(bigW.dp, (250f * fsc).dp), onUsed = { touch++ })
                     Mode.CALC -> CalcPanel(bsc, Modifier.requiredSize(bigW.dp, (292f * fsc).dp)) { touch++ }
                     Mode.QUICK -> QuickPanel(quickPages, bsc, Modifier.requiredSize(bigW.dp, (quickBaseH * fsc).dp)) { touch++ }
                     Mode.COMPACT -> shownCurrent?.let {

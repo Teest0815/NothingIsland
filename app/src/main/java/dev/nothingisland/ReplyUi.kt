@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -97,7 +98,7 @@ fun ReplyBar() {
                 Modifier.fillMaxWidth().height((250f * fsc).dp).clip(shape)
                     .background(IslandTheme.bg).border(1.dp, IslandTheme.hairline, shape),
             ) {
-                NotePanel(st.notes, sc, Modifier.fillMaxSize(), {}) {
+                NotePanel(st.notes, sc, Modifier.fillMaxSize(), onUsed = {}, bottom = {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -129,7 +130,7 @@ fun ReplyBar() {
                             )
                         }
                     }
-                }
+                })
             }
         }
         return
