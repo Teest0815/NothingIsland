@@ -1079,7 +1079,7 @@ private fun IdleDots(sc: Float) {
 }
 
 @Composable
-private fun SmallIcon(icon: ImageBitmap?, size: Dp, pulse: Boolean = false) {
+private fun SmallIcon(icon: ImageBitmap?, size: Dp, pulse: Boolean = false, popKey: Any? = icon) {
     if (icon != null) {
         // Klingelnder Anruf: Symbol pulsiert wie ein Herzschlag.
         val beat = if (pulse) {
@@ -1091,8 +1091,8 @@ private fun SmallIcon(icon: ImageBitmap?, size: Dp, pulse: Boolean = false) {
             ).value
         } else 1f
         // Symbol poppt beim Erscheinen auf und dreht sich leicht ein.
-        val pop = remember(icon) { Animatable(0f) }
-        LaunchedEffect(icon) { pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 380f)) }
+        val pop = remember(popKey) { Animatable(0f) }
+        LaunchedEffect(popKey) { pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 380f)) }
         Image(
             bitmap = icon,
             contentDescription = null,
@@ -1121,8 +1121,8 @@ private fun PillIcon(e: IslandEvent, size: Dp, pulse: Boolean = false) {
     val note = e.kind == Kind.MEDIA && s.pillIconMedia == 1
     when {
         pic != null -> {
-            val pop = remember(pic) { Animatable(0f) }
-            LaunchedEffect(pic) { pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 380f)) }
+            val pop = remember(e.key) { Animatable(0f) }
+            LaunchedEffect(e.key) { pop.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 380f)) }
             Image(
                 bitmap = pic,
                 contentDescription = null,
@@ -1132,8 +1132,8 @@ private fun PillIcon(e: IslandEvent, size: Dp, pulse: Boolean = false) {
                 }.clip(CircleShape),
             )
         }
-        note -> SmallIcon(QuickActions.icon("music"), size, pulse)
-        else -> SmallIcon(e.icon, size, pulse)
+        note -> SmallIcon(QuickActions.icon("music"), size, pulse, popKey = e.key)
+        else -> SmallIcon(e.icon, size, pulse, popKey = e.key)
     }
 }
 
