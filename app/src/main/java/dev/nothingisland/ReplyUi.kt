@@ -90,6 +90,50 @@ fun ReplyBar() {
         IslandBus.endReply()
     }
     val shape = RoundedCornerShape((minOf(st.expandedCorner * fsc, 42f * fsc)).dp)
+    if (sink != null) {
+        // Schreiben-Bubble sieht aus wie die Notiz-Bubble, nur mit Eingabefeld statt Knopf.
+        Box(Modifier.fillMaxWidth().padding(12.dp)) {
+            Box(
+                Modifier.fillMaxWidth().height((250f * fsc).dp).clip(shape)
+                    .background(IslandTheme.bg).border(1.dp, IslandTheme.hairline, shape),
+            ) {
+                NotePanel(st.notes, sc, Modifier.fillMaxSize(), {}) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy((8f * sc).dp),
+                    ) {
+                        Box(
+                            Modifier.weight(1f).clip(RoundedCornerShape(50)).background(IslandTheme.buttonBg)
+                                .padding(horizontal = (14f * sc).dp, vertical = (10f * sc).dp),
+                        ) {
+                            if (text.isEmpty()) Text("Notiz schreiben …", color = IslandTheme.textGray, fontSize = (13f * sc).sp)
+                            BasicTextField(
+                                value = text,
+                                onValueChange = { text = it },
+                                textStyle = TextStyle(color = IslandTheme.fg, fontSize = (13f * sc).sp),
+                                cursorBrush = SolidColor(IslandTheme.accent),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                keyboardActions = KeyboardActions(onDone = { send() }),
+                                modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                            )
+                        }
+                        Box(
+                            Modifier.clip(RoundedCornerShape(50)).background(IslandTheme.accent)
+                                .clickable { send() }
+                                .padding(horizontal = (14f * sc).dp, vertical = (10f * sc).dp),
+                        ) {
+                            Text(
+                                "SPEICHERN", color = IslandTheme.onAccent, fontFamily = IslandTheme.font,
+                                fontWeight = FontWeight.Bold, fontSize = (10f * sc).sp, letterSpacing = 1.sp,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        return
+    }
     var expanded by remember(e.id) { mutableStateOf(false) }
     val alertH = 84f * fsc
     val fullH = alertH + 62f * sc

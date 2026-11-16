@@ -307,7 +307,7 @@ class OverlayHost(
         val fsc = s.scale * minOf(s.expandedScale, s.expandedFrameMax)
         val lp = WindowManager.LayoutParams(
             ((bigW + 24f) * d).toInt(),
-            ((84f * fsc + 62f * sc + 24f) * d).toInt(),
+            (((if (IslandBus.replyTarget.value?.noteSink != null) 250f * fsc else 84f * fsc + 62f * sc) + 24f) * d).toInt(),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
