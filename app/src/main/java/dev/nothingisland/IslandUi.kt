@@ -184,6 +184,7 @@ private fun IslandHostBody() {
     val lowPowerNow by IslandBus.lowPower.collectAsState()
     LaunchedEffect(s.powerSaver) { QuickActions.updateLowPower(ctx, s) }
     val screenOnNow by IslandBus.screenOn.collectAsState()
+    var lockHidden by remember { mutableStateOf(false) }
     LaunchedEffect(lowPowerNow, screenOnNow) {
         // Bei ausgeschaltetem Bildschirm gibt es nichts anzuzeigen: keine Schleife. Beim Einschalten sofort abgleichen.
         if (!screenOnNow) return@LaunchedEffect
@@ -394,6 +395,19 @@ private fun IslandHostBody() {
         lingering != null -> Mode.MESSAGE
         current != null -> Mode.COMPACT
         else -> Mode.IDLE
+    }
+    // Sperren: Alles Große sofort unsichtbar, ohne Animation. Compose pausiert beim Bildschirm-Aus, die
+    // Schrumpf-Animation würde sonst beim Aufwecken sichtbar weiterlaufen. Darum nach dem Aufwecken kurz warten.
+    var bigBeforeLock by remember { mutableStateOf(false) }
+    if (screenOnNow && !lockHidden) {
+        bigBeforeLock = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK || mode == Mode.CALC || mode == Mode.NOTE
+    }
+    LaunchedEffect(screenOnNow) {
+        if (!screenOnNow) lockHidden = true
+        else if (lockHidden) {
+            if (bigBeforeLock) delay(700)
+            lockHidden = false
+        }
     }
     // Beim Antworten zeichnet das eigene Eingabefenster; die Pille tritt zurück.
     val fullscreenNow by IslandBus.fullscreen.collectAsState()
@@ -629,7 +643,7 @@ private fun IslandHostBody() {
     }
     val shape = RoundedCornerShape(corner)
 
-    Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (noteReplyHidden) 0f else 1f }.wrapContentSize(Alignment.TopStart, unbounded = true)) {
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (noteReplyHidden || lockHidden) 0f else 1f }.wrapContentSize(Alignment.TopStart, unbounded = true)) {
     Box(Modifier.width(span.dp), contentAlignment = Alignment.TopCenter) {
     Row(modifier = Modifier.padding(top = maxOf(topPad, 0.dp)), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.width(slot))
