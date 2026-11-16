@@ -34,6 +34,8 @@ data class IslandEvent(
     val icon: ImageBitmap? = null,
     /** Profil-/Gruppenbild des Absenders (Messenger), falls vorhanden. */
     val avatar: ImageBitmap? = null,
+    /** Notiz-Eingabe: statt einer Antwort wird der Text hier abgegeben. */
+    val noteSink: ((String) -> Unit)? = null,
     val action: PendingIntent? = null,
     val actions: List<IslandAction> = emptyList(),
     /** Basiszeit (Notification.when) falls die Benachrichtigung ein Chronometer zeigt. */
@@ -155,6 +157,8 @@ data class IslandSettings(
     val pillIconNotif: Int = 0,
     /** Bei Musik: Nach-unten-Ziehen pausiert/startet die Wiedergabe. */
     val swipeDownPause: Boolean = false,
+    /** Notizen der Notiz-Pille als JSON-Liste (neueste zuletzt). */
+    val notes: String = "[]",
     /** Kopierten Text kurz in der Pille zeigen. */
     val clipboard: Boolean = true,
     /** Training: Wert rechts in der Pille (bpm, dist, pace, speed, power, cad, kcal). */
@@ -303,7 +307,29 @@ object IslandBus {
 
     fun setQuick(value: Boolean) {
         _quick.value = value
-        if (value) _calc.value = false
+        if (value) { _calc.value = false; _note.value = false }
+    }
+
+    /** Notiz-Pille. */
+    private val _note = MutableStateFlow(false)
+    val note: StateFlow<Boolean> = _note.asStateFlow()
+
+    fun setNote(value: Boolean) {
+        _note.value = value
+        if (value) { _quick.value = false; _calc.value = false }
+    }
+
+    fun noteList(json: String): List<String> = runCatching {
+        val a = org.json.JSONArray(json)
+        (0 until a.length()).map { a.getString(it) }
+    }.getOrDefault(emptyList())
+
+    fun addNote(ctx: Context, text: String) {
+        updateSettings(ctx) { s -> s.copy(notes = org.json.JSONArray((noteList(s.notes) + text).takeLast(30)).toString()) }
+    }
+
+    fun removeNote(ctx: Context, index: Int) {
+        updateSettings(ctx) { s -> s.copy(notes = org.json.JSONArray(noteList(s.notes).filterIndexed { i, _ -> i != index }).toString()) }
     }
 
     /** Taschenrechner in der großen Pille. */
@@ -312,7 +338,7 @@ object IslandBus {
 
     fun setCalc(value: Boolean) {
         _calc.value = value
-        if (value) _quick.value = false
+        if (value) { _quick.value = false; _note.value = false }
     }
 
     /** Meldung, auf die gerade direkt in der Island geantwortet wird. */
@@ -342,6 +368,7 @@ object IslandBus {
         _replyShown.value = false
         _quick.value = false
         _calc.value = false
+        _note.value = false
         _expanded.value = false
         removeOngoing("charge-detail")
         _pending.value = emptyList()
@@ -494,6 +521,7 @@ object IslandBus {
             swipeUpAction = p.getString("swipeUpAction", d.swipeUpAction) ?: d.swipeUpAction,
             pillIconNotif = p.getInt("pillIconNotif", d.pillIconNotif),
             swipeDownPause = p.getBoolean("swipeDownPause", d.swipeDownPause),
+            notes = p.getString("notes", d.notes) ?: d.notes,
             clipboard = p.getBoolean("clipboard", d.clipboard),
             workoutMetric = p.getString("workoutMetric", d.workoutMetric) ?: d.workoutMetric,
             quickTiles = p.getString("quickTiles", d.quickTiles) ?: d.quickTiles,
@@ -557,6 +585,7 @@ object IslandBus {
             .putString("swipeUpAction", s.swipeUpAction)
             .putInt("pillIconNotif", s.pillIconNotif)
             .putBoolean("swipeDownPause", s.swipeDownPause)
+            .putString("notes", s.notes)
             .putBoolean("clipboard", s.clipboard)
             .putString("workoutMetric", s.workoutMetric)
             .putString("quickTiles", s.quickTiles)

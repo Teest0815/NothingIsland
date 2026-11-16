@@ -57,7 +57,9 @@ fun ReplyBar() {
     IslandTheme.apply(st)
     val event by IslandBus.replyTarget.collectAsState()
     val e = event ?: return
-    val reply = e.reply ?: return
+    val reply = e.reply
+    val sink = e.noteSink
+    if (reply == null && sink == null) return
     val ctx = LocalContext.current
     val sc = st.scale * st.expandedScale
     val fsc = st.scale * minOf(st.expandedScale, st.expandedFrameMax)
@@ -73,8 +75,14 @@ fun ReplyBar() {
     fun send() {
         val t = text.trim()
         if (t.isEmpty()) return
+        if (sink != null) {
+            keyboard?.hide()
+            IslandBus.endReply()
+            sink(t)
+            return
+        }
         val data = Intent()
-        val b = Bundle().apply { putCharSequence(reply.remoteInput.resultKey, t) }
+        val b = Bundle().apply { putCharSequence(reply!!.remoteInput.resultKey, t) }
         RemoteInput.addResultsToIntent(arrayOf(reply.remoteInput), data, b)
         runCatching { reply.action.send(ctx, 0, data) }
         keyboard?.hide()
@@ -125,7 +133,7 @@ fun ReplyBar() {
                         .padding(horizontal = (14f * sc).dp, vertical = (10f * sc).dp),
                 ) {
                     if (text.isEmpty()) {
-                        Text("Antwort schreiben …", color = IslandTheme.textGray, fontSize = (13f * sc).sp)
+                        Text(if (sink != null) "Notiz schreiben …" else "Antwort schreiben …", color = IslandTheme.textGray, fontSize = (13f * sc).sp)
                     }
                     BasicTextField(
                         value = text,
@@ -145,7 +153,7 @@ fun ReplyBar() {
                         .padding(horizontal = (14f * sc).dp, vertical = (10f * sc).dp),
                 ) {
                     Text(
-                        "SENDEN",
+                        if (sink != null) "SPEICHERN" else "SENDEN",
                         color = IslandTheme.onAccent,
                         fontFamily = IslandTheme.font,
                         fontWeight = FontWeight.Bold,

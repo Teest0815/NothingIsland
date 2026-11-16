@@ -292,6 +292,7 @@ object QuickActions {
         ),
         settingsTile("alarm", "Wecker", "WECKER", "alarm", AlarmClock.ACTION_SHOW_ALARMS),
         settingsTile("nfc", "NFC", "NFC", "nfc", Settings.ACTION_NFC_SETTINGS),
+        QuickTile("note", "Notiz", { "NOTIZ" }, "note", { false }, { _ -> IslandBus.setNote(true); true }),
         QuickTile("calc", "Taschenrechner", { "RECHNER" }, "calc", { false }, { _ -> IslandBus.setCalc(true); true }),
         QuickTile(
             "app", "Nothing Island Einstellungen", { "ISLAND" }, "gear", { false },
@@ -859,6 +860,12 @@ object QuickActions {
                 c.drawLine(42f, 66f, 42f, 20f, line)
                 c.drawLine(76f, 58f, 76f, 14f, line)
                 c.drawLine(42f, 20f, 76f, 14f, line)
+            }
+            "note" -> {
+                c.drawRoundRect(RectF(18f, 12f, 78f, 84f), 8f, 8f, line)
+                c.drawLine(30f, 34f, 66f, 34f, line)
+                c.drawLine(30f, 48f, 66f, 48f, line)
+                c.drawLine(30f, 62f, 52f, 62f, line)
             }
             "calc" -> {
                 c.drawRoundRect(RectF(20f, 10f, 76f, 86f), 8f, 8f, line)

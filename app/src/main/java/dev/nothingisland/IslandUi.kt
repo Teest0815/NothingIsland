@@ -34,6 +34,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -124,7 +125,7 @@ private val Fg: Color get() = IslandTheme.fg
 private val Bg: Color get() = IslandTheme.bg
 private val Mono: FontFamily get() = IslandTheme.font
 
-private enum class Mode { IDLE, COMPACT, MESSAGE, ALERT, EXPANDED, QUICK, CALC }
+private enum class Mode { IDLE, COMPACT, MESSAGE, ALERT, EXPANDED, QUICK, CALC, NOTE }
 
 /** Reserve um die Pille, damit Überschwingen der Feder nicht abgeschnitten wird. */
 private const val WINDOW_MARGIN = 24f
@@ -157,6 +158,7 @@ private fun IslandHostBody() {
     val manual by IslandBus.expanded.collectAsState()
     val quick by IslandBus.quick.collectAsState()
     val calc by IslandBus.calc.collectAsState()
+    val note by IslandBus.note.collectAsState()
     val replying by IslandBus.replyShown.collectAsState()
     val pendingList by IslandBus.pending.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -238,6 +240,12 @@ private fun IslandHostBody() {
         if (quick) {
             delay(10_000)
             IslandBus.setQuick(false)
+        }
+    }
+    LaunchedEffect(note, touch) {
+        if (note) {
+            delay(45_000)
+            IslandBus.setNote(false)
         }
     }
     LaunchedEffect(calc, touch) {
@@ -373,6 +381,7 @@ private fun IslandHostBody() {
     val mode = when {
         alert != null -> Mode.ALERT
         calc -> Mode.CALC
+        note -> Mode.NOTE
         quick && s.quickPanel -> Mode.QUICK
         manual && current != null -> Mode.EXPANDED
         lingering != null -> Mode.MESSAGE
@@ -407,7 +416,7 @@ private fun IslandHostBody() {
     // Haptik: kurzes Vibrieren, wenn die Pille aufklappt.
     var prevMode by remember { mutableStateOf(mode) }
     LaunchedEffect(mode) {
-        val big = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK || mode == Mode.CALC
+        val big = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK || mode == Mode.CALC || mode == Mode.NOTE
         if (s.haptics && big && prevMode != mode) QuickActions.haptic(ctx, s.hapticLevel)
         prevMode = mode
     }
@@ -445,6 +454,7 @@ private fun IslandHostBody() {
         Mode.EXPANDED -> expandedH
         Mode.QUICK -> quickBaseH * fsc
         Mode.CALC -> 292f * fsc
+        Mode.NOTE -> 250f * fsc
     }
     val targetCorner = when (mode) {
         Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH / 2f * s.smallRoundness
@@ -452,7 +462,7 @@ private fun IslandHostBody() {
     }
 
     val motion = spring<Dp>(dampingRatio = 0.9f, stiffness = 500f)
-    val growing = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK || mode == Mode.CALC
+    val growing = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK || mode == Mode.CALC || mode == Mode.NOTE
     // Je größer die Pille, desto langsamer und ruhiger federt sie (sonst wirkt das Nachschwingen zu hektisch).
     val bigK = maxOf(fsc, bsc).coerceAtLeast(1f)
     val slow = (1f / bigK).coerceIn(0.5f, 1f)
@@ -474,7 +484,7 @@ private fun IslandHostBody() {
         val was = lastMode
         lastMode = mode
         val small = mode == Mode.IDLE || mode == Mode.COMPACT || mode == Mode.MESSAGE
-        val big = was == Mode.ALERT || was == Mode.EXPANDED || was == Mode.QUICK || was == Mode.CALC
+        val big = was == Mode.ALERT || was == Mode.EXPANDED || was == Mode.QUICK || was == Mode.CALC || was == Mode.NOTE
         if (s.squashEntry && small && big) {
             squashBounce = false
             squashHold = true
@@ -575,6 +585,7 @@ private fun IslandHostBody() {
             Mode.EXPANDED -> IslandBus.setExpanded(false)
             Mode.QUICK -> IslandBus.setQuick(false)
             Mode.CALC -> IslandBus.setCalc(false)
+            Mode.NOTE -> IslandBus.setNote(false)
             Mode.MESSAGE -> lingering = null
             else -> Unit
         }
@@ -854,6 +865,7 @@ private fun IslandHostBody() {
                                     val k = s.swipeUpAction
                                     if (k == "panel") IslandBus.setQuick(true)
                                     else if (k == "calc") IslandBus.setCalc(true)
+                                    else if (k == "note") IslandBus.setNote(true)
                                     else runCatching { QuickActions.tile(k)?.click?.invoke(ctx) }
                                 }
                             }
@@ -894,7 +906,7 @@ private fun IslandHostBody() {
                         Mode.EXPANDED -> IslandBus.setExpanded(false)
                         Mode.IDLE -> if (s.quickPanel) IslandBus.setQuick(true)
                         Mode.QUICK -> IslandBus.setQuick(false)
-                        Mode.CALC -> Unit
+                        Mode.CALC, Mode.NOTE -> Unit
                     }
                 },
             contentAlignment = Alignment.Center,
@@ -916,7 +928,7 @@ private fun IslandHostBody() {
                             sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
                         )
                     }
-                    if (targetState.first == Mode.QUICK || targetState.first == Mode.CALC) {
+                    if (targetState.first == Mode.QUICK || targetState.first == Mode.CALC || targetState.first == Mode.NOTE) {
                         // Schnellzugriff: Rahmen wächst zuerst, die Kacheln blenden danach einzeln ein.
                         return@AnimatedContent ContentTransform(
                             targetContentEnter = fadeIn(tween(140, delayMillis = 20)) +
@@ -926,7 +938,7 @@ private fun IslandHostBody() {
                             sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
                         )
                     }
-                    if (initialState.first == Mode.QUICK || initialState.first == Mode.CALC) {
+                    if (initialState.first == Mode.QUICK || initialState.first == Mode.CALC || initialState.first == Mode.NOTE) {
                         return@AnimatedContent ContentTransform(
                             targetContentEnter = fadeIn(tween(150, delayMillis = 100)) +
                                 scaleIn(tween(240, delayMillis = 100, easing = FastOutSlowInEasing), initialScale = 0.9f),
@@ -935,7 +947,7 @@ private fun IslandHostBody() {
                             sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
                         )
                     }
-                    val toBig = targetState.first == Mode.ALERT || targetState.first == Mode.EXPANDED || targetState.first == Mode.QUICK || targetState.first == Mode.CALC
+                    val toBig = targetState.first == Mode.ALERT || targetState.first == Mode.EXPANDED || targetState.first == Mode.QUICK || targetState.first == Mode.CALC || targetState.first == Mode.NOTE
                     val delay = if (toBig) 90 else 60
                     ContentTransform(
                         targetContentEnter = fadeIn(tween(200, delayMillis = delay)) +
@@ -955,6 +967,7 @@ private fun IslandHostBody() {
             ) { st ->
                 when (st.first) {
                     Mode.IDLE -> IdleDots(sc)
+                    Mode.NOTE -> NotePanel(s.notes, bsc, Modifier.requiredSize(bigW.dp, (250f * fsc).dp)) { touch++ }
                     Mode.CALC -> CalcPanel(bsc, Modifier.requiredSize(bigW.dp, (292f * fsc).dp)) { touch++ }
                     Mode.QUICK -> QuickPanel(quickPages, bsc, Modifier.requiredSize(bigW.dp, (quickBaseH * fsc).dp)) { touch++ }
                     Mode.COMPACT -> shownCurrent?.let {
@@ -2710,6 +2723,71 @@ private fun CalcPanel(sc: Float, modifier: Modifier, onUsed: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+// ------------------------------------------------------------------ Notiz-Pille
+
+@Composable
+private fun NotePanel(notesJson: String, sc: Float, modifier: Modifier, onUsed: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val notes = remember(notesJson) { IslandBus.noteList(notesJson) }
+    val shown = notes.withIndex().toList().asReversed()
+    Column(modifier.padding(horizontal = (16f * sc).dp, vertical = (12f * sc).dp)) {
+        Text(
+            "NOTIZEN", color = TextGray, fontFamily = Mono, fontWeight = FontWeight.Bold,
+            fontSize = (10f * sc).sp, letterSpacing = 1.5.sp,
+        )
+        Spacer(Modifier.height((6f * sc).dp))
+        Column(
+            Modifier.weight(1f).fillMaxWidth().then(androidx.compose.foundation.rememberScrollState().let { Modifier.verticalScroll(it) }),
+            verticalArrangement = Arrangement.spacedBy((6f * sc).dp),
+        ) {
+            if (shown.isEmpty()) {
+                Text("Noch keine Notiz.", color = TextGray, fontSize = (13f * sc).sp, modifier = Modifier.padding(top = (8f * sc).dp))
+            }
+            shown.forEach { (i, text) ->
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape((12f * sc).dp)).background(ButtonBg)
+                        .padding(start = (12f * sc).dp, top = (4f * sc).dp, bottom = (4f * sc).dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text, color = Fg, fontSize = (13f * sc).sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(vertical = (4f * sc).dp)
+                            .pointerInput(text) { detectTapGestures { onUsed(); QuickActions.copyCode(ctx, text) } },
+                    )
+                    Box(
+                        Modifier.size((36f * sc).dp).clickable { onUsed(); IslandBus.removeNote(ctx, i) },
+                        contentAlignment = Alignment.Center,
+                    ) { Text("✕", color = TextGray, fontSize = (12f * sc).sp) }
+                }
+            }
+        }
+        Spacer(Modifier.height((8f * sc).dp))
+        val src = remember { MutableInteractionSource() }
+        val down by src.collectIsPressedAsState()
+        Box(
+            Modifier.fillMaxWidth().height((40f * sc).dp)
+                .bounceClick({
+                    onUsed()
+                    IslandBus.setNote(false)
+                    IslandBus.startReply(
+                        IslandEvent(
+                            app = "NOTIZEN", title = "Neue Notiz", text = "Schreib etwas auf",
+                            noteSink = { t -> IslandBus.addNote(ctx, t); IslandBus.setNote(true) },
+                        ),
+                    )
+                }, src)
+                .clip(RoundedCornerShape(50))
+                .background(if (down) Color.White else NothingRed),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "+  NEUE NOTIZ", color = if (down) Color.Black else OnAccent, fontFamily = Mono,
+                fontWeight = FontWeight.Bold, fontSize = (11f * sc).sp, letterSpacing = 1.sp,
+            )
         }
     }
 }
