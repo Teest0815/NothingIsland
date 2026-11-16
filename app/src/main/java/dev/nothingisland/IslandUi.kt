@@ -801,6 +801,31 @@ private fun IslandHostBody() {
                         },
                     )
                 }
+                .pointerInput(mode, s.swipeUpAction) {
+                    if (s.swipeUpAction.isEmpty() || (mode != Mode.IDLE && mode != Mode.COMPACT)) return@pointerInput
+                    val trigger = 22.dp.toPx()
+                    var total = 0f
+                    var armed = false
+                    detectVerticalDragGestures(
+                        onDragStart = { total = 0f; armed = false },
+                        onDragEnd = {
+                            if (total < -trigger) {
+                                val k = s.swipeUpAction
+                                if (s.haptics) QuickActions.haptic(ctx, 1)
+                                if (k == "panel") IslandBus.setQuick(true)
+                                else runCatching { QuickActions.tile(k)?.click?.invoke(ctx) }
+                            }
+                        },
+                        onDragCancel = { total = 0f },
+                        onVerticalDrag = { change, dragAmount ->
+                            change.consume()
+                            total += dragAmount
+                            val over = total < -trigger
+                            if (over && !armed && s.haptics) QuickActions.haptic(ctx, 1)
+                            armed = over
+                        },
+                    )
+                }
                 .combinedClickable(
                     interactionSource = press,
                     indication = null,
@@ -1064,6 +1089,35 @@ private fun PillIcon(e: IslandEvent, size: Dp, pulse: Boolean = false) {
         }
         note -> SmallIcon(QuickActions.icon("music"), size, pulse)
         else -> SmallIcon(e.icon, size, pulse)
+    }
+}
+
+/** Symbol im Punktring der großen Pille, gleiche Einstellung wie in der kleinen Pille. */
+@Composable
+private fun RingIcon(e: IslandEvent, sc: Float) {
+    val s by IslandBus.settings.collectAsState()
+    val pic: ImageBitmap? = when {
+        e.kind == Kind.MEDIA && s.pillIconMedia == 2 -> e.art
+        e.kind == Kind.OTHER && s.pillIconNotif == 1 -> e.avatar
+        else -> null
+    }
+    if (pic != null) {
+        Image(
+            bitmap = pic,
+            contentDescription = null,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = Modifier.size((34f * sc).dp).clip(CircleShape),
+        )
+        return
+    }
+    val bmp = if (e.kind == Kind.MEDIA && s.pillIconMedia == 1) QuickActions.icon("music") else e.icon
+    bmp?.let {
+        Image(
+            bitmap = it,
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(Fg),
+            modifier = Modifier.size((20f * sc).dp),
+        )
     }
 }
 
@@ -1609,14 +1663,7 @@ private fun OngoingExpanded(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.size((48f * sc).dp)) {
                     DotRing(Modifier.fillMaxSize())
-                    e.icon?.let {
-                        Image(
-                            bitmap = it,
-                            contentDescription = null,
-                            colorFilter = ColorFilter.tint(Fg),
-                            modifier = Modifier.size((20f * sc).dp),
-                        )
-                    }
+                    RingIcon(e, sc)
                 }
                 Spacer(Modifier.width((14f * sc).dp))
                 Column(modifier = Modifier.weight(1f)) {

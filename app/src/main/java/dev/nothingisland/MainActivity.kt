@@ -623,6 +623,10 @@ class MainActivity : ComponentActivity() {
             Spacer(Modifier.height(8.dp))
         }
 
+        CardIf(FoldLabel("WISCHEN NACH OBEN", false)) {
+            SwipeUpSettings(s)
+        }
+
         CardIf(FoldLabel("HAPTIK", false)) {
             ToggleRow("Kurz vibrieren beim Aufklappen", s.haptics) { c ->
                 edit { it.copy(haptics = c) }
@@ -712,6 +716,39 @@ class MainActivity : ComponentActivity() {
                 }
             }
             Spacer(Modifier.height(8.dp))
+        }
+    }
+
+    /** Funktion für Wischen nach oben auf der kleinen Pille (Ruhe-Pille und laufende Aktivität). */
+    @Composable
+    private fun SwipeUpSettings(s: IslandSettings) {
+        val cur = s.swipeUpAction
+        val curName = when {
+            cur.isEmpty() -> "Aus"
+            cur == "panel" -> "Schnellzugriff-Panel öffnen"
+            else -> QuickActions.tile(cur)?.name ?: cur
+        }
+        Text(
+            "Wische auf der kleinen Pille nach oben, um eine Funktion auszulösen (Taschenlampe, Taschenrechner, eine App, ein Smart-Home-Gerät …).",
+            color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Text("Aktuell: $curName", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
+        fun set(k: String) = edit { it.copy(swipeUpAction = k) }
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip("AUS", cur.isEmpty()) { set("") }
+            Chip("PANEL", cur == "panel") { set("panel") }
+        }
+        AppTilePicker(emptyList()) { set(it) }
+        HaDevicePicker(emptyList()) { set(it) }
+        Spacer(Modifier.height(6.dp))
+        Text("Funktion wählen", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+        QuickActions.tiles.forEach { t ->
+            Text(
+                (if (cur == t.key) "●  " else "+  ") + t.name,
+                color = if (cur == t.key) Color.White else AppAccent,
+                fontSize = 14.sp,
+                modifier = Modifier.fillMaxWidth().clickable { set(t.key) }.padding(vertical = 8.dp),
+            )
         }
     }
 

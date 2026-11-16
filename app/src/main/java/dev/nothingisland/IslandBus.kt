@@ -149,6 +149,8 @@ data class IslandSettings(
     val otpCodes: Boolean = true,
     /** Symbol der kleinen Pille bei Musik: 0 App-Symbol, 1 Musiknote, 2 Cover. */
     val pillIconMedia: Int = 0,
+    /** Wischen nach oben auf der kleinen Pille: Kachel-Schlüssel, "panel" oder leer (aus). */
+    val swipeUpAction: String = "",
     /** Symbol der kleinen Pille bei Meldungen: 0 App-Symbol, 1 Profil-/Gruppenbild. */
     val pillIconNotif: Int = 0,
     /** Kopierten Text kurz in der Pille zeigen. */
@@ -476,6 +478,7 @@ object IslandBus {
             groupNotif = p.getBoolean("groupNotif2", d.groupNotif),
             otpCodes = p.getBoolean("otpCodes", d.otpCodes),
             pillIconMedia = p.getInt("pillIconMedia", d.pillIconMedia),
+            swipeUpAction = p.getString("swipeUpAction", d.swipeUpAction) ?: d.swipeUpAction,
             pillIconNotif = p.getInt("pillIconNotif", d.pillIconNotif),
             clipboard = p.getBoolean("clipboard", d.clipboard),
             workoutMetric = p.getString("workoutMetric", d.workoutMetric) ?: d.workoutMetric,
@@ -537,6 +540,7 @@ object IslandBus {
             .putBoolean("groupNotif2", s.groupNotif)
             .putBoolean("otpCodes", s.otpCodes)
             .putInt("pillIconMedia", s.pillIconMedia)
+            .putString("swipeUpAction", s.swipeUpAction)
             .putInt("pillIconNotif", s.pillIconNotif)
             .putBoolean("clipboard", s.clipboard)
             .putString("workoutMetric", s.workoutMetric)

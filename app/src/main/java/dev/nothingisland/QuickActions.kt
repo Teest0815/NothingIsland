@@ -293,6 +293,18 @@ object QuickActions {
         settingsTile("alarm", "Wecker", "WECKER", "alarm", AlarmClock.ACTION_SHOW_ALARMS),
         settingsTile("nfc", "NFC", "NFC", "nfc", Settings.ACTION_NFC_SETTINGS),
         QuickTile(
+            "calc", "Taschenrechner", { "RECHNER" }, "scene", { false },
+            { c ->
+                runCatching {
+                    c.startActivity(
+                        Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALCULATOR)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }
+                true
+            },
+        ),
+        QuickTile(
             "app", "Nothing Island Einstellungen", { "ISLAND" }, "gear", { false },
             { c ->
                 runCatching {
