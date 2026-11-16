@@ -62,7 +62,7 @@ fun ReplyBar() {
     if (event != null) lastEvent = event
     val e = event ?: lastEvent ?: return
     val closeK by androidx.compose.animation.core.animateFloatAsState(
-        if (closing) 0f else 1f, tween(if (closing) 230 else 0), label = "replyClose",
+        if (closing) 0f else 1f, tween(if (closing) (if (e.noteSink != null) 110 else 230) else 0), label = "replyClose",
     )
     val noteOpen by IslandBus.note.collectAsState()
     val closeFx = Modifier.graphicsLayer {

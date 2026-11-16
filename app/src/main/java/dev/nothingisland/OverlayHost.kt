@@ -70,6 +70,7 @@ class OverlayHost(
     private var layoutJob: Job? = null
     private var touchView: View? = null
     private var replyView: ComposeView? = null
+    private var replyScrim: View? = null
     private var replyJob: Job? = null
     private var lockReceiver: BroadcastReceiver? = null
     private var touchParams: WindowManager.LayoutParams? = null
@@ -304,10 +305,7 @@ class OverlayHost(
                     // Tastatur ist dann nicht von Tippen daneben zu unterscheiden. Darum zählt es nur bei versteckter Tastatur.
                     val imeVisible = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
                         v.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true
-                    if (!imeVisible && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        IslandBus.setNote(false)
-                        IslandBus.endReply()
-                    }
+                    if (!imeVisible && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) IslandBus.closeNoteAnimated()
                 } else if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE) {
                     // Tippen auf die Tastatur zählt nicht als "außerhalb": sonst schließt sich die Island beim Schreiben.
                     val h = dm.heightPixels
@@ -320,6 +318,37 @@ class OverlayHost(
                 false
             }
             setContent { ReplyBar() }
+        }
+        if (IslandBus.replyTarget.value?.noteSink != null) {
+            // Unsichtbare Fläche hinter dem Notiz-Fenster (nur über der Tastatur): Tippen darauf schließt die Notiz.
+            val sv = View(context)
+            sv.setOnTouchListener { _, ev ->
+                if (ev.actionMasked == MotionEvent.ACTION_DOWN) IslandBus.closeNoteAnimated()
+                true
+            }
+            val slp = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                (dm.heightPixels * 0.5f).toInt(),
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT,
+            ).apply { gravity = Gravity.TOP or Gravity.START }
+            if (runCatching { wm.addView(sv, slp) }.isSuccess) {
+                replyScrim = sv
+                view.setOnApplyWindowInsetsListener { v, insets ->
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        val ime = insets.getInsets(android.view.WindowInsets.Type.ime()).bottom
+                        val hh = if (ime > 0) dm.heightPixels - ime else dm.heightPixels
+                        if (slp.height != hh) {
+                            slp.height = hh
+                            replyScrim?.let { runCatching { wm.updateViewLayout(it, slp) } }
+                        }
+                    }
+                    v.onApplyWindowInsets(insets)
+                }
+            }
         }
         // Feste Fenstergröße (Endhöhe): Das Aufklappen passiert nur im Inneren, das Fenster wird nie umgebaut.
         val sc = s.scale * s.expandedScale
@@ -367,6 +396,8 @@ class OverlayHost(
     private fun removeReply() {
         replyView?.let { v -> runCatching { windowManager?.removeView(v) } }
         replyView = null
+        replyScrim?.let { v -> runCatching { windowManager?.removeView(v) } }
+        replyScrim = null
         IslandBus.setReplyShown(false)
     }
 
