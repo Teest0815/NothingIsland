@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -2810,7 +2811,7 @@ internal fun NotePanel(notesJson: String, sc: Float, modifier: Modifier, onUsed:
             Modifier.fillMaxWidth().height((40f * sc).dp)
                 // Schon beim Aufsetzen des Fingers reagieren (Eingabefenster braucht einen Moment zum Aufbauen).
                 .pointerInput(Unit) {
-                    androidx.compose.foundation.gestures.awaitEachGesture {
+                    awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
                         onUsed()
                         IslandBus.startReply(
