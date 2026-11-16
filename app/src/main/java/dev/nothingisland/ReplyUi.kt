@@ -67,8 +67,8 @@ fun ReplyBar() {
     val noteOpen by IslandBus.note.collectAsState()
     val closeFx = Modifier.graphicsLayer {
         transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
-        if (e.noteSink != null && !noteOpen) {
-            // Notiz geschlossen: Bubble schrumpft in die kleine Pille.
+        if (e.noteSink == null || !noteOpen) {
+            // Geschlossen (Antwort gesendet/abgebrochen, Notiz zu): Bubble schrumpft in die kleine Pille.
             alpha = (closeK * 1.8f).coerceAtMost(1f)
             scaleX = 0.34f + 0.66f * closeK
             scaleY = 0.10f + 0.90f * closeK
@@ -138,17 +138,6 @@ fun ReplyBar() {
                                 keyboardActions = KeyboardActions(onDone = { send() }),
                                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
                             )
-                        }
-                        Box(
-                            Modifier.clip(RoundedCornerShape(50)).background(IslandTheme.buttonBg)
-                                .clickable {
-                                    keyboard?.hide()
-                                    IslandBus.setNote(false)
-                                    IslandBus.endReply()
-                                }
-                                .padding(horizontal = (12f * sc).dp, vertical = (10f * sc).dp),
-                        ) {
-                            Text("✕", color = IslandTheme.textGray, fontSize = (11f * sc).sp)
                         }
                         Box(
                             Modifier.clip(RoundedCornerShape(50)).background(IslandTheme.accent)
