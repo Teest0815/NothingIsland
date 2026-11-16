@@ -81,6 +81,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.TransformOrigin
+import android.media.session.PlaybackState
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.draw.drawWithContent
@@ -230,6 +231,8 @@ private fun IslandHostBody() {
     var touch by remember { mutableIntStateOf(0) }
     var pullY by remember { mutableFloatStateOf(0f) }
     var pullRaw by remember { mutableFloatStateOf(0f) }
+    // Gummiband-Dehnung der kleinen Pille beim Nach-unten-Ziehen (0..1, beim Loslassen schnellt sie federnd zurück).
+    var rubber by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(quick, touch) {
         if (quick) {
             delay(10_000)
@@ -647,6 +650,12 @@ private fun IslandHostBody() {
                     scaleY = pressScale * pop * bump.value.coerceAtMost(1.05f)
                     translationX = swipeX.value + stretchPx / 2f
                     translationY = pullY + dropY.value
+                    if (rubber != 0f) {
+                        // Zieht sich etwas in die Höhe und wird schmaler.
+                        scaleY *= 1f + 0.16f * rubber
+                        scaleX *= 1f - 0.12f * rubber
+                        transformOrigin = TransformOrigin(0.5f, 0f)
+                    }
                     // Gestapelte Karten kippen beim Wischen leicht, fallen mit leichter Schräglage ein.
                     if (stackBehind > 0) {
                         rotationZ = (swipeX.value / size.width.coerceAtLeast(1f)) * 9f +
@@ -801,25 +810,48 @@ private fun IslandHostBody() {
                         },
                     )
                 }
-                .pointerInput(mode, s.swipeUpAction) {
-                    if (s.swipeUpAction.isEmpty() || (mode != Mode.IDLE && mode != Mode.COMPACT)) return@pointerInput
+                .pointerInput(mode, s.swipeUpAction, s.swipeDownPause) {
+                    if ((s.swipeUpAction.isEmpty() && !s.swipeDownPause) || (mode != Mode.IDLE && mode != Mode.COMPACT)) return@pointerInput
                     val trigger = 22.dp.toPx()
+                    val maxPull = 44.dp.toPx()
                     var total = 0f
                     var armed = false
+                    val snapBack: () -> Unit = {
+                        val from = rubber
+                        swipeScope.launch {
+                            androidx.compose.animation.core.animate(
+                                from, 0f,
+                                animationSpec = spring(dampingRatio = 0.3f, stiffness = 700f),
+                            ) { v, _ -> rubber = v }
+                            rubber = 0f
+                        }
+                    }
                     detectVerticalDragGestures(
                         onDragStart = { total = 0f; armed = false },
                         onDragEnd = {
-                            if (total > trigger) {
-                                val k = s.swipeUpAction
+                            val fire = total > trigger
+                            total = 0f
+                            snapBack()
+                            if (fire) {
                                 if (s.haptics) QuickActions.haptic(ctx, 1)
-                                if (k == "panel") IslandBus.setQuick(true)
-                                else runCatching { QuickActions.tile(k)?.click?.invoke(ctx) }
+                                val mc = curForSkip?.takeIf { it.kind == Kind.MEDIA }?.media
+                                if (s.swipeDownPause && mode == Mode.COMPACT && mc != null) {
+                                    runCatching {
+                                        if (mc.playbackState?.state == PlaybackState.STATE_PLAYING) mc.transportControls.pause()
+                                        else mc.transportControls.play()
+                                    }
+                                } else {
+                                    val k = s.swipeUpAction
+                                    if (k == "panel") IslandBus.setQuick(true)
+                                    else runCatching { QuickActions.tile(k)?.click?.invoke(ctx) }
+                                }
                             }
                         },
-                        onDragCancel = { total = 0f },
+                        onDragCancel = { total = 0f; snapBack() },
                         onVerticalDrag = { change, dragAmount ->
                             change.consume()
-                            total += dragAmount
+                            total = (total + dragAmount).coerceAtLeast(0f)
+                            rubber = kotlin.math.tanh(total / (maxPull * 1.4f))
                             val over = total > trigger
                             if (over && !armed && s.haptics) QuickActions.haptic(ctx, 1)
                             armed = over

@@ -153,6 +153,8 @@ data class IslandSettings(
     val swipeUpAction: String = "",
     /** Symbol der kleinen Pille bei Meldungen: 0 App-Symbol, 1 Profil-/Gruppenbild. */
     val pillIconNotif: Int = 0,
+    /** Bei Musik: Nach-unten-Ziehen pausiert/startet die Wiedergabe. */
+    val swipeDownPause: Boolean = false,
     /** Kopierten Text kurz in der Pille zeigen. */
     val clipboard: Boolean = true,
     /** Training: Wert rechts in der Pille (bpm, dist, pace, speed, power, cad, kcal). */
@@ -480,6 +482,7 @@ object IslandBus {
             pillIconMedia = p.getInt("pillIconMedia", d.pillIconMedia),
             swipeUpAction = p.getString("swipeUpAction", d.swipeUpAction) ?: d.swipeUpAction,
             pillIconNotif = p.getInt("pillIconNotif", d.pillIconNotif),
+            swipeDownPause = p.getBoolean("swipeDownPause", d.swipeDownPause),
             clipboard = p.getBoolean("clipboard", d.clipboard),
             workoutMetric = p.getString("workoutMetric", d.workoutMetric) ?: d.workoutMetric,
             quickTiles = p.getString("quickTiles", d.quickTiles) ?: d.quickTiles,
@@ -542,6 +545,7 @@ object IslandBus {
             .putInt("pillIconMedia", s.pillIconMedia)
             .putString("swipeUpAction", s.swipeUpAction)
             .putInt("pillIconNotif", s.pillIconNotif)
+            .putBoolean("swipeDownPause", s.swipeDownPause)
             .putBoolean("clipboard", s.clipboard)
             .putString("workoutMetric", s.workoutMetric)
             .putString("quickTiles", s.quickTiles)

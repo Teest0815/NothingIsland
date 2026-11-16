@@ -733,6 +733,7 @@ class MainActivity : ComponentActivity() {
             color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp),
         )
         Text("Aktuell: $curName", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
+        ToggleRow("Bei Musik pausiert/startet Nach-unten-Ziehen die Wiedergabe (statt der Funktion unten)", s.swipeDownPause) { c -> edit { it.copy(swipeDownPause = c) } }
         fun set(k: String) = edit { it.copy(swipeUpAction = k) }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Chip("AUS", cur.isEmpty()) { set("") }
