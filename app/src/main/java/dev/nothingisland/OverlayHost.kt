@@ -182,7 +182,9 @@ class OverlayHost(
         val tv = View(context)
         tv.setOnTouchListener { _, ev ->
             if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE) {
-                IslandBus.collapse()
+                // Solange das Antwort-/Notiz-Fenster offen ist, entscheidet dieses selbst: Tipps in sein Fenster
+                // und auf die Tastatur sind für das Touch-Fenster der Pille sonst "außerhalb" und würden alles schließen.
+                if (IslandBus.replyTarget.value == null) IslandBus.collapse()
                 false
             } else {
                 val a = params
@@ -313,7 +315,7 @@ class OverlayHost(
                         v.rootWindowInsets?.getInsets(android.view.WindowInsets.Type.ime())?.bottom ?: 0
                     } else 0
                     val keyboardTop = if (imeH > 0) h - imeH else (h * 0.55f).toInt()
-                    if (ev.rawY < keyboardTop) IslandBus.endReply()
+                    if (ev.rawY < keyboardTop) IslandBus.collapse()
                 }
                 false
             }
