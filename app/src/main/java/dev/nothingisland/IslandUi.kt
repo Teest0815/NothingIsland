@@ -34,6 +34,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -159,7 +160,10 @@ private fun IslandHostBody() {
     val quick by IslandBus.quick.collectAsState()
     val calc by IslandBus.calc.collectAsState()
     val note by IslandBus.note.collectAsState()
-    val replying by IslandBus.replyShown.collectAsState()
+    val replyingRaw by IslandBus.replyShown.collectAsState()
+    val replyEv by IslandBus.replyTarget.collectAsState()
+    // Bei der Notiz bleibt die Island darunter stehen (kein Neuaufbau beim Schließen, kein Ruckeln).
+    val replying = replyingRaw && replyEv?.noteSink == null
     val pendingList by IslandBus.pending.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // Zwischenablage: kopierten Text kurz zeigen.
@@ -2733,7 +2737,11 @@ private fun CalcPanel(sc: Float, modifier: Modifier, onUsed: () -> Unit) {
 internal fun NotePanel(notesJson: String, sc: Float, modifier: Modifier, onUsed: () -> Unit, bottom: (@Composable () -> Unit)? = null) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val notes = remember(notesJson) { IslandBus.noteList(notesJson) }
-    val shown = notes.withIndex().toList().asReversed()
+    val shown = remember(notesJson) {
+        val cnt = HashMap<String, Int>()
+        // Stabile Schlüssel (Text + Vorkommen), damit Einfügen und Löschen sauber animiert werden.
+        notes.mapIndexed { i, tx -> val n = (cnt[tx] ?: 0) + 1; cnt[tx] = n; Triple("$tx#$n", i, tx) }.asReversed()
+    }
     Column(modifier.padding(horizontal = (16f * sc).dp, vertical = (12f * sc).dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -2747,16 +2755,22 @@ internal fun NotePanel(notesJson: String, sc: Float, modifier: Modifier, onUsed:
             )
         }
         Spacer(Modifier.height((6f * sc).dp))
-        Column(
-            Modifier.weight(1f).fillMaxWidth().then(androidx.compose.foundation.rememberScrollState().let { Modifier.verticalScroll(it) }),
+        androidx.compose.foundation.lazy.LazyColumn(
+            Modifier.weight(1f).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy((6f * sc).dp),
         ) {
-            if (shown.isEmpty()) {
+            if (shown.isEmpty()) item(key = "empty") {
                 Text("Noch keine Notiz.", color = TextGray, fontSize = (13f * sc).sp, modifier = Modifier.padding(top = (8f * sc).dp))
             }
-            shown.forEach { (i, text) ->
+            items(shown, key = { it.first }) { (_, i, text) ->
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape((12f * sc).dp)).background(ButtonBg)
+                    Modifier
+                        .animateItem(
+                            fadeInSpec = spring(stiffness = 380f),
+                            placementSpec = spring(dampingRatio = 0.75f, stiffness = 380f),
+                            fadeOutSpec = tween(170),
+                        )
+                        .fillMaxWidth().clip(RoundedCornerShape((12f * sc).dp)).background(ButtonBg)
                         .padding(start = (12f * sc).dp, top = (4f * sc).dp, bottom = (4f * sc).dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

@@ -17,6 +17,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -93,13 +97,19 @@ fun ReplyBar() {
         runCatching { focus.requestFocus() }
         keyboard?.show()
     }
+    val scope = rememberCoroutineScope()
     fun send() {
         val t = text.trim()
         if (t.isEmpty()) return
         if (sink != null) {
-            keyboard?.hide()
-            IslandBus.endReply()
+            // Speichern: Notiz rutscht in die Liste (auch in der Island darunter), dann blendet das Fenster aus.
             sink(t)
+            text = ""
+            scope.launch {
+                delay(170)
+                keyboard?.hide()
+                IslandBus.endReply()
+            }
             return
         }
         val rp = reply ?: return
@@ -119,35 +129,58 @@ fun ReplyBar() {
                     .background(IslandTheme.bg).border(1.dp, IslandTheme.hairline, shape),
             ) {
                 NotePanel(st.notes, sc, Modifier.fillMaxSize(), onUsed = {}, bottom = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy((8f * sc).dp),
-                    ) {
-                        Box(
-                            Modifier.weight(1f).clip(RoundedCornerShape(50)).background(IslandTheme.buttonBg)
-                                .padding(horizontal = (14f * sc).dp, vertical = (10f * sc).dp),
-                        ) {
-                            if (text.isEmpty()) Text("Notiz schreiben …", color = IslandTheme.textGray, fontSize = (13f * sc).sp)
-                            BasicTextField(
-                                value = text,
-                                onValueChange = { text = it },
-                                textStyle = TextStyle(color = IslandTheme.fg, fontSize = (13f * sc).sp),
-                                cursorBrush = SolidColor(IslandTheme.accent),
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                                keyboardActions = KeyboardActions(onDone = { send() }),
-                                modifier = Modifier.fillMaxWidth().focusRequester(focus),
-                            )
-                        }
-                        Box(
-                            Modifier.clip(RoundedCornerShape(50)).background(IslandTheme.accent)
-                                .clickable { send() }
-                                .padding(horizontal = (14f * sc).dp, vertical = (10f * sc).dp),
-                        ) {
-                            Text(
-                                "SPEICHERN", color = IslandTheme.onAccent, fontFamily = IslandTheme.font,
-                                fontWeight = FontWeight.Bold, fontSize = (10f * sc).sp, letterSpacing = 1.sp,
-                            )
+                    // Der rote Knopf "+ NEUE NOTIZ" zieht sich zu "SPEICHERN" zusammen, das Feld wächst daneben auf.
+                    val morph = remember(e.id) { Animatable(0f) }
+                    LaunchedEffect(e.id) { morph.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 320f)) }
+                    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().height((40f * sc).dp)) {
+                        val total = maxWidth
+                        val btnW = (96f * sc).dp
+                        val gap = (8f * sc).dp
+                        val k = morph.value
+                        val kc = k.coerceIn(0f, 1f)
+                        val fieldW = ((total - btnW - gap) * k).coerceAtLeast(0.dp)
+                        val btn = (total * (1f - k) + btnW * k).coerceAtLeast(btnW * 0.6f)
+                        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                            if (fieldW > 2.dp) {
+                                Box(
+                                    Modifier.width(fieldW).fillMaxHeight().clip(RoundedCornerShape(50))
+                                        .background(IslandTheme.buttonBg)
+                                        .padding(horizontal = (14f * sc).dp),
+                                    contentAlignment = Alignment.CenterStart,
+                                ) {
+                                    Box(Modifier.graphicsLayer { alpha = ((kc - 0.35f) / 0.65f).coerceIn(0f, 1f) }) {
+                                        if (text.isEmpty()) Text("Notiz schreiben …", color = IslandTheme.textGray, fontSize = (13f * sc).sp, maxLines = 1)
+                                        BasicTextField(
+                                            value = text,
+                                            onValueChange = { text = it },
+                                            singleLine = true,
+                                            textStyle = TextStyle(color = IslandTheme.fg, fontSize = (13f * sc).sp),
+                                            cursorBrush = SolidColor(IslandTheme.accent),
+                                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                            keyboardActions = KeyboardActions(onDone = { send() }),
+                                            modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.width(gap * kc))
+                            Box(
+                                Modifier.width(btn).fillMaxHeight().clip(RoundedCornerShape(50))
+                                    .background(IslandTheme.accent)
+                                    .clickable { send() },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    "+  NEUE NOTIZ", color = IslandTheme.onAccent, fontFamily = IslandTheme.font,
+                                    fontWeight = FontWeight.Bold, fontSize = (11f * sc).sp, letterSpacing = 1.sp, maxLines = 1,
+                                    modifier = Modifier.graphicsLayer { alpha = (1f - kc * 2f).coerceIn(0f, 1f) },
+                                )
+                                Text(
+                                    "SPEICHERN", color = IslandTheme.onAccent, fontFamily = IslandTheme.font,
+                                    fontWeight = FontWeight.Bold, fontSize = (10f * sc).sp, letterSpacing = 1.sp, maxLines = 1,
+                                    modifier = Modifier.graphicsLayer { alpha = (kc * 2f - 1f).coerceIn(0f, 1f) },
+                                )
+                            }
                         }
                     }
                 })
