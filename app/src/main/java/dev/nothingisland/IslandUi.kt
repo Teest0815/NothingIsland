@@ -162,8 +162,9 @@ private fun IslandHostBody() {
     val note by IslandBus.note.collectAsState()
     val replyingRaw by IslandBus.replyShown.collectAsState()
     val replyEv by IslandBus.replyTarget.collectAsState()
-    // Bei der Notiz bleibt die Island darunter stehen (kein Neuaufbau beim Schließen, kein Ruckeln).
     val replying = replyingRaw && replyEv?.noteSink == null
+    // Bei der Notiz wird die Island nur unsichtbar und berührungslos (nicht abgebaut): Beim Schließen kein Neuaufbau, kein Ruckeln.
+    val noteReplyHidden = replyingRaw && replyEv?.noteSink != null
     val pendingList by IslandBus.pending.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // Zwischenablage: kopierten Text kurz zeigen.
@@ -621,11 +622,12 @@ private fun IslandHostBody() {
     }
     val rowW = targetW + 2f * slotTarget
     SideEffect {
-        IslandBus.setTouchRect(span / 2f - rowW / 2f - 4f, topTarget - 4f, rowW + 8f, targetH + 8f)
+        if (noteReplyHidden) IslandBus.setTouchRect(0f, 0f, 1f, 1f)
+        else IslandBus.setTouchRect(span / 2f - rowW / 2f - 4f, topTarget - 4f, rowW + 8f, targetH + 8f)
     }
     val shape = RoundedCornerShape(corner)
 
-    Box(Modifier.fillMaxSize().wrapContentSize(Alignment.TopStart, unbounded = true)) {
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (noteReplyHidden) 0f else 1f }.wrapContentSize(Alignment.TopStart, unbounded = true)) {
     Box(Modifier.width(span.dp), contentAlignment = Alignment.TopCenter) {
     Row(modifier = Modifier.padding(top = maxOf(topPad, 0.dp)), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.width(slot))
