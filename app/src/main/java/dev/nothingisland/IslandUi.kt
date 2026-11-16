@@ -2790,7 +2790,7 @@ internal fun NotePanel(notesJson: String, sc: Float, modifier: Modifier, onUsed:
                     Text(
                         text, color = Fg, fontSize = (13f * sc).sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f).padding(vertical = (4f * sc).dp)
-                            .pointerInput(text) { detectTapGestures { onUsed(); QuickActions.copyCode(ctx, text) } },
+                            .pointerInput(text) { detectTapGestures { onUsed(); QuickActions.copyCode(ctx, text, raw = true) } },
                     )
                     Box(
                         Modifier.size((34f * sc).dp).clickable { onUsed(); shareNote(ctx, text) },

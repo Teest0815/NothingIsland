@@ -361,6 +361,14 @@ object IslandBus {
         _replyClosing.value = value
     }
 
+    /** Alle großen Ansichten schließen (Schnellzugriff, Rechner, Notiz, Eingabe), z. B. beim Sperren. */
+    fun closePanels() {
+        _quick.value = false
+        _calc.value = false
+        _note.value = false
+        if (_replyTarget.value != null) endReply()
+    }
+
     /** Notiz schließen wie sonst: Eingabefenster blendet aus, die Notiz-Bubble darunter schrumpft normal zur Pille. */
     fun closeNoteAnimated() {
         if (_replyTarget.value != null) endReply()
