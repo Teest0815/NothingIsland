@@ -235,8 +235,9 @@ class OverlayHost(
                         // Bilder mehr, die große Ansicht wäre sonst beim Aufwecken noch kurz zu sehen.
                         bigAtLock = IslandBus.quick.value || IslandBus.calc.value || IslandBus.note.value ||
                             IslandBus.expanded.value || IslandBus.current.value != null || IslandBus.replyTarget.value != null
-                        // Komposition komplett verwerfen: beim Aufwecken wird sie frisch (ohne Schrumpf-Animation) neu aufgebaut.
-                        overlay?.let { it.visibility = View.INVISIBLE; it.disposeComposition(); compositionDisposed = true }
+                        // Fenster ganz entfernen: Bei ausgeschaltetem Bildschirm entstehen keine neuen Bilder, das letzte
+                        // Bild (mit der großen Bubble) bliebe sonst beim Aufwecken kurz stehen.
+                        overlay?.let { ov -> runCatching { windowManager?.removeViewImmediate(ov) }; compositionDisposed = true }
                         removeReply()
                         IslandBus.setScreenOn(false)
                         IslandBus.collapse()
@@ -246,8 +247,8 @@ class OverlayHost(
                         val ov = overlay
                         if (ov != null && compositionDisposed) {
                             compositionDisposed = false
-                            ov.setContent { IslandHost() }
-                            ov.postDelayed({ ov.visibility = View.VISIBLE }, 90)
+                            // Neues Fenster, frisch aufgebaut: startet schon zugeklappt als kleine Pille.
+                            params?.let { p -> runCatching { windowManager?.addView(ov, p) } }
                         }
                         val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
                         if (km?.isKeyguardLocked == true) IslandBus.closePanels()
