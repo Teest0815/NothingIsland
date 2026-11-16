@@ -460,6 +460,7 @@ object QuickActions {
         val prev = lastPlugged
         lastPlugged = plugged
         lastPluggedNow = plugged
+        IslandBus.setCharging(plugged)
         lastPct = pct
         updateLowPower(ctx, st)
         if (pct < 0) return

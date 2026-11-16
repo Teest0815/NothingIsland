@@ -595,6 +595,26 @@ class MainActivity : ComponentActivity() {
             ToggleRow("Ladeanzeige animieren (Balken & Prozent)", s.chargeAnim) { c -> edit { it.copy(chargeAnim = c) } }
         }
 
+        CardIf(FoldLabel("LEUCHTEN", false)) {
+            ToggleRow("Leuchten um die Island", s.glow) { c -> edit { it.copy(glow = c) } }
+            SettingSlider("Stärke", "${(s.glowStrength * 100).roundToInt()} %", s.glowStrength, 0.1f..1f) { v ->
+                edit { it.copy(glowStrength = (v * 20f).roundToInt() / 20f) }
+            }
+            SettingSlider("Reichweite", "${s.glowSize} dp", s.glowSize.toFloat(), 6f..24f) { v ->
+                edit { it.copy(glowSize = v.roundToInt()) }
+            }
+            ToggleRow("Neue Meldung (Farbe der App, blitzt auf)", s.glowNotif) { c -> edit { it.copy(glowNotif = c) } }
+            ToggleRow("Musik (Farbe des Covers, atmet langsam)", s.glowMedia) { c -> edit { it.copy(glowMedia = c) } }
+            ToggleRow("Anruf (grün, pulsiert beim Klingeln)", s.glowCall) { c -> edit { it.copy(glowCall = c) } }
+            ToggleRow("Laden (grün, flammt beim Anstecken auf)", s.glowCharge) { c -> edit { it.copy(glowCharge = c) } }
+            ToggleRow("Kamera oder Mikrofon in Benutzung", s.glowPrivacy) { c -> edit { it.copy(glowPrivacy = c) } }
+            ToggleRow("Akku schwach oder kritisch (rot)", s.glowBattery) { c -> edit { it.copy(glowBattery = c) } }
+            Text(
+                "Im Energiesparmodus ist das Leuchten aus.",
+                color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+
         CardIf(FoldLabel("HINTERGRUND", false)) {
             ToggleRow("Im Hintergrund aktiv halten (stille Benachrichtigung)", s.keepAlive) { c ->
                 edit { it.copy(keepAlive = c) }

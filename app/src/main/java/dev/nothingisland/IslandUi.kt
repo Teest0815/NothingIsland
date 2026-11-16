@@ -92,6 +92,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.StrokeCap
@@ -601,6 +602,26 @@ private fun IslandHostBody() {
         }
     }
 
+    // Leuchten: Quelle wählen (Meldung > Anruf > Kamera/Mikrofon > Laden > Musik).
+    val charging by IslandBus.charging.collectAsState()
+    val callEv = alert?.takeIf { it.kind == Kind.CALL } ?: ongoing.firstOrNull { it.kind == Kind.CALL }
+    val mediaEv = ongoing.firstOrNull { it.kind == Kind.MEDIA && it.playing }
+    val glowSpec: GlowSpec? = if (!s.glow || lowPowerNow || mode == Mode.QUICK || mode == Mode.CALC || mode == Mode.NOTE) null else when {
+        alert != null && alert.app == "AKKU" && alert.kind == Kind.OTHER ->
+            if (s.glowBattery) GlowSpec(Color(0xFFFF3B30), alert.id, true, 1300, 0.35f, 1f) else null
+        alert != null && alert.kind == Kind.OTHER ->
+            if (s.glowNotif) GlowSpec(appGlowColor(alert.app), alert.id, true, 2600, 0.35f, 0.75f) else null
+        callEv != null && s.glowCall ->
+            if (callEv.chronoBase == null) GlowSpec(Color(0xFF34C759), "ring", true, 750, 0.3f, 1f)
+            else GlowSpec(Color(0xFF34C759), "call", false, 3200, 0.3f, 0.55f)
+        ongoing.any { it.key == "camera" || it.key == "mic" } && s.glowPrivacy ->
+            GlowSpec(if (ongoing.any { it.key == "camera" }) Color(0xFFFF9F0A) else Color(0xFF30D158), "privacy", true, 2200, 0.6f, 0.85f)
+        charging && s.glowCharge -> GlowSpec(Color(0xFF30D158), "charge", true, 3600, 0.2f, 0.5f)
+        mediaEv != null && s.glowMedia ->
+            GlowSpec(remember(mediaEv.art) { mediaEv.art?.let { coverGlowColor(it) } ?: NothingRed }, "media", false, 3400, 0.25f, 0.6f)
+        else -> null
+    }
+
     // Fenster: Die linke Kante hängt an einer festen Breite ("span") um die Bildschirmmitte, nur die
     // rechte Kante und die Höhe ändern sich. So gibt es beim Auf- und Zuklappen keinen seitlichen Versatz.
     // Wachsen passiert sofort, Schrumpfen erst nach der Animation.
@@ -645,6 +666,8 @@ private fun IslandHostBody() {
         Spacer(Modifier.width(slot))
 
         Box {
+        // Leuchten: weicher Schein um die Pille (Meldung, Musik, Anruf, Laden, Kamera/Mikrofon, Akku).
+        if (glowSpec != null) GlowLayer(glowSpec, s.glowStrength, s.glowSize, corner, Modifier.matchParentSize())
         // Karten dahinter: eigene Ebenen (bewegen sich nicht mit der obersten). Tiefe d: 0 = vorn, 1 = erste dahinter ...
         // Beim Wegziehen rückt jede Karte nach vorn, bei neuer Meldung rutschen alle eine Stufe zurück (smooth).
         for (i in stackBehind downTo 1) {
@@ -2857,4 +2880,90 @@ private fun shareNote(ctx: android.content.Context, text: String) {
         )
         IslandBus.collapse()
     }
+}
+
+// ------------------------------------------------------------------ Leuchten
+
+private class GlowSpec(
+    val color: Color,
+    /** Ändert sich der Schlüssel, blitzt das Leuchten kurz stärker auf. */
+    val key: Any,
+    val flash: Boolean,
+    val period: Int,
+    val lo: Float,
+    val hi: Float,
+)
+
+/** Feste Farbe für bekannte Apps, sonst stabile Farbe aus dem Namen. */
+private fun appGlowColor(app: String): Color {
+    val n = app.lowercase()
+    return when {
+        "whatsapp" in n -> Color(0xFF25D366)
+        "telegram" in n -> Color(0xFF2AABEE)
+        "signal" in n -> Color(0xFF3A76F0)
+        "instagram" in n -> Color(0xFFE1306C)
+        "gmail" in n || "mail" in n -> Color(0xFFEA4335)
+        "messenger" in n -> Color(0xFF0084FF)
+        "discord" in n -> Color(0xFF5865F2)
+        "outlook" in n -> Color(0xFF0078D4)
+        "nachricht" in n || "message" in n || "sms" in n -> Color(0xFF34C759)
+        "home assistant" in n -> Color(0xFF18BCF2)
+        else -> Color.hsv((n.hashCode().mod(360)).toFloat(), 0.65f, 1f)
+    }
+}
+
+/** Kräftigste Farbe des Covers, leicht aufgehellt. */
+private fun coverGlowColor(art: ImageBitmap): Color = runCatching {
+    val src = art.asAndroidBitmap()
+    val bm = android.graphics.Bitmap.createScaledBitmap(src.copy(android.graphics.Bitmap.Config.ARGB_8888, false), 12, 12, true)
+    val hsv = FloatArray(3)
+    var best = -1f
+    var bh = 0f
+    for (x in 0 until 12) for (y in 0 until 12) {
+        android.graphics.Color.colorToHSV(bm.getPixel(x, y), hsv)
+        val score = hsv[1] * hsv[2]
+        if (score > best) { best = score; bh = hsv[0] }
+    }
+    Color.hsv(bh, 0.75f, 1f)
+}.getOrDefault(NothingRed)
+
+@Composable
+private fun GlowLayer(spec: GlowSpec, strength: Float, sizeDp: Int, corner: Dp, modifier: Modifier) {
+    val inf = androidx.compose.animation.core.rememberInfiniteTransition(label = "glow")
+    val ph by inf.animateFloat(
+        0f, 1f,
+        androidx.compose.animation.core.infiniteRepeatable(
+            androidx.compose.animation.core.tween(spec.period, easing = androidx.compose.animation.core.LinearEasing),
+        ),
+        label = "glowPhase",
+    )
+    val flash = remember(spec.key) { Animatable(if (spec.flash) 1f else 0f) }
+    LaunchedEffect(spec.key) {
+        if (spec.flash) {
+            flash.snapTo(1f)
+            flash.animateTo(0f, androidx.compose.animation.core.tween(1300))
+        }
+    }
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, androidx.compose.animation.core.tween(500)) }
+    Box(
+        modifier.drawBehind {
+            val breathe = 0.5f + 0.5f * kotlin.math.sin(ph * 2f * Math.PI.toFloat())
+            val inten = (spec.lo + (spec.hi - spec.lo) * breathe) * (1f + 0.9f * flash.value) * appear.value * strength
+            if (inten <= 0.01f) return@drawBehind
+            val reach = sizeDp.dp.toPx()
+            val layers = 14
+            val c = corner.toPx()
+            for (i in layers downTo 1) {
+                val g = reach * i / layers
+                // Stärker nach unten: Der Schein kommt von unter der Island.
+                drawRoundRect(
+                    color = spec.color.copy(alpha = (inten * 0.075f).coerceIn(0f, 1f)),
+                    topLeft = androidx.compose.ui.geometry.Offset(-g, -g * 0.35f),
+                    size = androidx.compose.ui.geometry.Size(size.width + 2f * g, size.height + g * 1.55f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(c + g),
+                )
+            }
+        },
+    )
 }

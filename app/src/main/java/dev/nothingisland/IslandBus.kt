@@ -157,6 +157,16 @@ data class IslandSettings(
     val pillIconNotif: Int = 0,
     /** Bei Musik: Nach-unten-Ziehen pausiert/startet die Wiedergabe. */
     val swipeDownPause: Boolean = false,
+    /** Leuchten um die Island. */
+    val glow: Boolean = true,
+    val glowStrength: Float = 0.7f,
+    val glowSize: Int = 16,
+    val glowNotif: Boolean = true,
+    val glowMedia: Boolean = true,
+    val glowCall: Boolean = true,
+    val glowCharge: Boolean = true,
+    val glowPrivacy: Boolean = true,
+    val glowBattery: Boolean = true,
     /** Notizen der Notiz-Pille als JSON-Liste (neueste zuletzt). */
     val notes: String = "[]",
     /** Kopierten Text kurz in der Pille zeigen. */
@@ -232,6 +242,14 @@ object IslandBus {
     }
 
     /** Bildschirm an? Bei aus laufen keine Zeit-Schleifen. */
+    private val _charging = MutableStateFlow(false)
+    /** Ladegerät steckt. */
+    val charging: StateFlow<Boolean> = _charging.asStateFlow()
+
+    fun setCharging(v: Boolean) {
+        if (_charging.value != v) _charging.value = v
+    }
+
     private val _screenOn = MutableStateFlow(true)
     val screenOn: StateFlow<Boolean> = _screenOn.asStateFlow()
 
@@ -545,6 +563,15 @@ object IslandBus {
             swipeUpAction = p.getString("swipeUpAction", d.swipeUpAction) ?: d.swipeUpAction,
             pillIconNotif = p.getInt("pillIconNotif", d.pillIconNotif),
             swipeDownPause = p.getBoolean("swipeDownPause", d.swipeDownPause),
+            glow = p.getBoolean("glow", d.glow),
+            glowStrength = p.getFloat("glowStrength", d.glowStrength),
+            glowSize = p.getInt("glowSize", d.glowSize),
+            glowNotif = p.getBoolean("glowNotif", d.glowNotif),
+            glowMedia = p.getBoolean("glowMedia", d.glowMedia),
+            glowCall = p.getBoolean("glowCall", d.glowCall),
+            glowCharge = p.getBoolean("glowCharge", d.glowCharge),
+            glowPrivacy = p.getBoolean("glowPrivacy", d.glowPrivacy),
+            glowBattery = p.getBoolean("glowBattery", d.glowBattery),
             notes = p.getString("notes", d.notes) ?: d.notes,
             clipboard = p.getBoolean("clipboard", d.clipboard),
             workoutMetric = p.getString("workoutMetric", d.workoutMetric) ?: d.workoutMetric,
@@ -609,6 +636,15 @@ object IslandBus {
             .putString("swipeUpAction", s.swipeUpAction)
             .putInt("pillIconNotif", s.pillIconNotif)
             .putBoolean("swipeDownPause", s.swipeDownPause)
+            .putBoolean("glow", s.glow)
+            .putFloat("glowStrength", s.glowStrength)
+            .putInt("glowSize", s.glowSize)
+            .putBoolean("glowNotif", s.glowNotif)
+            .putBoolean("glowMedia", s.glowMedia)
+            .putBoolean("glowCall", s.glowCall)
+            .putBoolean("glowCharge", s.glowCharge)
+            .putBoolean("glowPrivacy", s.glowPrivacy)
+            .putBoolean("glowBattery", s.glowBattery)
             .putString("notes", s.notes)
             .putBoolean("clipboard", s.clipboard)
             .putString("workoutMetric", s.workoutMetric)
