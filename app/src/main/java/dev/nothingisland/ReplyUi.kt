@@ -81,10 +81,11 @@ fun ReplyBar() {
             sink(t)
             return
         }
+        val rp = reply ?: return
         val data = Intent()
-        val b = Bundle().apply { putCharSequence(reply!!.remoteInput.resultKey, t) }
-        RemoteInput.addResultsToIntent(arrayOf(reply.remoteInput), data, b)
-        runCatching { reply.action.send(ctx, 0, data) }
+        val b = Bundle().apply { putCharSequence(rp.remoteInput.resultKey, t) }
+        RemoteInput.addResultsToIntent(arrayOf(rp.remoteInput), data, b)
+        runCatching { rp.action.send(ctx, 0, data) }
         keyboard?.hide()
         IslandBus.endReply()
     }
