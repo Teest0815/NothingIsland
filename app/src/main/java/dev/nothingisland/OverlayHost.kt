@@ -66,6 +66,7 @@ class OverlayHost(
     private var windowManager: WindowManager? = null
     private var overlay: ComposeView? = null
     private var bigAtLock = false
+    private var compositionDisposed = false
     private var params: WindowManager.LayoutParams? = null
     private var owner: OverlayOwner? = null
     private var layoutJob: Job? = null
@@ -234,17 +235,19 @@ class OverlayHost(
                         // Bilder mehr, die große Ansicht wäre sonst beim Aufwecken noch kurz zu sehen.
                         bigAtLock = IslandBus.quick.value || IslandBus.calc.value || IslandBus.note.value ||
                             IslandBus.expanded.value || IslandBus.current.value != null || IslandBus.replyTarget.value != null
-                        overlay?.visibility = View.INVISIBLE
+                        // Komposition komplett verwerfen: beim Aufwecken wird sie frisch (ohne Schrumpf-Animation) neu aufgebaut.
+                        overlay?.let { it.visibility = View.INVISIBLE; it.disposeComposition(); compositionDisposed = true }
                         removeReply()
                         IslandBus.setScreenOn(false)
                         IslandBus.collapse()
                     }
                     Intent.ACTION_SCREEN_ON -> {
                         IslandBus.setScreenOn(true)
-                        if (overlay?.visibility != View.VISIBLE) {
-                            // Die Schrumpf-Animation läuft nach dem Aufwecken erst durch, dann wieder einblenden.
-                            val ov = overlay
-                            if (bigAtLock) ov?.postDelayed({ ov.visibility = View.VISIBLE }, 700) else ov?.visibility = View.VISIBLE
+                        val ov = overlay
+                        if (ov != null && compositionDisposed) {
+                            compositionDisposed = false
+                            ov.setContent { IslandHost() }
+                            ov.postDelayed({ ov.visibility = View.VISIBLE }, 90)
                         }
                         val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
                         if (km?.isKeyguardLocked == true) IslandBus.closePanels()
