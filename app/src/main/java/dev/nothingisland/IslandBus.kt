@@ -242,6 +242,14 @@ object IslandBus {
     }
 
     /** Bildschirm an? Bei aus laufen keine Zeit-Schleifen. */
+    private val _wakeTick = MutableStateFlow(0)
+    /** Zählt hoch, wenn der Bildschirm angeht (löst das federnde Hereinkommen der Pille aus). */
+    val wakeTick: StateFlow<Int> = _wakeTick.asStateFlow()
+
+    fun bumpWake() {
+        _wakeTick.value += 1
+    }
+
     private val _charging = MutableStateFlow(false)
     /** Ladegerät steckt. */
     val charging: StateFlow<Boolean> = _charging.asStateFlow()

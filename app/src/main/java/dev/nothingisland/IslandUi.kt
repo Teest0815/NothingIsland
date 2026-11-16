@@ -170,7 +170,11 @@ private fun IslandHostBody() {
     val noteReplyHidden = replyingRaw && replyEv?.noteSink != null
     // Frischer Aufbau (z. B. nach dem Aufwecken, auch auf dem Sperrbildschirm): Die Pille federt weich herein.
     val wake = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { wake.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 230f)) }
+    val wakeTick by IslandBus.wakeTick.collectAsState()
+    LaunchedEffect(wakeTick) {
+        wake.snapTo(0f)
+        wake.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 230f))
+    }
     val pendingList by IslandBus.pending.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // Zwischenablage: kopierten Text kurz zeigen.
@@ -604,13 +608,15 @@ private fun IslandHostBody() {
 
     // Leuchten: Quelle wählen (Meldung > Anruf > Kamera/Mikrofon > Laden > Musik).
     val charging by IslandBus.charging.collectAsState()
-    val callEv = alert?.takeIf { it.kind == Kind.CALL } ?: ongoing.firstOrNull { it.kind == Kind.CALL }
+    val callEv = ongoing.firstOrNull { it.kind == Kind.CALL }
     val mediaEv = ongoing.firstOrNull { it.kind == Kind.MEDIA && it.playing }
-    val glowSpec: GlowSpec? = if (!s.glow || lowPowerNow || mode == Mode.QUICK || mode == Mode.CALC || mode == Mode.NOTE) null else when {
-        alert != null && alert.app == "AKKU" && alert.kind == Kind.OTHER ->
-            if (s.glowBattery) GlowSpec(Color(0xFFFF3B30), alert.id, true, 1300, 0.35f, 1f) else null
-        alert != null && alert.kind == Kind.OTHER ->
-            if (s.glowNotif) GlowSpec(appGlowColor(alert.app), alert.id, true, 2600, 0.35f, 0.75f) else null
+    val msgEv = if (mode == Mode.MESSAGE) lingering else null
+    // Nur bei der kleinen Island (Ruhe, laufende Aktivität, Meldungs-Pille), nie bei großen Ansichten.
+    val glowSpec: GlowSpec? = if (!s.glow || lowPowerNow || (mode != Mode.IDLE && mode != Mode.COMPACT && mode != Mode.MESSAGE)) null else when {
+        msgEv != null && msgEv.app == "AKKU" && msgEv.kind == Kind.OTHER ->
+            if (s.glowBattery) GlowSpec(Color(0xFFFF3B30), msgEv.id, true, 1300, 0.35f, 1f) else null
+        msgEv != null && msgEv.kind == Kind.OTHER ->
+            if (s.glowNotif) GlowSpec(appGlowColor(msgEv.app), msgEv.id, true, 2600, 0.35f, 0.75f) else null
         callEv != null && s.glowCall ->
             if (callEv.chronoBase == null) GlowSpec(Color(0xFF34C759), "ring", true, 750, 0.3f, 1f)
             else GlowSpec(Color(0xFF34C759), "call", false, 3200, 0.3f, 0.55f)
@@ -2959,8 +2965,9 @@ private fun GlowLayer(spec: GlowSpec, strength: Float, sizeDp: Int, corner: Dp, 
                 // Stärker nach unten: Der Schein kommt von unter der Island.
                 drawRoundRect(
                     color = spec.color.copy(alpha = (inten * 0.075f).coerceIn(0f, 1f)),
-                    topLeft = androidx.compose.ui.geometry.Offset(-g, -g * 0.35f),
-                    size = androidx.compose.ui.geometry.Size(size.width + 2f * g, size.height + g * 1.55f),
+                    // Rundum, nach unten etwas weiter: auch über der kleinen Island sieht man den Schein.
+                    topLeft = androidx.compose.ui.geometry.Offset(-g, -g * 0.9f),
+                    size = androidx.compose.ui.geometry.Size(size.width + 2f * g, size.height + g * 1.9f),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(c + g),
                 )
             }

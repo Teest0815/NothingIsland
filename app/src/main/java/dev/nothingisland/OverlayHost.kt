@@ -237,13 +237,15 @@ class OverlayHost(
                             IslandBus.expanded.value || IslandBus.current.value != null || IslandBus.replyTarget.value != null
                         // Fenster ganz entfernen: Bei ausgeschaltetem Bildschirm entstehen keine neuen Bilder, das letzte
                         // Bild (mit der großen Bubble) bliebe sonst beim Aufwecken kurz stehen.
-                        overlay?.let { ov -> runCatching { windowManager?.removeViewImmediate(ov) }; compositionDisposed = true }
+                        // Nur wenn etwas Großes offen war; bei der kleinen Pille allein bleibt das Fenster, kein Neuaufbau.
+                        if (bigAtLock) overlay?.let { ov -> runCatching { windowManager?.removeViewImmediate(ov) }; compositionDisposed = true }
                         removeReply()
                         IslandBus.setScreenOn(false)
                         IslandBus.collapse()
                     }
                     Intent.ACTION_SCREEN_ON -> {
                         IslandBus.setScreenOn(true)
+                        IslandBus.bumpWake()
                         val ov = overlay
                         if (ov != null && compositionDisposed) {
                             compositionDisposed = false
