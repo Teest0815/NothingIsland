@@ -809,7 +809,7 @@ private fun IslandHostBody() {
                     detectVerticalDragGestures(
                         onDragStart = { total = 0f; armed = false },
                         onDragEnd = {
-                            if (total < -trigger) {
+                            if (total > trigger) {
                                 val k = s.swipeUpAction
                                 if (s.haptics) QuickActions.haptic(ctx, 1)
                                 if (k == "panel") IslandBus.setQuick(true)
@@ -820,7 +820,7 @@ private fun IslandHostBody() {
                         onVerticalDrag = { change, dragAmount ->
                             change.consume()
                             total += dragAmount
-                            val over = total < -trigger
+                            val over = total > trigger
                             if (over && !armed && s.haptics) QuickActions.haptic(ctx, 1)
                             armed = over
                         },

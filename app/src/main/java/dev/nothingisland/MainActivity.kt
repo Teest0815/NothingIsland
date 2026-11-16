@@ -623,7 +623,7 @@ class MainActivity : ComponentActivity() {
             Spacer(Modifier.height(8.dp))
         }
 
-        CardIf(FoldLabel("WISCHEN NACH OBEN", false)) {
+        CardIf(FoldLabel("NACH UNTEN ZIEHEN", false)) {
             SwipeUpSettings(s)
         }
 
@@ -719,7 +719,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Funktion für Wischen nach oben auf der kleinen Pille (Ruhe-Pille und laufende Aktivität). */
+    /** Funktion für Nach unten ziehen auf der kleinen Pille (Ruhe-Pille und laufende Aktivität). */
     @Composable
     private fun SwipeUpSettings(s: IslandSettings) {
         val cur = s.swipeUpAction
@@ -729,7 +729,7 @@ class MainActivity : ComponentActivity() {
             else -> QuickActions.tile(cur)?.name ?: cur
         }
         Text(
-            "Wische auf der kleinen Pille nach oben, um eine Funktion auszulösen (Taschenlampe, Taschenrechner, eine App, ein Smart-Home-Gerät …).",
+            "Ziehe die kleine Pille nach unten, um eine Funktion auszulösen (Taschenlampe, Taschenrechner, eine App, ein Smart-Home-Gerät …).",
             color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp),
         )
         Text("Aktuell: $curName", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
