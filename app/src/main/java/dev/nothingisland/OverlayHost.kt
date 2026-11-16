@@ -228,7 +228,7 @@ class OverlayHost(
         val rc = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, i: Intent?) {
                 when (i?.action) {
-                    Intent.ACTION_SCREEN_OFF -> { IslandBus.setScreenOn(false); IslandBus.closePanels() }
+                    Intent.ACTION_SCREEN_OFF -> { IslandBus.setScreenOn(false); IslandBus.collapse() }
                     Intent.ACTION_SCREEN_ON -> {
                         IslandBus.setScreenOn(true)
                         val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager

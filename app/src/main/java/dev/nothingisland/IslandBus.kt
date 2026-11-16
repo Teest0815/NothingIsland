@@ -366,6 +366,7 @@ object IslandBus {
         _quick.value = false
         _calc.value = false
         _note.value = false
+        _expanded.value = false
         if (_replyTarget.value != null) endReply()
     }
 
