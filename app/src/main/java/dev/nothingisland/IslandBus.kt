@@ -303,6 +303,16 @@ object IslandBus {
 
     fun setQuick(value: Boolean) {
         _quick.value = value
+        if (value) _calc.value = false
+    }
+
+    /** Taschenrechner in der großen Pille. */
+    private val _calc = MutableStateFlow(false)
+    val calc: StateFlow<Boolean> = _calc.asStateFlow()
+
+    fun setCalc(value: Boolean) {
+        _calc.value = value
+        if (value) _quick.value = false
     }
 
     /** Meldung, auf die gerade direkt in der Island geantwortet wird. */
@@ -331,6 +341,7 @@ object IslandBus {
         _replyTarget.value = null
         _replyShown.value = false
         _quick.value = false
+        _calc.value = false
         _expanded.value = false
         removeOngoing("charge-detail")
         _pending.value = emptyList()

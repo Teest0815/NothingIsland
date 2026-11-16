@@ -292,18 +292,7 @@ object QuickActions {
         ),
         settingsTile("alarm", "Wecker", "WECKER", "alarm", AlarmClock.ACTION_SHOW_ALARMS),
         settingsTile("nfc", "NFC", "NFC", "nfc", Settings.ACTION_NFC_SETTINGS),
-        QuickTile(
-            "calc", "Taschenrechner", { "RECHNER" }, "scene", { false },
-            { c ->
-                runCatching {
-                    c.startActivity(
-                        Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALCULATOR)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                }
-                true
-            },
-        ),
+        QuickTile("calc", "Taschenrechner", { "RECHNER" }, "calc", { false }, { _ -> IslandBus.setCalc(true); true }),
         QuickTile(
             "app", "Nothing Island Einstellungen", { "ISLAND" }, "gear", { false },
             { c ->
@@ -870,6 +859,11 @@ object QuickActions {
                 c.drawLine(42f, 66f, 42f, 20f, line)
                 c.drawLine(76f, 58f, 76f, 14f, line)
                 c.drawLine(42f, 20f, 76f, 14f, line)
+            }
+            "calc" -> {
+                c.drawRoundRect(RectF(20f, 10f, 76f, 86f), 8f, 8f, line)
+                c.drawRoundRect(RectF(30f, 20f, 66f, 34f), 3f, 3f, fill)
+                for (r in 0 until 3) for (k in 0 until 3) c.drawCircle(34f + k * 14f, 48f + r * 13f, 4f, fill)
             }
             "bell" -> {
                 val p = Path().apply {

@@ -124,7 +124,7 @@ private val Fg: Color get() = IslandTheme.fg
 private val Bg: Color get() = IslandTheme.bg
 private val Mono: FontFamily get() = IslandTheme.font
 
-private enum class Mode { IDLE, COMPACT, MESSAGE, ALERT, EXPANDED, QUICK }
+private enum class Mode { IDLE, COMPACT, MESSAGE, ALERT, EXPANDED, QUICK, CALC }
 
 /** Reserve um die Pille, damit Überschwingen der Feder nicht abgeschnitten wird. */
 private const val WINDOW_MARGIN = 24f
@@ -156,6 +156,7 @@ private fun IslandHostBody() {
     val primaryKey by IslandBus.primaryKey.collectAsState()
     val manual by IslandBus.expanded.collectAsState()
     val quick by IslandBus.quick.collectAsState()
+    val calc by IslandBus.calc.collectAsState()
     val replying by IslandBus.replyShown.collectAsState()
     val pendingList by IslandBus.pending.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -237,6 +238,12 @@ private fun IslandHostBody() {
         if (quick) {
             delay(10_000)
             IslandBus.setQuick(false)
+        }
+    }
+    LaunchedEffect(calc, touch) {
+        if (calc) {
+            delay(45_000)
+            IslandBus.setCalc(false)
         }
     }
     var lastAlert by remember { mutableStateOf<IslandEvent?>(null) }
@@ -365,6 +372,7 @@ private fun IslandHostBody() {
     val current = ongoing.firstOrNull { it.key == primaryKey } ?: ongoing.lastOrNull()
     val mode = when {
         alert != null -> Mode.ALERT
+        calc -> Mode.CALC
         quick && s.quickPanel -> Mode.QUICK
         manual && current != null -> Mode.EXPANDED
         lingering != null -> Mode.MESSAGE
@@ -399,7 +407,7 @@ private fun IslandHostBody() {
     // Haptik: kurzes Vibrieren, wenn die Pille aufklappt.
     var prevMode by remember { mutableStateOf(mode) }
     LaunchedEffect(mode) {
-        val big = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK
+        val big = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK || mode == Mode.CALC
         if (s.haptics && big && prevMode != mode) QuickActions.haptic(ctx, s.hapticLevel)
         prevMode = mode
     }
@@ -436,6 +444,7 @@ private fun IslandHostBody() {
         Mode.ALERT -> BASE_ALERT_H * fsc
         Mode.EXPANDED -> expandedH
         Mode.QUICK -> quickBaseH * fsc
+        Mode.CALC -> 292f * fsc
     }
     val targetCorner = when (mode) {
         Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH / 2f * s.smallRoundness
@@ -443,7 +452,7 @@ private fun IslandHostBody() {
     }
 
     val motion = spring<Dp>(dampingRatio = 0.9f, stiffness = 500f)
-    val growing = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK
+    val growing = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK || mode == Mode.CALC
     // Je größer die Pille, desto langsamer und ruhiger federt sie (sonst wirkt das Nachschwingen zu hektisch).
     val bigK = maxOf(fsc, bsc).coerceAtLeast(1f)
     val slow = (1f / bigK).coerceIn(0.5f, 1f)
@@ -465,7 +474,7 @@ private fun IslandHostBody() {
         val was = lastMode
         lastMode = mode
         val small = mode == Mode.IDLE || mode == Mode.COMPACT || mode == Mode.MESSAGE
-        val big = was == Mode.ALERT || was == Mode.EXPANDED || was == Mode.QUICK
+        val big = was == Mode.ALERT || was == Mode.EXPANDED || was == Mode.QUICK || was == Mode.CALC
         if (s.squashEntry && small && big) {
             squashBounce = false
             squashHold = true
@@ -565,6 +574,7 @@ private fun IslandHostBody() {
             }
             Mode.EXPANDED -> IslandBus.setExpanded(false)
             Mode.QUICK -> IslandBus.setQuick(false)
+            Mode.CALC -> IslandBus.setCalc(false)
             Mode.MESSAGE -> lingering = null
             else -> Unit
         }
@@ -843,6 +853,7 @@ private fun IslandHostBody() {
                                 } else {
                                     val k = s.swipeUpAction
                                     if (k == "panel") IslandBus.setQuick(true)
+                                    else if (k == "calc") IslandBus.setCalc(true)
                                     else runCatching { QuickActions.tile(k)?.click?.invoke(ctx) }
                                 }
                             }
@@ -883,6 +894,7 @@ private fun IslandHostBody() {
                         Mode.EXPANDED -> IslandBus.setExpanded(false)
                         Mode.IDLE -> if (s.quickPanel) IslandBus.setQuick(true)
                         Mode.QUICK -> IslandBus.setQuick(false)
+                        Mode.CALC -> Unit
                     }
                 },
             contentAlignment = Alignment.Center,
@@ -904,7 +916,7 @@ private fun IslandHostBody() {
                             sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
                         )
                     }
-                    if (targetState.first == Mode.QUICK) {
+                    if (targetState.first == Mode.QUICK || targetState.first == Mode.CALC) {
                         // Schnellzugriff: Rahmen wächst zuerst, die Kacheln blenden danach einzeln ein.
                         return@AnimatedContent ContentTransform(
                             targetContentEnter = fadeIn(tween(140, delayMillis = 20)) +
@@ -914,7 +926,7 @@ private fun IslandHostBody() {
                             sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
                         )
                     }
-                    if (initialState.first == Mode.QUICK) {
+                    if (initialState.first == Mode.QUICK || initialState.first == Mode.CALC) {
                         return@AnimatedContent ContentTransform(
                             targetContentEnter = fadeIn(tween(150, delayMillis = 100)) +
                                 scaleIn(tween(240, delayMillis = 100, easing = FastOutSlowInEasing), initialScale = 0.9f),
@@ -923,7 +935,7 @@ private fun IslandHostBody() {
                             sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
                         )
                     }
-                    val toBig = targetState.first == Mode.ALERT || targetState.first == Mode.EXPANDED || targetState.first == Mode.QUICK
+                    val toBig = targetState.first == Mode.ALERT || targetState.first == Mode.EXPANDED || targetState.first == Mode.QUICK || targetState.first == Mode.CALC
                     val delay = if (toBig) 90 else 60
                     ContentTransform(
                         targetContentEnter = fadeIn(tween(200, delayMillis = delay)) +
@@ -943,6 +955,7 @@ private fun IslandHostBody() {
             ) { st ->
                 when (st.first) {
                     Mode.IDLE -> IdleDots(sc)
+                    Mode.CALC -> CalcPanel(bsc, Modifier.requiredSize(bigW.dp, (292f * fsc).dp)) { touch++ }
                     Mode.QUICK -> QuickPanel(quickPages, bsc, Modifier.requiredSize(bigW.dp, (quickBaseH * fsc).dp)) { touch++ }
                     Mode.COMPACT -> shownCurrent?.let {
                         CompactContent(it, sc, gap, s.iconTextGap.toFloat(), s.equalizer, s.workoutMetric, Modifier.requiredSize(compactW.dp, smallH.dp))
@@ -2551,6 +2564,152 @@ private fun DotRing(modifier: Modifier = Modifier, dots: Int = 24) {
                 radius = (1.3f + glow * 0.9f).dp.toPx(),
                 center = Offset(c.x + r * cos(a), c.y + r * sin(a)),
             )
+        }
+    }
+}
+
+// ------------------------------------------------------------------ Taschenrechner
+
+private val CALC_OPS = setOf('+', '-', '×', '÷')
+
+/** Rechnet Ausdrücke wie "12+3×4" mit Punkt vor Strich; ein Prozentzeichen teilt durch 100. Null bei Fehler. */
+private fun calcEval(src: String): Double? {
+    var i = 0
+    fun peek(): Char? = src.getOrNull(i)
+    fun number(): Double? {
+        var neg = false
+        while (peek() == '-') { neg = !neg; i++ }
+        val st = i
+        while (peek()?.let { it.isDigit() || it == '.' } == true) i++
+        var v = src.substring(st, i).toDoubleOrNull() ?: return null
+        while (peek() == '%') { v /= 100.0; i++ }
+        return if (neg) -v else v
+    }
+    fun term(): Double? {
+        var v = number() ?: return null
+        while (peek() == '×' || peek() == '÷') {
+            val op = peek(); i++
+            val r = number() ?: return null
+            if (op == '×') v *= r else { if (r == 0.0) return null; v /= r }
+        }
+        return v
+    }
+    fun expr(): Double? {
+        var v = term() ?: return null
+        while (peek() == '+' || peek() == '-') {
+            val op = peek(); i++
+            val r = term() ?: return null
+            v = if (op == '+') v + r else v - r
+        }
+        return v
+    }
+    val r = expr()
+    return if (i == src.length) r?.takeIf { it.isFinite() } else null
+}
+
+private fun calcFormat(v: Double): String {
+    if (v == Math.rint(v) && kotlin.math.abs(v) < 1e15) return v.toLong().toString()
+    val s = java.math.BigDecimal(v).round(java.math.MathContext(10)).stripTrailingZeros().toPlainString()
+    return s
+}
+
+@Composable
+private fun CalcPanel(sc: Float, modifier: Modifier, onUsed: () -> Unit) {
+    val ctx = LocalContext.current
+    val hap = IslandBus.settings.collectAsState().value.haptics
+    var expr by remember { mutableStateOf("") }
+    var done by remember { mutableStateOf(false) } // Ergebnis steht da: nächste Ziffer beginnt neu
+    val live = if (expr.isEmpty() || done) null else if (expr.any { it in CALC_OPS || it == '%' } || expr.indexOf('-', 1) > 0) calcEval(expr) else null
+
+    fun press(k: String) {
+        onUsed()
+        if (hap) QuickActions.haptic(ctx, 1)
+        when (k) {
+            "C" -> { expr = ""; done = false }
+            "⌫" -> { expr = expr.dropLast(1); done = false }
+            "=" -> calcEval(expr)?.let { expr = calcFormat(it); done = true }
+            "+", "-", "×", "÷" -> {
+                val c = k[0]
+                if (expr.isEmpty()) { if (c == '-') expr = "-" }
+                else {
+                    done = false
+                    val last = expr.last()
+                    expr = if (last in CALC_OPS) {
+                        if (c == '-' && (last == '×' || last == '÷')) expr + c else expr.dropLast(1) + c
+                    } else expr + c
+                    if (expr == "-") expr = "-"
+                }
+            }
+            "%" -> if (expr.isNotEmpty() && (expr.last().isDigit() || expr.last() == '%')) { expr += "%"; done = false }
+            "," -> {
+                if (done) { expr = ""; done = false }
+                val cur = expr.takeLastWhile { it.isDigit() || it == '.' }
+                if (!cur.contains('.')) expr += if (cur.isEmpty()) "0." else "."
+            }
+            else -> {
+                if (done) { expr = ""; done = false }
+                if (expr.length < 40) expr += k
+            }
+        }
+    }
+
+    val shownExpr = expr.replace('.', ',').ifEmpty { "0" }
+    val resultText = when {
+        done -> null
+        live != null -> "= " + calcFormat(live).replace('.', ',')
+        else -> null
+    }
+    val rows = listOf(
+        listOf("C", "%", "⌫", "÷"),
+        listOf("7", "8", "9", "×"),
+        listOf("4", "5", "6", "-"),
+        listOf("1", "2", "3", "+"),
+        listOf("0", ",", "="),
+    )
+    Column(
+        modifier = modifier.padding(horizontal = (14f * sc).dp, vertical = (12f * sc).dp),
+        verticalArrangement = Arrangement.spacedBy((6f * sc).dp),
+    ) {
+        Column(Modifier.weight(1.25f).fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.Center) {
+            Text(
+                resultText ?: " ", color = TextGray, fontFamily = Mono, fontSize = (12f * sc).sp,
+                maxLines = 1,
+            )
+            Text(
+                shownExpr.replace('-', '−'),
+                color = Fg, fontFamily = Mono, fontWeight = FontWeight.Medium,
+                fontSize = (if (shownExpr.length > 14) 18f else 28f).times(sc).sp,
+                maxLines = 1, overflow = TextOverflow.Clip,
+            )
+        }
+        rows.forEach { row ->
+            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy((6f * sc).dp)) {
+                row.forEach { k ->
+                    val src = remember { MutableInteractionSource() }
+                    val down by src.collectIsPressedAsState()
+                    val isOp = k in setOf("÷", "×", "-", "+", "%")
+                    val isEq = k == "="
+                    val bg by androidx.compose.animation.animateColorAsState(
+                        if (down) Color.White else if (isEq) NothingRed else ButtonBg,
+                        tween(if (down) 40 else 200), label = "calcbg",
+                    )
+                    Box(
+                        modifier = Modifier
+                            .weight(if (k == "0") 2f else 1f)
+                            .fillMaxHeight()
+                            .bounceClick({ press(k) }, src)
+                            .clip(RoundedCornerShape((14f * sc).dp))
+                            .drawBehind { drawRect(bg) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            if (k == "-") "−" else k,
+                            color = if (down) Color.Black else if (isEq) OnAccent else if (isOp || k == "C" || k == "⌫") NothingRed else Fg,
+                            fontFamily = Mono, fontWeight = FontWeight.Medium, fontSize = (16f * sc).sp,
+                        )
+                    }
+                }
+            }
         }
     }
 }
