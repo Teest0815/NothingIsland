@@ -2615,7 +2615,7 @@ private fun calcFormat(v: Double): String {
 
 @Composable
 private fun CalcPanel(sc: Float, modifier: Modifier, onUsed: () -> Unit) {
-    val ctx = LocalContext.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val hap = IslandBus.settings.collectAsState().value.haptics
     var expr by remember { mutableStateOf("") }
     var done by remember { mutableStateOf(false) } // Ergebnis steht da: nächste Ziffer beginnt neu
