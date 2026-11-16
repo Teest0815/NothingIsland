@@ -65,6 +65,7 @@ class OverlayHost(
 ) {
     private var windowManager: WindowManager? = null
     private var overlay: ComposeView? = null
+    private var bigAtLock = false
     private var params: WindowManager.LayoutParams? = null
     private var owner: OverlayOwner? = null
     private var layoutJob: Job? = null
@@ -228,9 +229,23 @@ class OverlayHost(
         val rc = object : BroadcastReceiver() {
             override fun onReceive(c: Context?, i: Intent?) {
                 when (i?.action) {
-                    Intent.ACTION_SCREEN_OFF -> { IslandBus.setScreenOn(false); IslandBus.collapse() }
+                    Intent.ACTION_SCREEN_OFF -> {
+                        // Sofort und synchron unsichtbar machen: Compose zeichnet bei ausgeschaltetem Bildschirm keine
+                        // Bilder mehr, die große Ansicht wäre sonst beim Aufwecken noch kurz zu sehen.
+                        bigAtLock = IslandBus.quick.value || IslandBus.calc.value || IslandBus.note.value ||
+                            IslandBus.expanded.value || IslandBus.current.value != null || IslandBus.replyTarget.value != null
+                        overlay?.visibility = View.INVISIBLE
+                        removeReply()
+                        IslandBus.setScreenOn(false)
+                        IslandBus.collapse()
+                    }
                     Intent.ACTION_SCREEN_ON -> {
                         IslandBus.setScreenOn(true)
+                        if (overlay?.visibility != View.VISIBLE) {
+                            // Die Schrumpf-Animation läuft nach dem Aufwecken erst durch, dann wieder einblenden.
+                            val ov = overlay
+                            if (bigAtLock) ov?.postDelayed({ ov.visibility = View.VISIBLE }, 700) else ov?.visibility = View.VISIBLE
+                        }
                         val km = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
                         if (km?.isKeyguardLocked == true) IslandBus.closePanels()
                     }
