@@ -118,7 +118,8 @@ class IslandListenerService : NotificationListenerService() {
     // ---------------------------------------------------------------- Auswertung
 
     private fun handle(sbn: StatusBarNotification, allowAlert: Boolean) {
-        if (sbn.packageName == packageName) return
+        // Eigene Meldungen ignorieren, außer den Notiz-Erinnerungen.
+        if (sbn.packageName == packageName && sbn.notification.channelId != NoteReminders.CH) return
         val n = sbn.notification
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
 

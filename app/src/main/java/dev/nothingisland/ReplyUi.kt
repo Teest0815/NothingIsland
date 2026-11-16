@@ -22,6 +22,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -103,10 +106,15 @@ fun ReplyBar() {
     LaunchedEffect(e.id) {
         if (sink != null) morph.animateTo(1f, spring(dampingRatio = 0.78f, stiffness = 650f))
     }
+    var remindAt by remember(e.id) { mutableStateOf<Long?>(null) }
+    var picking by remember(e.id) { mutableStateOf(false) }
     fun send() {
         val t = text.trim()
         if (t.isEmpty()) return
         if (sink != null) {
+            remindAt?.let { NoteReminders.schedule(ctx, t, it) }
+            remindAt = null
+            picking = false
             // Speichern: Notiz rutscht in die Liste (auch in der Island darunter), dann blendet das Fenster aus.
             sink(t)
             text = ""
@@ -135,7 +143,9 @@ fun ReplyBar() {
                 Modifier.fillMaxWidth().height((250f * fsc).dp).clip(shape)
                     .background(IslandTheme.bg).border(1.dp, IslandTheme.hairline, shape),
             ) {
-                NotePanel(st.notes, sc, Modifier.fillMaxSize(), onUsed = {}, bottom = {
+                NotePanel(st.notes, sc, Modifier.fillMaxSize(), onUsed = {}, middle = if (picking) ({
+                    RemindPicker(sc, remindAt) { remindAt = it; picking = false }
+                }) else null, bottom = {
                     // Der rote Knopf "+ NEUE NOTIZ" zieht sich zu "SPEICHERN" zusammen, das Feld wächst daneben auf.
                     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().height((40f * sc).dp)) {
                         val total = maxWidth
@@ -143,7 +153,8 @@ fun ReplyBar() {
                         val gap = (8f * sc).dp
                         val k = morph.value
                         val kc = k.coerceIn(0f, 1f)
-                        val fieldW = ((total - btnW - gap) * k).coerceAtLeast(0.dp)
+                        val remW = (44f * sc).dp
+                        val fieldW = ((total - btnW - remW - gap * 2f) * k).coerceAtLeast(0.dp)
                         val btn = (total * (1f - k) + btnW * k).coerceAtLeast(btnW * 0.6f)
                         Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                             if (fieldW > 2.dp) {
@@ -166,6 +177,30 @@ fun ReplyBar() {
                                             modifier = Modifier.fillMaxWidth().focusRequester(focus),
                                         )
                                     }
+                                }
+                            }
+                            Spacer(Modifier.width(gap * kc))
+                            if (kc > 0.02f) Box(
+                                Modifier.width(remW * kc).fillMaxHeight().clip(RoundedCornerShape(50))
+                                    .background(if (remindAt != null) IslandTheme.accent else IslandTheme.buttonBg)
+                                    .clickable { picking = !picking }
+                                    .graphicsLayer { alpha = kc },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                val at = remindAt
+                                if (at != null) {
+                                    Text(
+                                        java.text.SimpleDateFormat("HH:mm", java.util.Locale.GERMANY).format(java.util.Date(at)),
+                                        color = IslandTheme.onAccent, fontFamily = IslandTheme.font,
+                                        fontWeight = FontWeight.Bold, fontSize = (9f * sc).sp, maxLines = 1, softWrap = false,
+                                    )
+                                } else {
+                                    androidx.compose.foundation.Image(
+                                        bitmap = QuickActions.icon("bell"),
+                                        contentDescription = "Erinnerung",
+                                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(IslandTheme.fg),
+                                        modifier = Modifier.size((16f * sc).dp),
+                                    )
                                 }
                             }
                             Spacer(Modifier.width(gap * kc))
@@ -266,6 +301,73 @@ fun ReplyBar() {
                     )
                 }
             }
+        }
+    }
+}
+
+/** Auswahl der Erinnerungszeit direkt in der Bubble. */
+@Composable
+private fun RemindPicker(sc: Float, current: Long?, onPick: (Long?) -> Unit) {
+    val base = remember { java.util.Calendar.getInstance().apply { timeInMillis = current ?: (System.currentTimeMillis() + 3_600_000L) } }
+    var h by remember { mutableIntStateOf(base.get(java.util.Calendar.HOUR_OF_DAY)) }
+    var m by remember { mutableIntStateOf((base.get(java.util.Calendar.MINUTE) / 5) * 5) }
+    fun target(): java.util.Calendar {
+        val c = java.util.Calendar.getInstance()
+        c.set(java.util.Calendar.HOUR_OF_DAY, h); c.set(java.util.Calendar.MINUTE, m)
+        c.set(java.util.Calendar.SECOND, 0); c.set(java.util.Calendar.MILLISECOND, 0)
+        if (c.timeInMillis <= System.currentTimeMillis()) c.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        return c
+    }
+    val tomorrow = target().get(java.util.Calendar.DAY_OF_YEAR) != java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_YEAR)
+    @Composable
+    fun Pill(label: String, strong: Boolean = false, onClick: () -> Unit) {
+        Box(
+            Modifier.clip(RoundedCornerShape(50)).background(if (strong) IslandTheme.accent else IslandTheme.buttonBg)
+                .clickable(onClick = onClick).padding(horizontal = (12f * sc).dp, vertical = (7f * sc).dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                label, color = if (strong) IslandTheme.onAccent else IslandTheme.fg, fontFamily = IslandTheme.font,
+                fontWeight = FontWeight.Bold, fontSize = (10f * sc).sp, letterSpacing = 0.5.sp, maxLines = 1,
+            )
+        }
+    }
+    @Composable
+    fun Step(value: Int, onMinus: () -> Unit, onPlus: () -> Unit) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size((34f * sc).dp).clip(RoundedCornerShape(50)).background(IslandTheme.buttonBg).clickable(onClick = onMinus), contentAlignment = Alignment.Center) {
+                Text("−", color = IslandTheme.fg, fontSize = (16f * sc).sp)
+            }
+            Text(
+                "%02d".format(value), color = IslandTheme.fg, fontFamily = IslandTheme.font, fontWeight = FontWeight.Medium,
+                fontSize = (22f * sc).sp, modifier = Modifier.padding(horizontal = (8f * sc).dp),
+            )
+            Box(Modifier.size((34f * sc).dp).clip(RoundedCornerShape(50)).background(IslandTheme.buttonBg).clickable(onClick = onPlus), contentAlignment = Alignment.Center) {
+                Text("+", color = IslandTheme.fg, fontSize = (16f * sc).sp)
+            }
+        }
+    }
+    fun inMin(min: Int) = System.currentTimeMillis() + min * 60_000L
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy((8f * sc).dp)) {
+        Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = Arrangement.spacedBy((6f * sc).dp)) {
+            Pill("KEINE") { onPick(null) }
+            Pill("+10 MIN") { onPick(inMin(10)) }
+            Pill("+1 STD") { onPick(inMin(60)) }
+            Pill("+3 STD") { onPick(inMin(180)) }
+            Pill("MORGEN 9:00") {
+                val c = java.util.Calendar.getInstance()
+                c.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                c.set(java.util.Calendar.HOUR_OF_DAY, 9); c.set(java.util.Calendar.MINUTE, 0)
+                c.set(java.util.Calendar.SECOND, 0); c.set(java.util.Calendar.MILLISECOND, 0)
+                onPick(c.timeInMillis)
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((6f * sc).dp)) {
+            Step(h, { h = (h + 23) % 24 }, { h = (h + 1) % 24 })
+            Text(":", color = IslandTheme.textGray, fontSize = (20f * sc).sp)
+            Step(m, { m = (m + 55) % 60 }, { m = (m + 5) % 60 })
+            Spacer(Modifier.weight(1f))
+            Pill(if (tomorrow) "MORGEN OK" else "OK", strong = true) { onPick(target().timeInMillis) }
         }
     }
 }

@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -2736,7 +2737,7 @@ private fun CalcPanel(sc: Float, modifier: Modifier, onUsed: () -> Unit) {
 // ------------------------------------------------------------------ Notiz-Pille
 
 @Composable
-internal fun NotePanel(notesJson: String, sc: Float, modifier: Modifier, onUsed: () -> Unit, bottom: (@Composable () -> Unit)? = null) {
+internal fun NotePanel(notesJson: String, sc: Float, modifier: Modifier, onUsed: () -> Unit, bottom: (@Composable () -> Unit)? = null, middle: (@Composable () -> Unit)? = null) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val notes = remember(notesJson) { IslandBus.noteList(notesJson) }
     val shown = remember(notesJson) {
@@ -2764,7 +2765,8 @@ internal fun NotePanel(notesJson: String, sc: Float, modifier: Modifier, onUsed:
             if (shown.size > prevCount) runCatching { listState.animateScrollToItem(0) }
             prevCount = shown.size
         }
-        androidx.compose.foundation.lazy.LazyColumn(
+        if (middle != null) Box(Modifier.weight(1f).fillMaxWidth()) { middle() }
+        else androidx.compose.foundation.lazy.LazyColumn(
             Modifier.weight(1f).fillMaxWidth(),
             state = listState,
             verticalArrangement = Arrangement.spacedBy((6f * sc).dp),
@@ -2806,15 +2808,20 @@ internal fun NotePanel(notesJson: String, sc: Float, modifier: Modifier, onUsed:
         val down by src.collectIsPressedAsState()
         Box(
             Modifier.fillMaxWidth().height((40f * sc).dp)
-                .bounceClick({
-                    onUsed()
-                    IslandBus.startReply(
-                        IslandEvent(
-                            app = "NOTIZEN", title = "Neue Notiz", text = "Schreib etwas auf",
-                            noteSink = { t -> IslandBus.addNote(ctx, t) },
-                        ),
-                    )
-                }, src)
+                // Schon beim Aufsetzen des Fingers reagieren (Eingabefenster braucht einen Moment zum Aufbauen).
+                .pointerInput(Unit) {
+                    androidx.compose.foundation.gestures.awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        onUsed()
+                        IslandBus.startReply(
+                            IslandEvent(
+                                app = "NOTIZEN", title = "Neue Notiz", text = "Schreib etwas auf",
+                                noteSink = { t -> IslandBus.addNote(ctx, t) },
+                            ),
+                        )
+                    }
+                }
+                .bounceClick({}, src)
                 .clip(RoundedCornerShape(50))
                 .background(if (down) Color.White else NothingRed),
             contentAlignment = Alignment.Center,
