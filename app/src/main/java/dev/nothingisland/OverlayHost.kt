@@ -297,7 +297,16 @@ class OverlayHost(
             setViewTreeSavedStateRegistryOwner(lo)
             setViewTreeViewModelStoreOwner(lo)
             setOnTouchListener { v, ev ->
-                if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE) {
+                if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE && IslandBus.replyTarget.value?.noteSink != null) {
+                    // Notiz: Ab Android 12 liefert Android für "außerhalb" keine Koordinaten mehr, Tippen auf die
+                    // Tastatur ist dann nicht von Tippen daneben zu unterscheiden. Darum zählt es nur bei versteckter Tastatur.
+                    val imeVisible = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                        v.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true
+                    if (!imeVisible && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        IslandBus.setNote(false)
+                        IslandBus.endReply()
+                    }
+                } else if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE) {
                     // Tippen auf die Tastatur zählt nicht als "außerhalb": sonst schließt sich die Island beim Schreiben.
                     val h = dm.heightPixels
                     val imeH = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

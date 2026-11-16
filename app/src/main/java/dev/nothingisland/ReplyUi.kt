@@ -62,13 +62,21 @@ fun ReplyBar() {
     if (event != null) lastEvent = event
     val e = event ?: lastEvent ?: return
     val closeK by androidx.compose.animation.core.animateFloatAsState(
-        if (closing) 0f else 1f, tween(if (closing) 200 else 0), label = "replyClose",
+        if (closing) 0f else 1f, tween(if (closing) 230 else 0), label = "replyClose",
     )
+    val noteOpen by IslandBus.note.collectAsState()
     val closeFx = Modifier.graphicsLayer {
-        alpha = closeK
-        val k = 0.92f + 0.08f * closeK
-        scaleX = k; scaleY = k
         transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
+        if (e.noteSink != null && !noteOpen) {
+            // Notiz geschlossen: Bubble schrumpft in die kleine Pille.
+            alpha = (closeK * 1.8f).coerceAtMost(1f)
+            scaleX = 0.34f + 0.66f * closeK
+            scaleY = 0.10f + 0.90f * closeK
+        } else {
+            alpha = closeK
+            val k = 0.96f + 0.04f * closeK
+            scaleX = k; scaleY = k
+        }
     }
     val reply = e.reply
     val sink = e.noteSink
@@ -130,6 +138,17 @@ fun ReplyBar() {
                                 keyboardActions = KeyboardActions(onDone = { send() }),
                                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
                             )
+                        }
+                        Box(
+                            Modifier.clip(RoundedCornerShape(50)).background(IslandTheme.buttonBg)
+                                .clickable {
+                                    keyboard?.hide()
+                                    IslandBus.setNote(false)
+                                    IslandBus.endReply()
+                                }
+                                .padding(horizontal = (12f * sc).dp, vertical = (10f * sc).dp),
+                        ) {
+                            Text("✕", color = IslandTheme.textGray, fontSize = (11f * sc).sp)
                         }
                         Box(
                             Modifier.clip(RoundedCornerShape(50)).background(IslandTheme.accent)
