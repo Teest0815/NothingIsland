@@ -57,7 +57,19 @@ fun ReplyBar() {
     val st by IslandBus.settings.collectAsState()
     IslandTheme.apply(st)
     val event by IslandBus.replyTarget.collectAsState()
-    val e = event ?: return
+    val closing by IslandBus.replyClosing.collectAsState()
+    var lastEvent by remember { mutableStateOf<IslandEvent?>(null) }
+    if (event != null) lastEvent = event
+    val e = event ?: lastEvent ?: return
+    val closeK by androidx.compose.animation.core.animateFloatAsState(
+        if (closing) 0f else 1f, tween(if (closing) 200 else 0), label = "replyClose",
+    )
+    val closeFx = Modifier.graphicsLayer {
+        alpha = closeK
+        val k = 0.92f + 0.08f * closeK
+        scaleX = k; scaleY = k
+        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
+    }
     val reply = e.reply
     val sink = e.noteSink
     if (reply == null && sink == null) return
@@ -93,7 +105,7 @@ fun ReplyBar() {
     val shape = RoundedCornerShape((minOf(st.expandedCorner * fsc, 42f * fsc)).dp)
     if (sink != null) {
         // Schreiben-Bubble sieht aus wie die Notiz-Bubble, nur mit Eingabefeld statt Knopf.
-        Box(Modifier.fillMaxWidth().padding(12.dp)) {
+        Box(Modifier.fillMaxWidth().then(closeFx).padding(12.dp)) {
             Box(
                 Modifier.fillMaxWidth().height((250f * fsc).dp).clip(shape)
                     .background(IslandTheme.bg).border(1.dp, IslandTheme.hairline, shape),
@@ -151,7 +163,7 @@ fun ReplyBar() {
         keyboard?.show()
     }
     val progress = ((h.value - alertH) / (fullH - alertH)).coerceIn(0f, 1f)
-    Box(Modifier.fillMaxWidth().padding(12.dp)) {
+    Box(Modifier.fillMaxWidth().then(closeFx).padding(12.dp)) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()

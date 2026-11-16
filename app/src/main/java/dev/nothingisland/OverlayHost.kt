@@ -243,7 +243,7 @@ class OverlayHost(
             lockReceiver = rc
         }
         replyJob = scope.launch {
-            IslandBus.replyTarget.collect { ev -> if (ev != null) showReply() else removeReply() }
+            IslandBus.replyTarget.collect { ev -> if (ev != null) showReply() else closeReplyAnimated() }
         }
         probeJob = scope.launch {
             IslandBus.settings.map { it.hideFullscreen }.distinctUntilChanged().collect { updateProbeLoop() }
@@ -296,8 +296,16 @@ class OverlayHost(
             setViewTreeLifecycleOwner(lo)
             setViewTreeSavedStateRegistryOwner(lo)
             setViewTreeViewModelStoreOwner(lo)
-            setOnTouchListener { _, ev ->
-                if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE) IslandBus.endReply()
+            setOnTouchListener { v, ev ->
+                if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE) {
+                    // Tippen auf die Tastatur zählt nicht als "außerhalb": sonst schließt sich die Island beim Schreiben.
+                    val h = dm.heightPixels
+                    val imeH = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        v.rootWindowInsets?.getInsets(android.view.WindowInsets.Type.ime())?.bottom ?: 0
+                    } else 0
+                    val keyboardTop = if (imeH > 0) h - imeH else (h * 0.55f).toInt()
+                    if (ev.rawY < keyboardTop) IslandBus.endReply()
+                }
                 false
             }
             setContent { ReplyBar() }
@@ -331,6 +339,18 @@ class OverlayHost(
                 if (replyView === view) IslandBus.setReplyShown(true)
             }, 120)
         }
+    }
+
+    /** Fenster erst nach der Ausblend-Animation entfernen. */
+    private fun closeReplyAnimated() {
+        if (replyView == null) return
+        IslandBus.setReplyClosing(true)
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (IslandBus.replyTarget.value == null) {
+                removeReply()
+                IslandBus.setReplyClosing(false)
+            }
+        }, 230)
     }
 
     private fun removeReply() {

@@ -353,7 +353,16 @@ object IslandBus {
         _replyShown.value = value
     }
 
+    /** true, solange das Antwort-/Notiz-Fenster ausblendet (kurz vor dem Entfernen). */
+    private val _replyClosing = MutableStateFlow(false)
+    val replyClosing: StateFlow<Boolean> = _replyClosing.asStateFlow()
+
+    fun setReplyClosing(value: Boolean) {
+        _replyClosing.value = value
+    }
+
     fun startReply(e: IslandEvent) {
+        _replyClosing.value = false
         _replyTarget.value = e
     }
 
