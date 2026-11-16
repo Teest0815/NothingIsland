@@ -98,6 +98,11 @@ fun ReplyBar() {
         keyboard?.show()
     }
     val scope = rememberCoroutineScope()
+    // Knopf "+ NEUE NOTIZ" <-> "SPEICHERN": 0 = Knopf, 1 = Eingabe.
+    val morph = remember(e.id) { Animatable(0f) }
+    LaunchedEffect(e.id) {
+        if (sink != null) morph.animateTo(1f, spring(dampingRatio = 0.78f, stiffness = 650f))
+    }
     fun send() {
         val t = text.trim()
         if (t.isEmpty()) return
@@ -106,8 +111,10 @@ fun ReplyBar() {
             sink(t)
             text = ""
             scope.launch {
-                delay(170)
                 keyboard?.hide()
+                // Speichern wird wieder zu "+ NEUE NOTIZ", die Notiz rutscht oben in die Liste.
+                morph.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = 520f))
+                delay(60)
                 IslandBus.endReply()
             }
             return
@@ -130,8 +137,6 @@ fun ReplyBar() {
             ) {
                 NotePanel(st.notes, sc, Modifier.fillMaxSize(), onUsed = {}, bottom = {
                     // Der rote Knopf "+ NEUE NOTIZ" zieht sich zu "SPEICHERN" zusammen, das Feld wächst daneben auf.
-                    val morph = remember(e.id) { Animatable(0f) }
-                    LaunchedEffect(e.id) { morph.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 320f)) }
                     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().height((40f * sc).dp)) {
                         val total = maxWidth
                         val btnW = (96f * sc).dp

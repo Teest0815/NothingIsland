@@ -2757,8 +2757,16 @@ internal fun NotePanel(notesJson: String, sc: Float, modifier: Modifier, onUsed:
             )
         }
         Spacer(Modifier.height((6f * sc).dp))
+        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+        var prevCount by remember { mutableIntStateOf(shown.size) }
+        LaunchedEffect(shown.size) {
+            // Neue Notiz: ganz nach oben scrollen, damit man sie sieht.
+            if (shown.size > prevCount) runCatching { listState.animateScrollToItem(0) }
+            prevCount = shown.size
+        }
         androidx.compose.foundation.lazy.LazyColumn(
             Modifier.weight(1f).fillMaxWidth(),
+            state = listState,
             verticalArrangement = Arrangement.spacedBy((6f * sc).dp),
         ) {
             if (shown.isEmpty()) item(key = "empty") {
