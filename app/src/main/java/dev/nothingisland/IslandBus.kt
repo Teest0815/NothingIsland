@@ -361,6 +361,12 @@ object IslandBus {
         _replyClosing.value = value
     }
 
+    /** Notiz schließen wie sonst: Eingabefenster blendet aus, die Notiz-Bubble darunter schrumpft normal zur Pille. */
+    fun closeNoteAnimated() {
+        if (_replyTarget.value != null) endReply()
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ setNote(false) }, 110)
+    }
+
     fun startReply(e: IslandEvent) {
         _replyClosing.value = false
         _replyTarget.value = e
