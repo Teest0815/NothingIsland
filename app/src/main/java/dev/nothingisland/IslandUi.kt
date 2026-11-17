@@ -826,8 +826,9 @@ internal fun IslandHostBody() {
                                     leave.snapTo(0f)
                                     stackHold = false
                                 } else {
-                                    // Kein Hochgleiten: Versatz sofort weg, die Meldung schrumpft an Ort und Stelle in die kleine Pille.
-                                    pullY = 0f
+                                    // Der Zug klingt weich aus, während die Meldung schon in die kleine Pille schrumpft
+                                    // (kein Sprung der Dehnung, kein Aufblitzen).
+                                    launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(220, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
                                     IslandBus.dismiss()
                                 }
                             } else {
