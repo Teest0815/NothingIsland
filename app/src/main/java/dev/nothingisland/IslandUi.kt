@@ -677,12 +677,12 @@ internal fun IslandHostBody() {
     val bigMode = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK || mode == Mode.CALC || mode == Mode.NOTE
     val centerX = sw / 2f + s.offsetX
     val rowLeftScreen = when {
-        bigMode -> (centerX - rowW / 2f).coerceIn(4f, maxOf(4f, sw - 4f - rowW))
+        bigMode && !s.bigFromCamera -> (centerX - rowW / 2f).coerceIn(4f, maxOf(4f, sw - 4f - rowW))
         dir == 1 -> maxOf(4f, anchor - rowW)
         dir == 2 -> minOf(anchor, sw - 4f - rowW)
         else -> 0f
     }
-    val bigMix by animateFloatAsState(if (bigMode) 1f else 0f, spring(dampingRatio = 0.85f, stiffness = 380f), label = "bigMix")
+    val bigMix by animateFloatAsState(if (bigMode && !s.bigFromCamera) 1f else 0f, spring(dampingRatio = 0.85f, stiffness = 380f), label = "bigMix")
     SideEffect {
         if (noteReplyHidden) IslandBus.setTouchRect(0f, 0f, 1f, 1f)
         else IslandBus.setTouchRect(

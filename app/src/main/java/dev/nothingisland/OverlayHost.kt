@@ -390,8 +390,14 @@ class OverlayHost(
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            x = (s.offsetX * d).toInt()
+            if (s.expandDir != 0 && s.bigFromCamera) {
+                gravity = Gravity.TOP or Gravity.START
+                val swd = context.resources.displayMetrics.widthPixels / d
+                x = ((s.bubbleLeftDp(swd, bigW) - 12f) * d).toInt()
+            } else {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                x = (s.offsetX * d).toInt()
+            }
             y = ((s.expandedTop - 12) * d).toInt()
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE

@@ -163,6 +163,8 @@ data class IslandSettings(
     val swipeDownPause: Boolean = false,
     /** Bilder und Sticker aus Meldungen (z. B. WhatsApp) anzeigen. */
     val showPictures: Boolean = true,
+    /** Bei einseitigem Aufgehen: auch große Blasen wachsen aus der Kamera-Kante statt mittig. */
+    val bigFromCamera: Boolean = false,
     /** Leuchten um die Island. */
     val glow: Boolean = true,
     val glowStrength: Float = 0.7f,
@@ -569,6 +571,7 @@ object IslandBus {
             pillIconNotif = p.getInt("pillIconNotif", d.pillIconNotif),
             swipeDownPause = p.getBoolean("swipeDownPause", d.swipeDownPause),
             showPictures = p.getBoolean("showPictures", d.showPictures),
+            bigFromCamera = p.getBoolean("bigFromCamera", d.bigFromCamera),
             glow = p.getBoolean("glow", d.glow),
             glowStrength = p.getFloat("glowStrength", d.glowStrength),
             glowSize = p.getInt("glowSize", d.glowSize),
@@ -644,6 +647,7 @@ object IslandBus {
             .putInt("pillIconNotif", s.pillIconNotif)
             .putBoolean("swipeDownPause", s.swipeDownPause)
             .putBoolean("showPictures", s.showPictures)
+            .putBoolean("bigFromCamera", s.bigFromCamera)
             .putBoolean("glow", s.glow)
             .putFloat("glowStrength", s.glowStrength)
             .putInt("glowSize", s.glowSize)

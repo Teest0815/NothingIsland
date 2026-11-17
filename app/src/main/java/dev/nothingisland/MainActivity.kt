@@ -490,6 +490,7 @@ class MainActivity : ComponentActivity() {
                     Chip(l, s.expandDir == v) { edit { it.copy(expandDir = v) } }
                 }
             }
+            if (s.expandDir != 0) ToggleRow("Große Bubbles auch aus der Kamera-Kante ziehen (statt mittig)", s.bigFromCamera) { c -> edit { it.copy(bigFromCamera = c) } }
             SettingSlider("Abstand von oben", "${s.offsetY} dp", s.offsetY.toFloat(), 0f..300f) { v -> edit { it.copy(offsetY = v.roundToInt()) } }
             SettingSlider("Größe", "${(s.scale * 100).roundToInt()} %", s.scale, 0.7f..1.5f) { v -> edit { it.copy(scale = (v * 20f).roundToInt() / 20f) } }
             SettingSlider("Breite der kleinen Pille", "${(s.widthFactor * 100).roundToInt()} %", s.widthFactor, 0.8f..1.8f) { v -> edit { it.copy(widthFactor = (v * 20f).roundToInt() / 20f) } }
