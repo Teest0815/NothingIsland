@@ -394,7 +394,7 @@ class OverlayHost(
                 x = ((s.bubbleLeftDp(swd, bigW) - 12f) * d).toInt()
             } else {
                 gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                x = (s.offsetX * d).toInt()
+                x = if (s.expandDir == 0) (s.offsetX * d).toInt() else 0
             }
             y = ((s.expandedTop - 12) * d).toInt()
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or

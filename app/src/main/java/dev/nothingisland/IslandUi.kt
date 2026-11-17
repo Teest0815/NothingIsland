@@ -647,7 +647,8 @@ internal fun IslandHostBody() {
     // Einseitiges Aufgehen: Reihe an der festen Kante, bei Platzmangel in den Bildschirm geschoben.
     // Große Blasen bleiben mittig, nur die kleine Pille hängt an der Kamera-Kante.
     val bigMode = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK || mode == Mode.CALC || mode == Mode.NOTE
-    val centerX = sw / 2f + s.offsetX
+    // Einseitig: große Blasen sind in der Bildschirmmitte (der Horizontal-Wert gilt nur für die kleine Pille).
+    val centerX = if (dir == 0) sw / 2f + s.offsetX else sw / 2f
     val rowLeftScreen = when {
         bigMode && !s.bigFromCamera -> (centerX - rowW / 2f).coerceIn(4f, maxOf(4f, sw - 4f - rowW))
         dir == 1 -> (anchor - rowW).coerceIn(4f, maxOf(4f, sw - 4f - rowW))
