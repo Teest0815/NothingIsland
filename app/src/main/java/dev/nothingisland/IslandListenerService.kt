@@ -340,6 +340,7 @@ class IslandListenerService : NotificationListenerService() {
             text = text,
             icon = loadIcon(n.smallIcon),
             avatar = if (kind == Kind.OTHER) loadAvatar(n, ex) else null,
+            picture = if (kind == Kind.OTHER && IslandBus.settings.value.showPictures) loadPicture(n, ex) else null,
             action = n.contentIntent,
             actions = actions,
             chronoBase = chronoBase,
@@ -482,6 +483,32 @@ class IslandListenerService : NotificationListenerService() {
         @Suppress("DEPRECATION")
         val p = last?.getParcelable<android.app.Person>("sender_person")
         bmp(p?.icon)
+    }.getOrNull()
+
+    /** Bild oder Sticker: BigPicture der Meldung, sonst das Bild der letzten Chat-Nachricht (Messenger). */
+    private fun loadPicture(n: Notification, ex: android.os.Bundle): ImageBitmap? = runCatching {
+        fun scaled(b: Bitmap): ImageBitmap {
+            val m = maxOf(b.width, b.height)
+            return (if (m > 360) Bitmap.createScaledBitmap(b, b.width * 360 / m, b.height * 360 / m, true) else b).asImageBitmap()
+        }
+        @Suppress("DEPRECATION")
+        (ex.get(Notification.EXTRA_PICTURE) as? Bitmap)?.let { return@runCatching scaled(it) }
+        if (Build.VERSION.SDK_INT >= 31) {
+            (ex.get("android.pictureIcon") as? Icon)?.loadDrawable(this)?.toBitmap(360, 360)?.let { return@runCatching scaled(it) }
+        }
+        @Suppress("DEPRECATION")
+        val msgs = ex.getParcelableArray(Notification.EXTRA_MESSAGES)
+        val last = msgs?.lastOrNull() as? android.os.Bundle ?: return@runCatching null
+        val type = last.getString("type") ?: return@runCatching null
+        @Suppress("DEPRECATION")
+        val uri = last.getParcelable<android.net.Uri>("uri") ?: return@runCatching null
+        if (!type.startsWith("image/")) return@runCatching null
+        val bmp = android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(contentResolver, uri)) { dec, info, _ ->
+            val m = maxOf(info.size.width, info.size.height)
+            if (m > 360) dec.setTargetSize(info.size.width * 360 / m, info.size.height * 360 / m)
+            dec.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+        }
+        bmp.asImageBitmap()
     }.getOrNull()
 
     private fun loadIcon(icon: Icon?): ImageBitmap? = runCatching {

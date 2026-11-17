@@ -174,6 +174,15 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
                 )
             }
         }
+        event.picture?.let { pic ->
+            Spacer(Modifier.width((10f * sc).dp))
+            Image(
+                bitmap = pic,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier.size((52f * sc).dp).clip(RoundedCornerShape((10f * sc).dp)),
+            )
+        }
         if (more > 0) {
             Spacer(Modifier.width((8f * sc).dp))
             Box(

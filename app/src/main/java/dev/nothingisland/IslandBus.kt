@@ -34,6 +34,8 @@ data class IslandEvent(
     val icon: ImageBitmap? = null,
     /** Profil-/Gruppenbild des Absenders (Messenger), falls vorhanden. */
     val avatar: ImageBitmap? = null,
+    /** Bild oder Sticker der Meldung (BigPicture oder Bild der letzten Chat-Nachricht). */
+    val picture: ImageBitmap? = null,
     /** Notiz-Eingabe: statt einer Antwort wird der Text hier abgegeben. */
     val noteSink: ((String) -> Unit)? = null,
     val action: PendingIntent? = null,
@@ -157,6 +159,8 @@ data class IslandSettings(
     val pillIconNotif: Int = 0,
     /** Bei Musik: Nach-unten-Ziehen pausiert/startet die Wiedergabe. */
     val swipeDownPause: Boolean = false,
+    /** Bilder und Sticker aus Meldungen (z. B. WhatsApp) anzeigen. */
+    val showPictures: Boolean = true,
     /** Leuchten um die Island. */
     val glow: Boolean = true,
     val glowStrength: Float = 0.7f,
@@ -560,6 +564,7 @@ object IslandBus {
             swipeUpAction = p.getString("swipeUpAction", d.swipeUpAction) ?: d.swipeUpAction,
             pillIconNotif = p.getInt("pillIconNotif", d.pillIconNotif),
             swipeDownPause = p.getBoolean("swipeDownPause", d.swipeDownPause),
+            showPictures = p.getBoolean("showPictures", d.showPictures),
             glow = p.getBoolean("glow", d.glow),
             glowStrength = p.getFloat("glowStrength", d.glowStrength),
             glowSize = p.getInt("glowSize", d.glowSize),
@@ -633,6 +638,7 @@ object IslandBus {
             .putString("swipeUpAction", s.swipeUpAction)
             .putInt("pillIconNotif", s.pillIconNotif)
             .putBoolean("swipeDownPause", s.swipeDownPause)
+            .putBoolean("showPictures", s.showPictures)
             .putBoolean("glow", s.glow)
             .putFloat("glowStrength", s.glowStrength)
             .putInt("glowSize", s.glowSize)
