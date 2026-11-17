@@ -275,9 +275,14 @@ internal fun IslandHostBody() {
     val appear = remember { Animatable(1f) }
     // Frischer Aufbau (z. B. nach dem Aufwecken): Die Pille kommt von ihrer Mitte aus herein, wie beim Auftauchen einer Status-Pille.
     val wakeTick by IslandBus.wakeTick.collectAsState()
+    // Einblenden (monoton, kein Flackern) und Größe (federt) getrennt: Die Feder darf überschwingen, die Deckkraft nicht.
+    val wakeFade = remember { Animatable(1f) }
+    val wakeScale = remember { Animatable(1f) }
     LaunchedEffect(wakeTick) {
-        appear.snapTo(0f)
-        appear.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 360f))
+        wakeFade.snapTo(0f)
+        wakeScale.snapTo(0.55f)
+        launch { wakeFade.animateTo(1f, tween(150)) }
+        wakeScale.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 380f))
     }
     // Kartenstapel: neue Meldung fällt von oben auf den Stapel, gelesene Karte schrumpft weg.
     val dropY = remember { Animatable(0f) }
@@ -710,8 +715,8 @@ internal fun IslandHostBody() {
             modifier = Modifier
                 .graphicsLayer {
                     val pop = 0.6f + 0.4f * appear.value
-                    scaleX = pressScale * pop * bump.value.coerceAtMost(1.05f)
-                    scaleY = pressScale * pop * bump.value.coerceAtMost(1.05f)
+                    scaleX = pressScale * pop * bump.value.coerceAtMost(1.05f) * wakeScale.value
+                    scaleY = pressScale * pop * bump.value.coerceAtMost(1.05f) * wakeScale.value
                     translationX = swipeX.value + stretchPx / 2f
                     translationY = pullY + dropY.value
                     if (rubber != 0f) {
@@ -733,7 +738,7 @@ internal fun IslandHostBody() {
                     }
                     // Zieht sich beim Ziehen leicht in die Länge.
                     if (pullY > 0f) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
-                    alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f) *
+                    alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f) * wakeFade.value *
                         (if (stackBehind > 0) 1f - leave.value.coerceAtLeast(0f).let { it * it } else 1f)
                 }
                 .layout { m, _ ->
