@@ -221,7 +221,9 @@ data class IslandSettings(
     val expandedTop: Int get() = if (expandedOffsetY < 0) offsetY else expandedOffsetY
 
     /** Das Fenster sitzt am höheren der beiden Werte, der Rest wird per Abstand im Layout erzeugt. */
-    val windowTop: Int get() = (minOf(offsetY, expandedTop) - (if (cameraBump) minOf(bumpHeight, minOf(offsetY, expandedTop)) else 0)).coerceAtLeast(0)
+    /** Höhe des Kamera-Wulsts: nie höher als der Platz über der großen Blase. */
+    val bumpPx: Int get() = if (cameraBump) minOf(bumpHeight, expandedTop) else 0
+    val windowTop: Int get() = minOf(offsetY, expandedTop - bumpPx).coerceAtLeast(0)
 }
 
 /** Einfacher In-Process-Bus zwischen Listener-Service, Overlay-UI und Settings-Activity. */

@@ -678,8 +678,8 @@ internal fun IslandHostBody() {
     val centerX = sw / 2f + s.offsetX
     val rowLeftScreen = when {
         bigMode && !s.bigFromCamera -> (centerX - rowW / 2f).coerceIn(4f, maxOf(4f, sw - 4f - rowW))
-        dir == 1 -> maxOf(4f, anchor - rowW)
-        dir == 2 -> minOf(anchor, sw - 4f - rowW)
+        dir == 1 -> (anchor - rowW).coerceIn(4f, maxOf(4f, sw - 4f - rowW))
+        dir == 2 -> anchor.coerceIn(4f, maxOf(4f, sw - 4f - rowW))
         else -> 0f
     }
     val bigMix by animateFloatAsState(if (bigMode && !s.bigFromCamera) 1f else 0f, spring(dampingRatio = 0.85f, stiffness = 380f), label = "bigMix")
@@ -695,27 +695,27 @@ internal fun IslandHostBody() {
     Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (noteReplyHidden) 0f else 1f }
     .wrapContentSize(Alignment.TopStart, unbounded = true)) {
     Box(
-        (if (dir == 1) Modifier.width(span.dp).padding(end = (winLeft + span - anchor).coerceAtLeast(0f).dp)
-        else if (dir == 2) Modifier.width(span.dp).padding(start = (anchor - winLeft).coerceAtLeast(0f).dp)
-        else Modifier.width(span.dp)),
+        Modifier.width(span.dp),
         contentAlignment = Alignment.TopCenter,
     ) {
-    Row(modifier = (if (dir == 1) Modifier.fillMaxWidth().wrapContentWidth(Alignment.End, unbounded = true)
-        else if (dir == 2) Modifier.fillMaxWidth().wrapContentWidth(Alignment.Start, unbounded = true) else Modifier)
+    Row(modifier = (if (dir == 0) Modifier else Modifier.layout { m, c ->
+            // Absolute Platzierung: feste Kante (Kamera) oder mittig, weich ineinander übergehend.
+            val p = m.measure(Constraints())
+            val d = density
+            val mg = 4f * d
+            val full = sw * d
+            val lim = maxOf(mg, full - mg - p.width)
+            val a = anchor * d
+            val anchored = (if (dir == 1) a - p.width else a).coerceIn(mg, lim)
+            val centered = (centerX * d - p.width / 2f).coerceIn(mg, lim)
+            val left = anchored + (centered - anchored) * bigMix
+            layout(maxOf(c.maxWidth, 0), p.height) { p.place((left - winLeft * d).roundToInt(), 0) }
+        })
         .padding(top = maxOf(topPad, 0.dp)), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.width(slot))
 
         Box(
-            if (dir == 0) Modifier else Modifier.graphicsLayer {
-                // Passt die wachsende Pille nicht neben die Kante, wird sie in den Bildschirm geschoben.
-                val a = anchor.dp.toPx()
-                val m = 4.dp.toPx()
-                val w = size.width
-                val base = if (dir == 1) a - w else a
-                val mid = (centerX.dp.toPx() - w / 2f).coerceIn(m, maxOf(m, sw.dp.toPx() - m - w))
-                val small = if (dir == 1) maxOf(base, m) else minOf(base, sw.dp.toPx() - m - w)
-                translationX = small + (mid - small) * bigMix - base
-            },
+            Modifier,
         ) {
         // Leuchten: weicher Schein um die Pille (Meldung, Musik, Anruf, Laden, Kamera/Mikrofon, Akku).
         if (glowSpec != null) GlowLayer(glowSpec, s.glowStrength, s.glowSize, corner, Modifier.matchParentSize())
@@ -1182,7 +1182,7 @@ internal fun IslandHostBody() {
     }
     // Kamera-Wulst: Die große Blase wächst wie aus der Kamera heraus, ein Bogen umschließt das Loch.
     val bumpP by animateFloatAsState(if (bigMode && s.cameraBump) 1f else 0f, spring(dampingRatio = 0.8f, stiffness = 380f), label = "bumpP")
-    val bumpH = minOf(s.bumpHeight, minOf(s.offsetY, s.expandedTop)).toFloat()
+    val bumpH = s.bumpPx.toFloat()
     if (s.cameraBump && bumpP > 0.01f && bumpH >= 24f) {
         val camHalf = maxOf(gap / 2f, 15f * sc)
         val camX = when (dir) { 1 -> anchor - camHalf; 2 -> anchor + camHalf; else -> sw / 2f + s.offsetX }
