@@ -79,8 +79,6 @@ class OverlayHost(
     private var lastAx = Int.MIN_VALUE
     private var lastAy = Int.MIN_VALUE
 
-    val isShown: Boolean get() = overlay != null
-
     // ---- Vollbild-Erkennung: 1-Pixel-Fenster ohne LAYOUT_IN_SCREEN. Es sitzt unter der Statusleiste (y > 0),
     // und rutscht auf y = 0, sobald die Statusleiste ausgeblendet ist. Wurde nie y > 0 gemessen, wird nie ausgeblendet.
     private var probe: View? = null

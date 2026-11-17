@@ -441,8 +441,6 @@ object IslandBus {
     /** Zuletzt gezeigte Ereignisse, damit die Antwort-Ansicht sie per ID findet. */
     private val recent = LinkedHashMap<Long, IslandEvent>()
 
-    fun eventById(id: Long): IslandEvent? = synchronized(recent) { recent[id] }
-
     fun post(event: IslandEvent) {
         if (event.reply != null) synchronized(recent) {
             recent[event.id] = event
@@ -478,12 +476,6 @@ object IslandBus {
     /** Eine Karte hinter der obersten entfernen (ihre Zeit ist abgelaufen). */
     fun removePending(id: Long) {
         _pending.update { list -> list.filterNot { it.id == id } }
-    }
-
-    /** Ganzen Stapel beenden. */
-    fun dismissAll() {
-        _pending.value = emptyList()
-        _current.value = null
     }
 
     fun dismiss() {

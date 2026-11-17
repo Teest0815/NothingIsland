@@ -3,12 +3,8 @@ package dev.nothingisland
 import android.app.RemoteInput
 import android.content.Intent
 import android.os.Bundle
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
 import androidx.compose.animation.core.animateDpAsState
 import kotlinx.coroutines.delay
 import androidx.compose.animation.core.tween
@@ -272,7 +268,7 @@ fun ReplyBar() {
                         .padding(horizontal = (14f * sc).dp, vertical = (10f * sc).dp),
                 ) {
                     if (text.isEmpty()) {
-                        Text(if (sink != null) "Notiz schreiben …" else "Antwort schreiben …", color = IslandTheme.textGray, fontSize = (13f * sc).sp)
+                        Text("Antwort schreiben …", color = IslandTheme.textGray, fontSize = (13f * sc).sp)
                     }
                     BasicTextField(
                         value = text,
@@ -292,7 +288,7 @@ fun ReplyBar() {
                         .padding(horizontal = (14f * sc).dp, vertical = (10f * sc).dp),
                 ) {
                     Text(
-                        if (sink != null) "SPEICHERN" else "SENDEN",
+                        "SENDEN",
                         color = IslandTheme.onAccent,
                         fontFamily = IslandTheme.font,
                         fontWeight = FontWeight.Bold,
