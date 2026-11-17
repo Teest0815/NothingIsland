@@ -37,6 +37,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -44,10 +45,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.ui.graphics.graphicsLayer
@@ -396,7 +395,7 @@ class MainActivity : ComponentActivity() {
         }
 
         val sv by IslandBus.settings.collectAsState()
-        CardIf(FoldLabel("SPARMODUS", false)) {
+        FoldCard("SPARMODUS", false) {
             Text(
                 "Spart Akku: keine Dauer-Animationen (Equalizer, Puls), Zustände werden seltener geprüft. Bei ausgeschaltetem Bildschirm pausiert die Prüfung immer.",
                 color = Muted,
@@ -482,7 +481,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun LayoutTab(s: IslandSettings) {
         val widthCap = (resources.configuration.screenWidthDp - 8).coerceAtLeast(220)
-        CardIf(FoldLabel("POSITION & GRÖSSE", true)) {
+        FoldCard("POSITION & GRÖSSE", true) {
             SettingSlider("Horizontal", "${s.offsetX} dp", s.offsetX.toFloat(), -150f..150f) { v -> edit { it.copy(offsetX = v.roundToInt()) } }
             Text("AUFGEHEN", color = TextGray, fontSize = 11.sp, fontFamily = Mono)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -500,7 +499,7 @@ class MainActivity : ComponentActivity() {
             SettingSlider("Abstand Symbol → Text (links)", "${s.iconTextGap} dp", s.iconTextGap.toFloat(), 0f..24f) { v -> edit { it.copy(iconTextGap = v.roundToInt()) } }
         }
 
-        CardIf(FoldLabel("AUFGEKLAPPTE PILLE", false)) {
+        FoldCard("AUFGEKLAPPTE PILLE", false) {
             SettingSlider("Größe", "${(s.expandedScale * 100).roundToInt()} %", s.expandedScale, 0.7f..2f) { v ->
                 edit { it.copy(expandedScale = (v * 20f).roundToInt() / 20f) }
                 IslandBus.post(previewAlert())
@@ -542,7 +541,7 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun FunctionTab(s: IslandSettings) {
         val ctx = this@MainActivity
-        CardIf(FoldLabel("ANZEIGE", true)) {
+        FoldCard("ANZEIGE", true) {
             ToggleRow("Ruhe-Pille anzeigen", s.idleVisible) { c -> edit { it.copy(idleVisible = c) } }
             ToggleRow("Musik, Timer & Co. dauerhaft anzeigen", s.showOngoing) { c -> edit { it.copy(showOngoing = c) } }
             ToggleRow("Auf dem Sperrbildschirm antippbar", s.lockTouch) { c -> edit { it.copy(lockTouch = c) } }
@@ -551,7 +550,7 @@ class MainActivity : ComponentActivity() {
             SettingSlider("Neue Meldung sichtbar für", "${s.alertSeconds} s", s.alertSeconds.toFloat(), 2f..15f) { v -> edit { it.copy(alertSeconds = v.roundToInt()) } }
         }
 
-        CardIf(FoldLabel("MELDUNGEN", false)) {
+        FoldCard("MELDUNGEN", false) {
             ToggleRow("Meldungen stapeln (Wischen entfernt die oberste Karte)", s.multiNotif) { c -> edit { it.copy(multiNotif = c) } }
             ToggleRow("Meldungen derselben App zu einer Karte zusammenfassen (statt stapeln)", s.groupNotif) { c -> edit { it.copy(groupNotif = c) } }
             ToggleRow("Bestätigungscodes erkennen (Tippen kopiert)", s.otpCodes) { c -> edit { it.copy(otpCodes = c) } }
@@ -597,13 +596,13 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        CardIf(FoldLabel("ANIMATIONEN", false)) {
+        FoldCard("ANIMATIONEN", false) {
             ToggleRow("Zahlen rollen (Timer, Stoppuhr, Anruf)", s.rollDigits) { c -> edit { it.copy(rollDigits = c) } }
             ToggleRow("Große Bubble wird klein: erst kleiner, dann breiter (Squash)", s.squashEntry) { c -> edit { it.copy(squashEntry = c) } }
             ToggleRow("Ladeanzeige animieren (Balken & Prozent)", s.chargeAnim) { c -> edit { it.copy(chargeAnim = c) } }
         }
 
-        CardIf(FoldLabel("LEUCHTEN", false)) {
+        FoldCard("LEUCHTEN", false) {
             ToggleRow("Leuchten um die Island", s.glow) { c -> edit { it.copy(glow = c) } }
             SettingSlider("Stärke", "${(s.glowStrength * 100).roundToInt()} %", s.glowStrength, 0.1f..1f) { v ->
                 edit { it.copy(glowStrength = (v * 20f).roundToInt() / 20f) }
@@ -623,20 +622,20 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        CardIf(FoldLabel("HINTERGRUND", false)) {
+        FoldCard("HINTERGRUND", false) {
             ToggleRow("Im Hintergrund aktiv halten (stille Benachrichtigung)", s.keepAlive) { c ->
                 edit { it.copy(keepAlive = c) }
                 if (c) KeepAliveService.start(ctx) else KeepAliveService.stop(ctx)
             }
         }
 
-        CardIf(FoldLabel("MUSIK", false)) {
+        FoldCard("MUSIK", false) {
             ToggleRow("Equalizer-Balken bei laufender Musik", s.equalizer) { c -> edit { it.copy(equalizer = c) } }
             ToggleRow("Podcast: Vor-/Zurückspulen-Tasten", s.mediaSeek) { c -> edit { it.copy(mediaSeek = c) } }
             ToggleRow("Wischen links/rechts: Song zurück/vor", s.swipeSkip) { c -> edit { it.copy(swipeSkip = c) } }
         }
 
-        CardIf(FoldLabel("TRAINING (STRAVA, POLAR, WAHOO, KOMOOT)", false)) {
+        FoldCard("TRAINING (STRAVA, POLAR, WAHOO, KOMOOT)", false) {
             Text(
                 "Während einer Aufzeichnung zeigt die kleine Pille links die Zeit und rechts diesen Wert. Er wird aus der Benachrichtigung der App gelesen, die Anzeige hängt also davon ab, was die App dort mitteilt. Fehlt der Wert, zeigt die Pille den ersten vorhandenen.",
                 color = Muted,
@@ -655,11 +654,11 @@ class MainActivity : ComponentActivity() {
             Spacer(Modifier.height(8.dp))
         }
 
-        CardIf(FoldLabel("NACH UNTEN ZIEHEN", false)) {
+        FoldCard("NACH UNTEN ZIEHEN", false) {
             SwipeUpSettings(s)
         }
 
-        CardIf(FoldLabel("HAPTIK", false)) {
+        FoldCard("HAPTIK", false) {
             ToggleRow("Kurz vibrieren beim Aufklappen", s.haptics) { c ->
                 edit { it.copy(haptics = c) }
                 if (c) QuickActions.hapticPlay(ctx, s.hapticStyle, s.hapticMs, s.hapticAmp)
@@ -693,7 +692,7 @@ class MainActivity : ComponentActivity() {
             Spacer(Modifier.height(8.dp))
         }
 
-        CardIf(FoldLabel("STATUS-ANZEIGEN", false)) {
+        FoldCard("STATUS-ANZEIGEN", false) {
             ToggleRow("Status in der Pille anzeigen", s.statusPills) { c -> edit { it.copy(statusPills = c) } }
             Text(
                 "Die Pille zeigt es, solange es aktiv ist. Wähle, was angezeigt wird:",
@@ -726,9 +725,9 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        CardIf(FoldLabel("SMART HOME (HOME ASSISTANT)", false)) { HomeAssistantSettings() }
+        FoldCard("SMART HOME (HOME ASSISTANT)", false) { HomeAssistantSettings() }
 
-        CardIf(FoldLabel("SCHNELLZUGRIFF", false)) {
+        FoldCard("SCHNELLZUGRIFF", false) {
             ToggleRow("Schnellzugriff-Panel aktivieren", s.quickPanel) { c ->
                 edit { it.copy(quickPanel = c) }
                 if (!c) IslandBus.setQuick(false)
@@ -1239,42 +1238,45 @@ private fun MiniButton(text: String, enabled: Boolean, onClick: () -> Unit) {
 
 // ------------------------------------------------------------------ UI-Bausteine
 
-/** Aufklappbare Überschrift. Gibt zurück, ob der Abschnitt offen ist. Der Zustand bleibt beim Tabwechsel erhalten. */
+/** Aufklappbarer Bereich: Titel und Inhalt liegen immer in einem Rahmen, der beim Öffnen weich größer wird. */
 @Composable
-private fun FoldLabel(text: String, defaultOpen: Boolean): Boolean {
+private fun FoldCard(text: String, defaultOpen: Boolean, content: @Composable () -> Unit) {
     var open by rememberSaveable(text) { mutableStateOf(defaultOpen) }
     val rot by animateFloatAsState(if (open) 90f else 0f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "chev")
-    Spacer(Modifier.height(20.dp))
-    Row(
+    val shape = RoundedCornerShape(20.dp)
+    Spacer(Modifier.height(14.dp))
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .bounceClick({ open = !open })
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .clip(shape)
+            .border(1.dp, CardBorder, shape)
+            .animateContentSize(spring(dampingRatio = 0.85f, stiffness = 400f)),
     ) {
-        Text(
-            text,
-            color = AppAccent,
-            fontFamily = FontFamily.Monospace,
-            fontSize = 12.sp,
-            letterSpacing = 2.sp,
-            modifier = Modifier.weight(1f),
-        )
-        Text("›", color = Muted, fontSize = 20.sp, modifier = Modifier.graphicsLayer { rotationZ = rot })
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .bounceClick({ open = !open })
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text,
+                color = AppAccent,
+                fontFamily = FontFamily.Monospace,
+                fontSize = 12.sp,
+                letterSpacing = 2.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text("›", color = Muted, fontSize = 20.sp, modifier = Modifier.graphicsLayer { rotationZ = rot })
+        }
+        AnimatedVisibility(
+            visible = open,
+            enter = fadeIn(tween(220, delayMillis = 40)),
+            exit = fadeOut(tween(120)),
+        ) {
+            Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 10.dp)) { content() }
+        }
     }
-    Spacer(Modifier.height(2.dp))
-    return open
-}
-
-/** Karte, die sich weich auf- und zuklappt. */
-@Composable
-private fun CardIf(open: Boolean, content: @Composable () -> Unit) {
-    AnimatedVisibility(
-        visible = open,
-        enter = expandVertically(spring(dampingRatio = 0.85f, stiffness = 400f)) + fadeIn(tween(220, delayMillis = 40)),
-        exit = shrinkVertically(tween(220, easing = FastOutSlowInEasing)) + fadeOut(tween(120)),
-    ) { Card(content) }
 }
 
 @Composable
