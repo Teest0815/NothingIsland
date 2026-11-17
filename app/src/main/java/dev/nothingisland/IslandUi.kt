@@ -170,13 +170,7 @@ internal fun IslandHostBody() {
     val replying = replyingRaw && replyEv?.noteSink == null
     // Bei der Notiz wird die Island nur unsichtbar und berührungslos (nicht abgebaut): Beim Schließen kein Neuaufbau, kein Ruckeln.
     val noteReplyHidden = replyingRaw && replyEv?.noteSink != null
-    // Frischer Aufbau (z. B. nach dem Aufwecken, auch auf dem Sperrbildschirm): Die Pille federt weich herein.
-    val wake = remember { Animatable(0f) }
-    val wakeTick by IslandBus.wakeTick.collectAsState()
-    LaunchedEffect(wakeTick) {
-        wake.snapTo(0f)
-        wake.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 230f))
-    }
+
     val pendingList by IslandBus.pending.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // Zwischenablage: kopierten Text kurz zeigen.
@@ -279,6 +273,12 @@ internal fun IslandHostBody() {
     var reported by remember { mutableStateOf(Triple(0f, 0f, 0f)) }
     var snapNext by remember { mutableStateOf(false) }
     val appear = remember { Animatable(1f) }
+    // Frischer Aufbau (z. B. nach dem Aufwecken): Die Pille kommt von ihrer Mitte aus herein, wie beim Auftauchen einer Status-Pille.
+    val wakeTick by IslandBus.wakeTick.collectAsState()
+    LaunchedEffect(wakeTick) {
+        appear.snapTo(0f)
+        appear.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 360f))
+    }
     // Kartenstapel: neue Meldung fällt von oben auf den Stapel, gelesene Karte schrumpft weg.
     val dropY = remember { Animatable(0f) }
     val leave = remember { Animatable(0f) }
@@ -661,14 +661,8 @@ internal fun IslandHostBody() {
     }
     val shape = RoundedCornerShape(corner)
 
-    Box(Modifier.fillMaxSize().graphicsLayer {
-        val w = wake.value
-        alpha = if (noteReplyHidden) 0f else (w * 2f).coerceIn(0f, 1f)
-        val k = 0.45f + 0.55f * w
-        scaleX = k; scaleY = k
-        translationY = -(1f - w) * 16.dp.toPx()
-        transformOrigin = TransformOrigin(0.5f, 0f)
-    }.wrapContentSize(Alignment.TopStart, unbounded = true)) {
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (noteReplyHidden) 0f else 1f }
+    .wrapContentSize(Alignment.TopStart, unbounded = true)) {
     Box(Modifier.width(span.dp), contentAlignment = Alignment.TopCenter) {
     Row(modifier = Modifier.padding(top = maxOf(topPad, 0.dp)), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.width(slot))
