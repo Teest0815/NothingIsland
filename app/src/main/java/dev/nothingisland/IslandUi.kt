@@ -1313,6 +1313,9 @@ internal fun SplitRow(
 internal fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float, eq: Boolean, workoutMetric: String, modifier: Modifier, camSide: Int = 0) {
     val nav = e.kind == Kind.NAVIGATION
     val workout = e.kind == Kind.WORKOUT
+    // Pausiert (Musik oder Timer): die Zeit wird leicht grau.
+    val paused = (e.kind == Kind.MEDIA && !e.playing) || (e.kind == Kind.TIMER && e.chronoBase == null)
+    val timeColor by androidx.compose.animation.animateColorAsState(if (paused) TextGray else Fg, tween(250), label = "timeColor")
     SplitRow(
         sc = sc,
         gap = gap,
@@ -1358,10 +1361,10 @@ internal fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Floa
                     horizontalArrangement = Arrangement.spacedBy((6f * sc).dp),
                 ) {
                     if (eq && e.kind == Kind.MEDIA) Equalizer(e.playing || e.chronoBase != null, sc)
-                    if (e.chronoBase != null) Chrono(e, (12f * sc).sp)
+                    if (e.chronoBase != null) Chrono(e, (12f * sc).sp, color = timeColor)
                     else Text(
                         text = e.rightText ?: "",
-                        color = Fg,
+                        color = timeColor,
                         fontFamily = Mono,
                         fontWeight = FontWeight.Medium,
                         fontSize = (12f * sc).sp,
@@ -1370,7 +1373,7 @@ internal fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Floa
                 }
                 e.rightText != null -> Text(
                     text = e.rightText,
-                    color = Fg,
+                    color = timeColor,
                     fontFamily = Mono,
                     fontWeight = FontWeight.Medium,
                     fontSize = (12f * sc).sp,
