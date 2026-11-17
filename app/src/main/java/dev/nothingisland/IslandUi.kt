@@ -52,6 +52,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -644,8 +645,8 @@ internal fun IslandHostBody() {
     // Das sichtbare Fenster hat immer dieselbe Breite (kein seitlicher Versatz beim Auf- und Zuklappen)
     // und nimmt selbst keine Touches an. Ein unsichtbares, passgenaues Touch-Fenster reicht sie durch.
     val rowBig = maxOf(bigW, compactW, messageW) + 2f * slotMax
-    val span = minOf(rowBig + 2f * WINDOW_MARGIN, screenW.toFloat())
     val dir = s.expandDir
+    val span = if (dir != 0) screenW.toFloat() else minOf(rowBig + 2f * WINDOW_MARGIN, screenW.toFloat())
     val sw = screenW.toFloat()
     val anchor = s.anchorDp(sw)
     // Linke Fensterkante in dp: bei einseitigem Aufgehen hängt die Pille an der festen Kante (Kamera-Seite).
@@ -672,11 +673,16 @@ internal fun IslandHostBody() {
     }
     val rowW = targetW + 2f * slotTarget
     // Einseitiges Aufgehen: Reihe an der festen Kante, bei Platzmangel in den Bildschirm geschoben.
-    val rowLeftScreen = when (dir) {
-        1 -> maxOf(4f, anchor - rowW)
-        2 -> minOf(anchor, sw - 4f - rowW)
+    // Große Blasen bleiben mittig, nur die kleine Pille hängt an der Kamera-Kante.
+    val bigMode = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.QUICK || mode == Mode.CALC || mode == Mode.NOTE
+    val centerX = sw / 2f + s.offsetX
+    val rowLeftScreen = when {
+        bigMode -> (centerX - rowW / 2f).coerceIn(4f, maxOf(4f, sw - 4f - rowW))
+        dir == 1 -> maxOf(4f, anchor - rowW)
+        dir == 2 -> minOf(anchor, sw - 4f - rowW)
         else -> 0f
     }
+    val bigMix by animateFloatAsState(if (bigMode) 1f else 0f, spring(dampingRatio = 0.85f, stiffness = 380f), label = "bigMix")
     SideEffect {
         if (noteReplyHidden) IslandBus.setTouchRect(0f, 0f, 1f, 1f)
         else IslandBus.setTouchRect(
@@ -705,7 +711,10 @@ internal fun IslandHostBody() {
                 val a = anchor.dp.toPx()
                 val m = 4.dp.toPx()
                 val w = size.width
-                translationX = if (dir == 1) maxOf(0f, m - (a - w)) else -maxOf(0f, a + w - (sw.dp.toPx() - m))
+                val base = if (dir == 1) a - w else a
+                val mid = (centerX.dp.toPx() - w / 2f).coerceIn(m, maxOf(m, sw.dp.toPx() - m - w))
+                val small = if (dir == 1) maxOf(base, m) else minOf(base, sw.dp.toPx() - m - w)
+                translationX = small + (mid - small) * bigMix - base
             },
         ) {
         // Leuchten: weicher Schein um die Pille (Meldung, Musik, Anruf, Laden, Kamera/Mikrofon, Akku).
@@ -1049,7 +1058,7 @@ internal fun IslandHostBody() {
                 label = "mode",
             ) { st ->
                 when (st.first) {
-                    Mode.IDLE -> IdleDots(sc)
+                    Mode.IDLE -> IdleDots(sc, if (s.expandDir == 0) 0f else (if (s.expandDir == 1) 1f else -1f) * (idleW / 2f - maxOf(gap / 2f, 15f * sc)))
                     Mode.NOTE -> NotePanel(s.notes, bsc, Modifier.requiredSize(bigW.dp, (250f * fsc).dp), onUsed = { touch++ })
                     Mode.CALC -> CalcPanel(bsc, Modifier.requiredSize(bigW.dp, (292f * fsc).dp)) { touch++ }
                     Mode.QUICK -> QuickPanel(quickPages, bsc, Modifier.requiredSize(bigW.dp, (quickBaseH * fsc).dp)) { touch++ }
@@ -1163,8 +1172,9 @@ internal fun IslandHostBody() {
 }
 
 @Composable
-internal fun IdleDots(sc: Float) {
+internal fun IdleDots(sc: Float, offsetX: Float = 0f) {
     Row(
+        modifier = Modifier.offset(x = offsetX.dp),
         horizontalArrangement = Arrangement.spacedBy((6f * sc).dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
