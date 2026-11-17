@@ -165,6 +165,10 @@ data class IslandSettings(
     val showPictures: Boolean = true,
     /** Bei einseitigem Aufgehen: auch große Blasen wachsen aus der Kamera-Kante statt mittig. */
     val bigFromCamera: Boolean = false,
+    /** Große Blasen bekommen einen Wulst nach oben, der die Kamera umschließt ("aus der Kamera gezogen"). */
+    val cameraBump: Boolean = false,
+    val bumpHeight: Int = 30,
+    val bumpWidth: Int = 100,
     /** Leuchten um die Island. */
     val glow: Boolean = true,
     val glowStrength: Float = 0.7f,
@@ -217,7 +221,7 @@ data class IslandSettings(
     val expandedTop: Int get() = if (expandedOffsetY < 0) offsetY else expandedOffsetY
 
     /** Das Fenster sitzt am höheren der beiden Werte, der Rest wird per Abstand im Layout erzeugt. */
-    val windowTop: Int get() = minOf(offsetY, expandedTop)
+    val windowTop: Int get() = (minOf(offsetY, expandedTop) - (if (cameraBump) minOf(bumpHeight, minOf(offsetY, expandedTop)) else 0)).coerceAtLeast(0)
 }
 
 /** Einfacher In-Process-Bus zwischen Listener-Service, Overlay-UI und Settings-Activity. */
@@ -572,6 +576,9 @@ object IslandBus {
             swipeDownPause = p.getBoolean("swipeDownPause", d.swipeDownPause),
             showPictures = p.getBoolean("showPictures", d.showPictures),
             bigFromCamera = p.getBoolean("bigFromCamera", d.bigFromCamera),
+            cameraBump = p.getBoolean("cameraBump", d.cameraBump),
+            bumpHeight = p.getInt("bumpHeight", d.bumpHeight),
+            bumpWidth = p.getInt("bumpWidth", d.bumpWidth),
             glow = p.getBoolean("glow", d.glow),
             glowStrength = p.getFloat("glowStrength", d.glowStrength),
             glowSize = p.getInt("glowSize", d.glowSize),
@@ -648,6 +655,9 @@ object IslandBus {
             .putBoolean("swipeDownPause", s.swipeDownPause)
             .putBoolean("showPictures", s.showPictures)
             .putBoolean("bigFromCamera", s.bigFromCamera)
+            .putBoolean("cameraBump", s.cameraBump)
+            .putInt("bumpHeight", s.bumpHeight)
+            .putInt("bumpWidth", s.bumpWidth)
             .putBoolean("glow", s.glow)
             .putFloat("glowStrength", s.glowStrength)
             .putInt("glowSize", s.glowSize)

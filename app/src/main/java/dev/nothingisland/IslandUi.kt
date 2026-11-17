@@ -1180,6 +1180,49 @@ internal fun IslandHostBody() {
         }
     }
     }
+    // Kamera-Wulst: Die große Blase wächst wie aus der Kamera heraus, ein Bogen umschließt das Loch.
+    val bumpP by animateFloatAsState(if (bigMode && s.cameraBump) 1f else 0f, spring(dampingRatio = 0.8f, stiffness = 380f), label = "bumpP")
+    val bumpH = minOf(s.bumpHeight, minOf(s.offsetY, s.expandedTop)).toFloat()
+    if (s.cameraBump && bumpP > 0.01f && bumpH >= 24f) {
+        val camHalf = maxOf(gap / 2f, 15f * sc)
+        val camX = when (dir) { 1 -> anchor - camHalf; 2 -> anchor + camHalf; else -> sw / 2f + s.offsetX }
+        val fil = 10f
+        val hw = s.bumpWidth.toFloat() + 2f * fil
+        val hh = bumpH + 2f
+        Box(
+            Modifier
+                .offset(x = (camX - winLeft - hw / 2f).dp, y = maxOf(topPad, 0.dp) - bumpH.dp)
+                .size(hw.dp, hh.dp)
+                .graphicsLayer {
+                    scaleY = bumpP
+                    transformOrigin = TransformOrigin(0.5f, 1f)
+                    translationX = swipeX.value
+                    translationY = pullY + dropY.value
+                    alpha = bumpP.coerceIn(0f, 1f) * wakeFade.value * (1f - (abs(swipeX.value) / (bigW.dp.toPx() * 0.9f)).coerceIn(0f, 1f))
+                }
+                .drawBehind {
+                    val f = fil.dp.toPx(); val r = 14.dp.toPx(); val w = size.width; val hb = (bumpH).dp.toPx(); val bw = w - 2f * f
+                    val edge = androidx.compose.ui.graphics.Path().apply {
+                        moveTo(0f, hb)
+                        quadraticTo(f, hb, f, hb - f)
+                        lineTo(f, r)
+                        quadraticTo(f, 0f, f + r, 0f)
+                        lineTo(f + bw - r, 0f)
+                        quadraticTo(f + bw, 0f, f + bw, r)
+                        lineTo(f + bw, hb - f)
+                        quadraticTo(f + bw, hb, w, hb)
+                    }
+                    val fill = androidx.compose.ui.graphics.Path().apply {
+                        addPath(edge)
+                        lineTo(w, size.height)
+                        lineTo(0f, size.height)
+                        close()
+                    }
+                    drawPath(fill, Bg)
+                    drawPath(edge, Hairline, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+                },
+        )
+    }
     }
 }
 
