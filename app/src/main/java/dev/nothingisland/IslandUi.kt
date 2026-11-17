@@ -1058,7 +1058,7 @@ internal fun IslandHostBody() {
                 label = "mode",
             ) { st ->
                 when (st.first) {
-                    Mode.IDLE -> IdleDots(sc, camSide = s.expandDir, offsetX = if (s.expandDir == 0) 0f else (if (s.expandDir == 1) 1f else -1f) * (idleW / 2f - maxOf(gap / 2f, 15f * sc)), s.expandDir)
+                    Mode.IDLE -> IdleDots(sc, camSide = s.expandDir, offsetX = if (s.expandDir == 0) 0f else (if (s.expandDir == 1) 1f else -1f) * (idleW / 2f - maxOf(gap / 2f, 15f * sc)))
                     Mode.NOTE -> NotePanel(s.notes, bsc, Modifier.requiredSize(bigW.dp, (250f * fsc).dp), onUsed = { touch++ })
                     Mode.CALC -> CalcPanel(bsc, Modifier.requiredSize(bigW.dp, (292f * fsc).dp)) { touch++ }
                     Mode.QUICK -> QuickPanel(quickPages, bsc, Modifier.requiredSize(bigW.dp, (quickBaseH * fsc).dp)) { touch++ }
