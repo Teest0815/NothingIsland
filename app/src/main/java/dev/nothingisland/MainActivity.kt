@@ -472,9 +472,9 @@ class MainActivity : ComponentActivity() {
         val widthCap = (resources.configuration.screenWidthDp - 8).coerceAtLeast(220)
         FoldCard("KLEINE PILLE", true) {
             // Aufgehen: Pfeile zeigen die Richtung, der Punkt ist die feste Kante (Kamera).
-            Row(Modifier.padding(top = 4.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(0 to "←  •  →", 1 to "←  •", 2 to "•  →").forEach { (v, l) ->
-                    Chip(l, s.expandDir == v) { edit { it.copy(expandDir = v) } }
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                listOf(0, 1, 2).forEach { v ->
+                    DirButton(v, s.expandDir == v, Modifier.weight(1f)) { edit { it.copy(expandDir = v) } }
                 }
             }
             if (s.expandDir != 0) ToggleRow("Große Bubbles auch aus der Kamera-Kante ziehen (statt mittig)", s.bigFromCamera) { c -> edit { it.copy(bigFromCamera = c) } }
@@ -1179,6 +1179,30 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
+/** Richtung des Aufgehens: gleich breite Felder, Inhalt mittig. Der Punkt ist die feste Kante (Kamera), Pfeile zeigen das Wachsen. */
+@Composable
+private fun DirButton(dir: Int, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(50)
+    val bg by animateColorAsState(if (selected) NothingRed else Color.Transparent, tween(220), label = "dirbg")
+    val line by animateColorAsState(if (selected) NothingRed else CardBorder, tween(220), label = "dirline")
+    val fg by animateColorAsState(if (selected) IslandTheme.onAccent else Muted, tween(220), label = "dirfg")
+    Box(
+        modifier = modifier
+            .height(46.dp)
+            .bounceClick(onClick)
+            .clip(shape)
+            .background(bg)
+            .border(1.dp, line, shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (dir != 2) Text("←", color = fg, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            Box(Modifier.size(7.dp).clip(CircleShape).background(fg))
+            if (dir != 1) Text("→", color = fg, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
 
 @Composable
 private fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
