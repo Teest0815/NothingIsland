@@ -245,7 +245,8 @@ class OverlayHost(
                     }
                     Intent.ACTION_SCREEN_ON -> {
                         IslandBus.setScreenOn(true)
-                        IslandBus.bumpWake()
+                        // Nur nach etwas Großem hereinfedern; ist nur die kleine Pille da, bleibt sie ruhig stehen.
+                        if (bigAtLock) IslandBus.bumpWake()
                         val ov = overlay
                         if (ov != null && compositionDisposed) {
                             compositionDisposed = false
