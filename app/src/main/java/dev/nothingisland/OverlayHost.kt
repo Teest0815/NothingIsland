@@ -391,8 +391,7 @@ class OverlayHost(
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            val lim = ((dm.widthPixels - bigW * d) / 2f).coerceAtLeast(0f)
-            x = (s.offsetX * d).coerceIn(-lim, lim).toInt()
+            x = (s.offsetX * d).toInt()
             y = ((s.expandedTop - 12) * d).toInt()
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE
@@ -444,10 +443,7 @@ class OverlayHost(
     /** Linke Fensterkante so, dass die Mitte des "span"-Bereichs auf der Bildschirmmitte (plus Versatz) liegt. */
     private fun leftPx(offsetX: Int, spanDp: Float): Int {
         val dm = context.resources.displayMetrics
-        val spanPx = spanDp * dm.density
-        // Nie über den Bildschirmrand hinaus: Große Ansichten rutschen bei seitlicher Position nach innen.
-        return (dm.widthPixels / 2f + offsetX * dm.density - spanPx / 2f)
-            .coerceIn(0f, (dm.widthPixels - spanPx).coerceAtLeast(0f)).toInt()
+        return (dm.widthPixels / 2f + offsetX * dm.density - spanDp * dm.density / 2f).toInt()
     }
 
     private fun applyLayout(s: IslandSettings, size: Triple<Float, Float, Float>, r: FloatArray) {

@@ -483,15 +483,7 @@ class MainActivity : ComponentActivity() {
     private fun LayoutTab(s: IslandSettings) {
         val widthCap = (resources.configuration.screenWidthDp - 8).coerceAtLeast(220)
         CardIf(FoldLabel("POSITION & GRÖSSE", true)) {
-            val halfW = (resources.configuration.screenWidthDp / 2f).roundToInt().coerceAtLeast(150)
-            val edgeOff = halfW - 56
-            Text("Position der Island", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp))
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Chip("LINKS", s.offsetX <= -edgeOff + 8) { edit { it.copy(offsetX = -edgeOff) } }
-                Chip("MITTE", kotlin.math.abs(s.offsetX) <= 8) { edit { it.copy(offsetX = 0) } }
-                Chip("RECHTS", s.offsetX >= edgeOff - 8) { edit { it.copy(offsetX = edgeOff) } }
-            }
-            SettingSlider("Horizontal", "${s.offsetX} dp", s.offsetX.toFloat().coerceIn(-halfW.toFloat(), halfW.toFloat()), -halfW.toFloat()..halfW.toFloat()) { v -> edit { it.copy(offsetX = v.roundToInt()) } }
+            SettingSlider("Horizontal", "${s.offsetX} dp", s.offsetX.toFloat(), -150f..150f) { v -> edit { it.copy(offsetX = v.roundToInt()) } }
             SettingSlider("Abstand von oben", "${s.offsetY} dp", s.offsetY.toFloat(), 0f..300f) { v -> edit { it.copy(offsetY = v.roundToInt()) } }
             SettingSlider("Größe", "${(s.scale * 100).roundToInt()} %", s.scale, 0.7f..1.5f) { v -> edit { it.copy(scale = (v * 20f).roundToInt() / 20f) } }
             SettingSlider("Breite der kleinen Pille", "${(s.widthFactor * 100).roundToInt()} %", s.widthFactor, 0.8f..1.8f) { v -> edit { it.copy(widthFactor = (v * 20f).roundToInt() / 20f) } }
