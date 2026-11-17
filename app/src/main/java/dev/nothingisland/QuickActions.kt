@@ -23,6 +23,7 @@ import android.media.AudioRecordingConfiguration
 import android.os.BatteryManager
 import android.os.PowerManager
 import android.os.VibrationEffect
+import android.os.Build
 import android.os.Vibrator
 import android.provider.AlarmClock
 import android.provider.MediaStore
@@ -222,19 +223,35 @@ object QuickActions {
         hapticPlay(ctx, st.hapticStyle, st.hapticMs, st.hapticAmp, soft = level == 1)
     }
 
+    /**
+     * Stile: 0 fein, 1 sanft, 2 klick, 3 doppelt, 4 frei (Dauer und Stärke selbst). [amp] (10..255) ist die Grundstärke,
+     * [soft] macht es noch leiser (Einrasten). Wo das Handy feine Vibrationsbausteine kann, werden sie genutzt.
+     */
     fun hapticPlay(ctx: Context, style: Int, ms: Int, amp: Int, soft: Boolean = false) {
         runCatching {
             val v = ctx.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+            val k = (amp / 255f) * (if (soft) 0.6f else 1f)
+            fun prim(id: Int) = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && v.areAllPrimitivesSupported(id)
             val effect = when (style) {
-                0 -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK)
-                2 -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
-                3 -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_DOUBLE_CLICK)
-                4 -> {
-                    val a = (if (soft) amp * 0.6f else amp.toFloat()).toInt().coerceIn(1, 255)
-                    val d = (if (soft) ms * 0.6f else ms.toFloat()).toLong().coerceAtLeast(3L)
-                    VibrationEffect.createOneShot(d, a)
-                }
-                else -> VibrationEffect.createPredefined(if (soft) VibrationEffect.EFFECT_TICK else VibrationEffect.EFFECT_CLICK)
+                4 -> VibrationEffect.createOneShot(
+                    (if (soft) ms * 0.6f else ms.toFloat()).toLong().coerceAtLeast(3L),
+                    (amp * (if (soft) 0.6f else 1f)).toInt().coerceIn(1, 255),
+                )
+                3 -> if (prim(VibrationEffect.Composition.PRIMITIVE_TICK)) {
+                    VibrationEffect.startComposition()
+                        .addPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, k.coerceIn(0.05f, 1f))
+                        .addPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, (k * 0.8f).coerceIn(0.05f, 1f), 70)
+                        .compose()
+                } else VibrationEffect.createWaveform(longArrayOf(0, 8, 60, 8), intArrayOf(0, (amp * 0.5f).toInt().coerceIn(1, 255), 0, (amp * 0.4f).toInt().coerceIn(1, 255)), -1)
+                2 -> if (prim(VibrationEffect.Composition.PRIMITIVE_CLICK)) {
+                    VibrationEffect.startComposition().addPrimitive(VibrationEffect.Composition.PRIMITIVE_CLICK, (k * 0.8f).coerceIn(0.05f, 1f)).compose()
+                } else VibrationEffect.createOneShot(14L, (amp * 0.7f).toInt().coerceIn(1, 255))
+                0 -> if (prim(VibrationEffect.Composition.PRIMITIVE_LOW_TICK)) {
+                    VibrationEffect.startComposition().addPrimitive(VibrationEffect.Composition.PRIMITIVE_LOW_TICK, k.coerceIn(0.05f, 1f)).compose()
+                } else VibrationEffect.createOneShot(5L, (amp * 0.4f).toInt().coerceIn(1, 255))
+                else -> if (prim(VibrationEffect.Composition.PRIMITIVE_TICK)) {
+                    VibrationEffect.startComposition().addPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, k.coerceIn(0.05f, 1f)).compose()
+                } else VibrationEffect.createOneShot(8L, (amp * 0.5f).toInt().coerceIn(1, 255))
             }
             v.vibrate(effect)
         }
@@ -794,13 +811,6 @@ object QuickActions {
         }
         val clockLike = creator != null && listOf("clock", "alarm", "deskclock").any { creator.contains(it, true) }
         val soon = next != null && clockLike && next - System.currentTimeMillis() in 1..10 * 60_000L
-        if (next != null) {
-            runCatching {
-                app.getSharedPreferences("island_prefs", Context.MODE_PRIVATE).edit().putString(
-                    "alarmDump", "nextAlarm=$next\njetzt=${System.currentTimeMillis()}\nvon=$creator ($creatorLabel)\nuhrApp=$clockLike\nangezeigt=$soon",
-                ).apply()
-            }
-        }
         setStatus(
             st.statusEnabled("alarm"), "alarm", soon, "WECKER",
             if (next != null) SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(next)) + (creatorLabel?.let { " · $it" } ?: "") else "", "alarm",

@@ -260,6 +260,112 @@ class MainActivity : ComponentActivity() {
         }
         Text(ver, color = Muted, fontFamily = FontFamily.Monospace, fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp))
 
+        SectionLabel("SETUP")
+        StepRow("01", "Über anderen Apps anzeigen", overlayOk) {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        }
+        Spacer(Modifier.height(12.dp))
+        StepRow("02", "Zugriff auf Benachrichtigungen", listenerOk) {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }
+        Spacer(Modifier.height(12.dp))
+        StepRow("03", "Über der Statusleiste anzeigen (Barrierefreiheit)", a11yOk) {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        Spacer(Modifier.height(12.dp))
+        StepRow("04", "Im Hintergrund aktiv lassen (Akku-Optimierung aus)", batteryOk) {
+            runCatching {
+                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+            }.onFailure {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
+        }
+        if (Build.VERSION.SDK_INT >= 31) {
+            Spacer(Modifier.height(12.dp))
+            StepRow("05", "Bluetooth-Namen lesen (Kopfhörer-Anzeige)", btOk) {
+                btPermission.launch(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "03 legt die Island über die Symbole oben und hält die App zuverlässig im Hintergrund am Leben. Die App liest dabei keine Bildschirminhalte. Falls Android die Option ausgraut: Einstellungen > Apps > Nothing Island > ⋮ > „Eingeschränkte Einstellungen zulassen“.",
+            color = Muted,
+            fontSize = 12.sp,
+        )
+        if (A11yGuard.isWanted(ctx) && !a11yOk) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Android hat die Barrierefreiheit für Nothing Island ausgeschaltet (das passiert, wenn die App beendet wird). Schalte sie bei 03 wieder ein. Damit die App das künftig selbst macht, einmalig am PC: adb shell pm grant dev.nothingisland android.permission.WRITE_SECURE_SETTINGS",
+                color = AppAccent,
+                fontSize = 12.sp,
+            )
+        }
+
+        val sv by IslandBus.settings.collectAsState()
+        FoldCard("SPARMODUS", false) {
+            Text(
+                "Spart Akku: keine Dauer-Animationen (Equalizer, Puls), Zustände werden seltener geprüft. Bei ausgeschaltetem Bildschirm pausiert die Prüfung immer.",
+                color = Muted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "AUS", 1 to "AUTOMATISCH", 2 to "IMMER").forEach { (k, n) ->
+                    Chip(n, sv.powerSaver == k) { edit { it.copy(powerSaver = k) } }
+                }
+            }
+            Text(
+                "Automatisch: aktiv, wenn der Energiesparmodus des Handys an ist oder der Akku unter 20 % liegt.",
+                color = Muted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+        }
+
+        FoldCard("TESTEN", false) {
+            Text("Zeigt Beispiele in der Island.", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillButton("MELDUNG", filled = true, modifier = Modifier.weight(1f)) {
+                    postTestMessage("Nothing Island", "Test-Benachrichtigung", "So sieht deine Island aus.", 0)
+                }
+                PillButton("STAPEL", filled = false, modifier = Modifier.weight(1f)) {
+                    // Mehrere Meldungen kurz hintereinander: zum Testen von Stapel, Durchwischen und Zusammenfassen.
+                    val tests = listOf(
+                        Triple("Nachrichten", "Lena", "Hast du kurz Zeit?"),
+                        Triple("Kalender", "Termin in 10 Min", "Team-Meeting"),
+                        Triple("Mail", "Rechnung Oktober", "Anbei die Rechnung als PDF."),
+                        Triple("Nachrichten", "Max", "Bin gleich da"),
+                    )
+                    val h = android.os.Handler(android.os.Looper.getMainLooper())
+                    tests.forEachIndexed { i, t -> h.postDelayed({ postTestMessage(t.first, t.second, t.third, i + 1) }, i * 900L) }
+                }
+                PillButton("PANEL", filled = false, modifier = Modifier.weight(1f)) { IslandBus.setQuick(true) }
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillButton("TIMER", filled = false, modifier = Modifier.weight(1f)) {
+                    val left = 5 * 60_000L
+                    IslandBus.upsertOngoing(demoTimer(System.currentTimeMillis() + left, left))
+                }
+                PillButton("MUSIK", filled = false, modifier = Modifier.weight(1f)) { IslandBus.upsertOngoing(demoMusic()) }
+                PillButton("NAVI", filled = false, modifier = Modifier.weight(1f)) { IslandBus.upsertOngoing(demoNav()) }
+            }
+            Spacer(Modifier.height(10.dp))
+            PillButton("ALLES LEEREN", filled = false, modifier = Modifier.fillMaxWidth()) {
+                IslandBus.removeOngoing("demo-timer")
+                IslandBus.removeOngoing("demo-music")
+                IslandBus.removeOngoing("demo-nav")
+                IslandBus.removeOngoing("demo-workout")
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Tipp: Tippe auf die kleine Pille, um sie aufzuklappen. Tippen auf die Ruhe-Pille oder langes Drücken auf die kleine Pille öffnet den Schnellzugriff. Mehrere Meldungen liegen wie Karten übereinander: Wischen entfernt die oberste, die nächste rückt nach.",
+                color = Muted,
+                fontSize = 12.sp,
+            )
+            Spacer(Modifier.height(8.dp))
+        }
+
         var crash by remember { mutableStateOf(CrashLog.read(ctx)) }
         crash?.let { text ->
             SectionLabel("LETZTER ABSTURZ")
@@ -323,19 +429,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        var alarmDump by remember { mutableStateOf(getSharedPreferences("island_prefs", MODE_PRIVATE).getString("alarmDump", null)) }
-        alarmDump?.let { text ->
-            SectionLabel("LETZTE WECKER-ANZEIGE")
-            Card {
-                Text(text, color = Muted, fontFamily = FontFamily.Monospace, fontSize = 10.sp, modifier = Modifier.padding(vertical = 8.dp))
-            }
-            Spacer(Modifier.height(10.dp))
-            PillButton("LÖSCHEN", filled = false, modifier = Modifier.fillMaxWidth()) {
-                getSharedPreferences("island_prefs", MODE_PRIVATE).edit().remove("alarmDump").apply()
-                alarmDump = null
-            }
-        }
-
         SectionLabel("BACKUP")
         Text(
             "Sichert Layout, Schalter, Kacheln und App-Regeln in eine Datei. Der Home-Assistant-Zugang ist nicht enthalten.",
@@ -350,110 +443,7 @@ class MainActivity : ComponentActivity() {
                 backupLoad.launch(arrayOf("application/json", "text/*", "application/octet-stream"))
             }
         }
-        Spacer(Modifier.height(18.dp))
 
-        SectionLabel("SETUP")
-        StepRow("01", "Über anderen Apps anzeigen", overlayOk) {
-            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-        }
-        Spacer(Modifier.height(12.dp))
-        StepRow("02", "Zugriff auf Benachrichtigungen", listenerOk) {
-            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-        }
-        Spacer(Modifier.height(12.dp))
-        StepRow("03", "Über der Statusleiste anzeigen (Barrierefreiheit)", a11yOk) {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        }
-        Spacer(Modifier.height(12.dp))
-        StepRow("04", "Im Hintergrund aktiv lassen (Akku-Optimierung aus)", batteryOk) {
-            runCatching {
-                startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
-            }.onFailure {
-                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-            }
-        }
-        if (Build.VERSION.SDK_INT >= 31) {
-            Spacer(Modifier.height(12.dp))
-            StepRow("05", "Bluetooth-Namen lesen (Kopfhörer-Anzeige)", btOk) {
-                btPermission.launch(Manifest.permission.BLUETOOTH_CONNECT)
-            }
-        }
-        Spacer(Modifier.height(10.dp))
-        Text(
-            "03 legt die Island über die Symbole oben und hält die App zuverlässig im Hintergrund am Leben. Die App liest dabei keine Bildschirminhalte. Falls Android die Option ausgraut: Einstellungen > Apps > Nothing Island > ⋮ > „Eingeschränkte Einstellungen zulassen“.",
-            color = Muted,
-            fontSize = 12.sp,
-        )
-        if (A11yGuard.isWanted(ctx) && !a11yOk) {
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Android hat die Barrierefreiheit für Nothing Island ausgeschaltet (das passiert, wenn die App beendet wird). Schalte sie bei 03 wieder ein. Damit die App das künftig selbst macht, einmalig am PC: adb shell pm grant dev.nothingisland android.permission.WRITE_SECURE_SETTINGS",
-                color = AppAccent,
-                fontSize = 12.sp,
-            )
-        }
-
-        val sv by IslandBus.settings.collectAsState()
-        FoldCard("SPARMODUS", false) {
-            Text(
-                "Spart Akku: keine Dauer-Animationen (Equalizer, Puls), Zustände werden seltener geprüft. Bei ausgeschaltetem Bildschirm pausiert die Prüfung immer.",
-                color = Muted,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(0 to "AUS", 1 to "AUTOMATISCH", 2 to "IMMER").forEach { (k, n) ->
-                    Chip(n, sv.powerSaver == k) { edit { it.copy(powerSaver = k) } }
-                }
-            }
-            Text(
-                "Automatisch: aktiv, wenn der Energiesparmodus des Handys an ist oder der Akku unter 20 % liegt.",
-                color = Muted,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(bottom = 6.dp),
-            )
-        }
-
-        SectionLabel("TESTEN")
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PillButton("MELDUNG", filled = true, modifier = Modifier.weight(1f)) {
-                postTestMessage("Nothing Island", "Test-Benachrichtigung", "So sieht deine Island aus.", 0)
-            }
-            PillButton("TIMER", filled = false, modifier = Modifier.weight(1f)) {
-                val left = 5 * 60_000L
-                IslandBus.upsertOngoing(demoTimer(System.currentTimeMillis() + left, left))
-            }
-            PillButton("MUSIK", filled = false, modifier = Modifier.weight(1f)) { IslandBus.upsertOngoing(demoMusic()) }
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PillButton("NAVI", filled = false, modifier = Modifier.weight(1f)) { IslandBus.upsertOngoing(demoNav()) }
-            PillButton("STAPEL", filled = false, modifier = Modifier.weight(1f)) {
-                // Mehrere Meldungen kurz hintereinander: zum Testen von Stapel, Durchwischen und Zusammenfassen.
-                val tests = listOf(
-                    Triple("Nachrichten", "Lena", "Hast du kurz Zeit?"),
-                    Triple("Kalender", "Termin in 10 Min", "Team-Meeting"),
-                    Triple("Mail", "Rechnung Oktober", "Anbei die Rechnung als PDF."),
-                    Triple("Nachrichten", "Max", "Bin gleich da"),
-                )
-                // Nacheinander, nicht alle auf einmal.
-                val h = android.os.Handler(android.os.Looper.getMainLooper())
-                tests.forEachIndexed { i, t -> h.postDelayed({ postTestMessage(t.first, t.second, t.third, i + 1) }, i * 900L) }
-            }
-            PillButton("LEEREN", filled = false, modifier = Modifier.weight(1f)) {
-                IslandBus.removeOngoing("demo-timer")
-                IslandBus.removeOngoing("demo-music")
-                IslandBus.removeOngoing("demo-nav")
-                IslandBus.removeOngoing("demo-workout")
-            }
-            PillButton("PANEL", filled = false, modifier = Modifier.weight(1f)) { IslandBus.setQuick(true) }
-        }
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "Tipp: Tippe auf die kleine Pille, um sie aufzuklappen. Dort findest du die Buttons der App (Pause, Stopp ...). Tippen auf die Ruhe-Pille oder langes Drücken auf die kleine Pille öffnet den Schnellzugriff. Mehrere Meldungen liegen wie Karten übereinander: Wischen entfernt die oberste, die nächste rückt nach.",
-            color = Muted,
-            fontSize = 12.sp,
-        )
     }
 
     /** Test-Meldung mit Antwort und "Als gelesen markieren". [n] unterscheidet die Meldungen voneinander. */
@@ -480,15 +470,15 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun LayoutTab(s: IslandSettings) {
         val widthCap = (resources.configuration.screenWidthDp - 8).coerceAtLeast(220)
-        FoldCard("POSITION & GRÖSSE", true) {
-            SettingSlider("Horizontal", "${s.offsetX} dp", s.offsetX.toFloat(), -150f..150f) { v -> edit { it.copy(offsetX = v.roundToInt()) } }
-            Text("AUFGEHEN", color = TextGray, fontSize = 11.sp, fontFamily = Mono)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(0 to "BEIDE SEITEN", 1 to "NACH LINKS", 2 to "NACH RECHTS").forEach { (v, l) ->
+        FoldCard("KLEINE PILLE", true) {
+            // Aufgehen: Pfeile zeigen die Richtung, der Punkt ist die feste Kante (Kamera).
+            Row(Modifier.padding(top = 4.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "←  •  →", 1 to "←  •", 2 to "•  →").forEach { (v, l) ->
                     Chip(l, s.expandDir == v) { edit { it.copy(expandDir = v) } }
                 }
             }
             if (s.expandDir != 0) ToggleRow("Große Bubbles auch aus der Kamera-Kante ziehen (statt mittig)", s.bigFromCamera) { c -> edit { it.copy(bigFromCamera = c) } }
+            SettingSlider("Horizontal", "${s.offsetX} dp", s.offsetX.toFloat(), -150f..150f) { v -> edit { it.copy(offsetX = v.roundToInt()) } }
             SettingSlider("Abstand von oben", "${s.offsetY} dp", s.offsetY.toFloat(), 0f..300f) { v -> edit { it.copy(offsetY = v.roundToInt()) } }
             SettingSlider("Größe", "${(s.scale * 100).roundToInt()} %", s.scale, 0.7f..1.5f) { v -> edit { it.copy(scale = (v * 20f).roundToInt() / 20f) } }
             SettingSlider("Breite der kleinen Pille", "${(s.widthFactor * 100).roundToInt()} %", s.widthFactor, 0.8f..1.8f) { v -> edit { it.copy(widthFactor = (v * 20f).roundToInt() / 20f) } }
@@ -664,25 +654,20 @@ class MainActivity : ComponentActivity() {
             }
             Text("Art der Vibration", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp, bottom = 6.dp))
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(0 to "TICK", 1 to "KLICK", 2 to "SCHWER", 3 to "DOPPELT", 4 to "FREI").forEach { (k, n) ->
+                listOf(0 to "FEIN", 1 to "SANFT", 2 to "KLICK", 3 to "DOPPELT", 4 to "FREI").forEach { (k, n) ->
                     Chip(n, s.hapticStyle == k) {
                         edit { it.copy(hapticStyle = k) }
                         QuickActions.hapticPlay(ctx, k, s.hapticMs, s.hapticAmp)
                     }
                 }
             }
+            SettingSlider("Stärke", "${(s.hapticAmp * 100f / 255f).roundToInt()} %", s.hapticAmp.toFloat(), 10f..255f) { v ->
+                edit { it.copy(hapticAmp = v.roundToInt()) }
+            }
             if (s.hapticStyle == 4) {
                 SettingSlider("Dauer", "${s.hapticMs} ms", s.hapticMs.toFloat(), 5f..120f) { v ->
                     edit { it.copy(hapticMs = v.roundToInt()) }
                 }
-                SettingSlider("Stärke", "${(s.hapticAmp * 100f / 255f).roundToInt()} %", s.hapticAmp.toFloat(), 10f..255f) { v ->
-                    edit { it.copy(hapticAmp = v.roundToInt()) }
-                }
-            } else {
-                Text(
-                    "Tick, Klick, Schwer und Doppelt sind feste Muster des Handys. Bei „Frei“ stellst du Dauer und Stärke selbst ein.",
-                    color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp),
-                )
             }
             Spacer(Modifier.height(4.dp))
             PillButton("AUSPROBIEREN", filled = false, modifier = Modifier.fillMaxWidth()) {
@@ -1334,7 +1319,8 @@ private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        // Ausgeschaltet: Schrift etwas grauer.
+        Text(label, color = if (checked) Color.White else Color(0xFF8E8E8E), fontSize = 14.sp, modifier = Modifier.weight(1f))
         Switch(
             checked = checked,
             onCheckedChange = onChange,

@@ -124,10 +124,10 @@ data class IslandSettings(
     val stackCompact: Float = 0.5f,
     /** Deckkraft der Karten hinter der obersten (0.15 .. 1). */
     val stackAlpha: Float = 0.55f,
-    /** 0 Tick, 1 Klick, 2 Schwer, 3 Doppelt, 4 Frei (Dauer und Stärke selbst wählen). */
+    /** 0 Fein, 1 Sanft, 2 Klick, 3 Doppelt, 4 Frei (Dauer und Stärke selbst wählen). */
     val hapticStyle: Int = 1,
     val hapticMs: Int = 25,
-    val hapticAmp: Int = 150,
+    val hapticAmp: Int = 110,
     /** Equalizer-Balken bei laufender Musik. */
     val equalizer: Boolean = true,
     /** System-Pop-ups (Heads-up) anderer Apps ausschalten, solange die Island läuft. Braucht WRITE_SECURE_SETTINGS. */
