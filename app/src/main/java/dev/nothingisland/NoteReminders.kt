@@ -33,6 +33,30 @@ object NoteReminders {
         setAlarm(ctx, id, at, text)
     }
 
+    /** Gelöschte Notiz: offenen Alarm und eine schon angezeigte Benachrichtigung entfernen. */
+    fun cancelForText(ctx: Context, text: String) {
+        val a = load(ctx)
+        val rest = JSONArray()
+        val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        for (i in 0 until a.length()) {
+            val o = a.getJSONObject(i)
+            if (o.getString("text") != text) { rest.put(o); continue }
+            val id = o.getInt("id")
+            runCatching {
+                am.cancel(PendingIntent.getBroadcast(ctx, id, Intent(ctx, NoteReminderReceiver::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_NO_CREATE) ?: return@runCatching)
+            }
+            nm.cancel(id)
+        }
+        save(ctx, rest)
+        // Schon ausgelöste Erinnerungen mit gleichem Text (stehen als Benachrichtigung): ebenfalls entfernen.
+        runCatching {
+            nm.activeNotifications.filter {
+                it.notification.channelId == CH && it.notification.extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() == text
+            }.forEach { nm.cancel(it.id) }
+        }
+    }
+
     private fun setAlarm(ctx: Context, id: Int, at: Long, text: String) {
         val am = ctx.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pi = PendingIntent.getBroadcast(

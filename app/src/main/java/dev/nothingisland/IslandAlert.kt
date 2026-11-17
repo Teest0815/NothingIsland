@@ -189,7 +189,6 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
                         val k = pop.value
                         scaleX = k
                         scaleY = k
-                        rotationZ = (1f - k) * -14f
                         alpha = (k * 2f).coerceIn(0f, 1f)
                     }
                     .clip(RoundedCornerShape((10f * sc).dp)),

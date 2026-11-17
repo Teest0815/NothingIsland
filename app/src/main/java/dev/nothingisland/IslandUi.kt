@@ -887,11 +887,19 @@ internal fun IslandHostBody() {
                         return@pointerInput
                     }
                     if (!swipeable) return@pointerInput
+                    // Wegwischen: kleine Pille reagiert schon auf kurzes Wischen und auf schnelles Schnippen.
+                    var vel = 0f
+                    var lastT = 0L
+                    val away = if (mode == Mode.MESSAGE) 26.dp.toPx() else 80.dp.toPx()
+                    val flingV = 650.dp.toPx() // px pro Sekunde
                     detectHorizontalDragGestures(
+                        onDragStart = { vel = 0f; lastT = 0L },
                         onDragEnd = {
                             val x = swipeX.value
+                            val flung = abs(vel) > flingV && abs(x) > 8.dp.toPx() && sign(vel) == sign(x)
+                            val x2 = if (flung && abs(x) <= away) sign(x) * (away + 1f) else x
                             swipeScope.launch {
-                                if (abs(x) > 80.dp.toPx() && stackBehind > 0) {
+                                if (abs(x2) > away && stackBehind > 0) {
                                     // Oberste Karte fliegt zur Seite und ist weg, die nächste rückt nach vorn.
                                     swipeX.animateTo(sign(x) * size.width * 0.7f, tween(150))
                                     suppressLinger = true
@@ -899,8 +907,8 @@ internal fun IslandHostBody() {
                                     IslandBus.dismiss()
                                     swipeX.snapTo(0f)
                                     if (s.haptics) QuickActions.haptic(ctx, 1)
-                                } else if (abs(x) > 80.dp.toPx()) {
-                                    swipeX.animateTo(sign(x) * size.width * 0.8f, tween(160))
+                                } else if (abs(x2) > away) {
+                                    swipeX.animateTo(sign(x2) * size.width * 0.8f, tween(if (flung) 110 else 160, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
                                     // Die kleine Pille erscheint direkt an ihrem Platz und wächst nicht aus der Mitte.
                                     snapNext = true
                                     appear.snapTo(0f)
@@ -920,6 +928,9 @@ internal fun IslandHostBody() {
                         },
                         onHorizontalDrag = { change, dragAmount ->
                             change.consume()
+                            val dt = change.uptimeMillis - lastT
+                            if (lastT != 0L && dt > 0) vel = vel * 0.5f + (dragAmount / dt * 1000f) * 0.5f
+                            lastT = change.uptimeMillis
                             swipeScope.launch { swipeX.snapTo(swipeX.value + dragAmount) }
                         },
                     )

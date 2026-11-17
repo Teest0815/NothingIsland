@@ -364,6 +364,7 @@ object IslandBus {
     }
 
     fun removeNote(ctx: Context, index: Int) {
+        noteList(settings.value.notes).getOrNull(index)?.let { NoteReminders.cancelForText(ctx, it) }
         updateSettings(ctx) { s -> s.copy(notes = org.json.JSONArray(noteList(s.notes).filterIndexed { i, _ -> i != index }).toString()) }
     }
 
