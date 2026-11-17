@@ -52,6 +52,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -644,36 +645,69 @@ internal fun IslandHostBody() {
     // und nimmt selbst keine Touches an. Ein unsichtbares, passgenaues Touch-Fenster reicht sie durch.
     val rowBig = maxOf(bigW, compactW, messageW) + 2f * slotMax
     val span = minOf(rowBig + 2f * WINDOW_MARGIN, screenW.toFloat())
+    val dir = s.expandDir
+    val sw = screenW.toFloat()
+    val anchor = s.anchorDp(sw)
+    // Linke Fensterkante in dp: bei einseitigem Aufgehen hängt die Pille an der festen Kante (Kamera-Seite).
+    val winLeft = when (dir) {
+        1 -> (anchor - span).coerceIn(0f, maxOf(0f, sw - span))
+        2 -> anchor.coerceIn(0f, maxOf(0f, sw - span))
+        else -> sw / 2f + s.offsetX - span / 2f
+    }
     val slotTarget = if (circleItem != null) slotMax else 0f
     val topTarget = ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
     // Beim Herunterziehen einer Meldung braucht das Fenster Platz nach unten, sonst wird sie abgeschnitten.
     val winH = topTarget + targetH + WINDOW_MARGIN + (if (canPullRead) 40f else 0f) + (if (mode == Mode.ALERT && s.multiNotif && pendingList.isNotEmpty()) stackOffDp * stackBehind + 6f else 0f)
-    LaunchedEffect(winH, span) {
+    LaunchedEffect(winH, span, winLeft) {
         val gh = maxOf(winH, reported.second)
-        if (span != reported.first || gh != reported.second) {
-            reported = Triple(span, gh, span)
-            IslandBus.setWindowSize(span, gh, span)
+        if (span != reported.first || gh != reported.second || winLeft != reported.third) {
+            reported = Triple(span, gh, winLeft)
+            IslandBus.setWindowSize(span, gh, winLeft)
         }
         if (gh != winH) {
             delay(520)
-            reported = Triple(span, winH, span)
-            IslandBus.setWindowSize(span, winH, span)
+            reported = Triple(span, winH, winLeft)
+            IslandBus.setWindowSize(span, winH, winLeft)
         }
     }
     val rowW = targetW + 2f * slotTarget
+    // Einseitiges Aufgehen: Reihe an der festen Kante, bei Platzmangel in den Bildschirm geschoben.
+    val rowLeftScreen = when (dir) {
+        1 -> maxOf(4f, anchor - rowW)
+        2 -> minOf(anchor, sw - 4f - rowW)
+        else -> 0f
+    }
     SideEffect {
         if (noteReplyHidden) IslandBus.setTouchRect(0f, 0f, 1f, 1f)
-        else IslandBus.setTouchRect(span / 2f - rowW / 2f - 4f, topTarget - 4f, rowW + 8f, targetH + 8f)
+        else IslandBus.setTouchRect(
+            (if (dir == 0) span / 2f - rowW / 2f else rowLeftScreen - winLeft) - 4f,
+            topTarget - 4f, rowW + 8f, targetH + 8f,
+        )
     }
     val shape = RoundedCornerShape(corner)
 
     Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (noteReplyHidden) 0f else 1f }
     .wrapContentSize(Alignment.TopStart, unbounded = true)) {
-    Box(Modifier.width(span.dp), contentAlignment = Alignment.TopCenter) {
-    Row(modifier = Modifier.padding(top = maxOf(topPad, 0.dp)), verticalAlignment = Alignment.CenterVertically) {
+    Box(
+        (if (dir == 1) Modifier.width(span.dp).padding(end = (winLeft + span - anchor).coerceAtLeast(0f).dp)
+        else if (dir == 2) Modifier.width(span.dp).padding(start = (anchor - winLeft).coerceAtLeast(0f).dp)
+        else Modifier.width(span.dp)),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+    Row(modifier = (if (dir == 1) Modifier.wrapContentWidth(Alignment.End, unbounded = true)
+        else if (dir == 2) Modifier.wrapContentWidth(Alignment.Start, unbounded = true) else Modifier)
+        .padding(top = maxOf(topPad, 0.dp)), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.width(slot))
 
-        Box {
+        Box(
+            if (dir == 0) Modifier else Modifier.graphicsLayer {
+                // Passt die wachsende Pille nicht neben die Kante, wird sie in den Bildschirm geschoben.
+                val a = anchor.dp.toPx()
+                val m = 4.dp.toPx()
+                val w = size.width
+                translationX = if (dir == 1) maxOf(0f, m - (a - w)) else -maxOf(0f, a + w - (sw.dp.toPx() - m))
+            },
+        ) {
         // Leuchten: weicher Schein um die Pille (Meldung, Musik, Anruf, Laden, Kamera/Mikrofon, Akku).
         if (glowSpec != null) GlowLayer(glowSpec, s.glowStrength, s.glowSize, corner, Modifier.matchParentSize())
         // Karten dahinter: eigene Ebenen (bewegen sich nicht mit der obersten). Tiefe d: 0 = vorn, 1 = erste dahinter ...

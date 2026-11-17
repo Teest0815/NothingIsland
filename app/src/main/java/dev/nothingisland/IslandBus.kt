@@ -78,6 +78,8 @@ data class IslandEvent(
 
 data class IslandSettings(
     val offsetX: Int = 0,
+    /** 0 = symmetrisch um die Mitte, 1 = wächst nur nach links (Kamera rechts), 2 = nur nach rechts (Kamera links). */
+    val expandDir: Int = 0,
     val offsetY: Int = 10,
     val scale: Float = 1f,
     val widthFactor: Float = 1f,
@@ -519,6 +521,7 @@ object IslandBus {
         }
         _settings.value = IslandSettings(
             offsetX = p.getInt("offsetX", d.offsetX),
+            expandDir = p.getInt("expandDir", d.expandDir),
             offsetY = p.getInt("offsetY", d.offsetY),
             scale = p.getFloat("scale", d.scale),
             widthFactor = p.getFloat("widthFactor", d.widthFactor),
@@ -593,6 +596,7 @@ object IslandBus {
         _settings.value = s
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt("offsetX", s.offsetX)
+            .putInt("expandDir", s.expandDir)
             .putInt("offsetY", s.offsetY)
             .putFloat("scale", s.scale)
             .putFloat("widthFactor", s.widthFactor)
@@ -661,4 +665,19 @@ object IslandBus {
             .putInt("themeFont", s.themeFont)
             .apply()
     }
+}
+
+
+/** Feste Kante der kleinen Pille in dp (Bildschirmkoordinaten): rechte Kante bei Richtung 1, linke bei 2. */
+internal fun IslandSettings.anchorDp(screenW: Float): Float {
+    val idle = BASE_IDLE_W * scale * widthFactor
+    val c = screenW / 2f + offsetX
+    return if (expandDir == 1) c + idle / 2f else c - idle / 2f
+}
+
+/** Linke Kante einer Blase der Breite w (dp) bei einseitigem Aufgehen, im Bildschirm gehalten. */
+internal fun IslandSettings.bubbleLeftDp(screenW: Float, w: Float): Float {
+    val a = anchorDp(screenW)
+    val l = if (expandDir == 1) a - w else a
+    return l.coerceIn(4f, maxOf(4f, screenW - 4f - w))
 }

@@ -167,7 +167,7 @@ class OverlayHost(
             }
             val s = IslandBus.settings.value
             val d = context.resources.displayMetrics.density
-            x = leftPx(s.offsetX, sp0)
+            x = (sp0 * d0).toInt()
             y = (s.windowTop * d).toInt()
         }
 
@@ -390,8 +390,14 @@ class OverlayHost(
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            x = (s.offsetX * d).toInt()
+            if (s.expandDir == 0) {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                x = (s.offsetX * d).toInt()
+            } else {
+                gravity = Gravity.TOP or Gravity.START
+                val swd = context.resources.displayMetrics.widthPixels / d
+                x = ((s.bubbleLeftDp(swd, bigW) - 12f) * d).toInt()
+            }
             y = ((s.expandedTop - 12) * d).toInt()
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE
@@ -440,17 +446,11 @@ class OverlayHost(
         runCatching { windowManager?.updateViewLayout(tv, tp) }
     }
 
-    /** Linke Fensterkante so, dass die Mitte des "span"-Bereichs auf der Bildschirmmitte (plus Versatz) liegt. */
-    private fun leftPx(offsetX: Int, spanDp: Float): Int {
-        val dm = context.resources.displayMetrics
-        return (dm.widthPixels / 2f + offsetX * dm.density - spanDp * dm.density / 2f).toInt()
-    }
-
     private fun applyLayout(s: IslandSettings, size: Triple<Float, Float, Float>, r: FloatArray) {
         val p = params ?: return
         val v = overlay ?: return
         val d = context.resources.displayMetrics.density
-        p.x = leftPx(s.offsetX, size.third)
+        p.x = (size.third * d).toInt()
         p.y = (s.windowTop * d).toInt()
         val nw = (size.first * d).toInt().coerceAtLeast(1)
         val nh = (size.second * d).toInt().coerceAtLeast(1)
