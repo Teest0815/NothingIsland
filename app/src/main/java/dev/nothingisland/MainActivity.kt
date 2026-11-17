@@ -494,6 +494,8 @@ class MainActivity : ComponentActivity() {
             ToggleRow("Kamera-Wulst: große Bubbles wachsen aus der Kamera (Bogen um das Loch)", s.cameraBump) { c -> edit { it.copy(cameraBump = c) } }
             if (s.cameraBump) {
                 SettingSlider("Wulst: Höhe", "${s.bumpHeight} dp", s.bumpHeight.toFloat(), 24f..60f) { v -> edit { it.copy(bumpHeight = v.roundToInt()) } }
+                SettingSlider("Wulst: Abrundung oben", "${s.bumpRound} dp", s.bumpRound.toFloat(), 2f..30f) { v -> edit { it.copy(bumpRound = v.roundToInt()) } }
+                SettingSlider("Wulst: Übergang zur Bubble", "${s.bumpFillet} dp", s.bumpFillet.toFloat(), 0f..30f) { v -> edit { it.copy(bumpFillet = v.roundToInt()) } }
                 SettingSlider("Wulst: Breite", "${s.bumpWidth} dp", s.bumpWidth.toFloat(), 50f..220f) { v -> edit { it.copy(bumpWidth = v.roundToInt()) } }
             }
             SettingSlider("Abstand von oben", "${s.offsetY} dp", s.offsetY.toFloat(), 0f..300f) { v -> edit { it.copy(offsetY = v.roundToInt()) } }

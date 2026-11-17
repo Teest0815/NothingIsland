@@ -169,6 +169,8 @@ data class IslandSettings(
     val cameraBump: Boolean = false,
     val bumpHeight: Int = 30,
     val bumpWidth: Int = 100,
+    val bumpRound: Int = 14,
+    val bumpFillet: Int = 10,
     /** Leuchten um die Island. */
     val glow: Boolean = true,
     val glowStrength: Float = 0.7f,
@@ -581,6 +583,8 @@ object IslandBus {
             cameraBump = p.getBoolean("cameraBump", d.cameraBump),
             bumpHeight = p.getInt("bumpHeight", d.bumpHeight),
             bumpWidth = p.getInt("bumpWidth", d.bumpWidth),
+            bumpRound = p.getInt("bumpRound", d.bumpRound),
+            bumpFillet = p.getInt("bumpFillet", d.bumpFillet),
             glow = p.getBoolean("glow", d.glow),
             glowStrength = p.getFloat("glowStrength", d.glowStrength),
             glowSize = p.getInt("glowSize", d.glowSize),
@@ -660,6 +664,8 @@ object IslandBus {
             .putBoolean("cameraBump", s.cameraBump)
             .putInt("bumpHeight", s.bumpHeight)
             .putInt("bumpWidth", s.bumpWidth)
+            .putInt("bumpRound", s.bumpRound)
+            .putInt("bumpFillet", s.bumpFillet)
             .putBoolean("glow", s.glow)
             .putFloat("glowStrength", s.glowStrength)
             .putInt("glowSize", s.glowSize)
