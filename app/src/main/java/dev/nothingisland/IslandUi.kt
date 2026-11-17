@@ -1058,7 +1058,7 @@ internal fun IslandHostBody() {
                 label = "mode",
             ) { st ->
                 when (st.first) {
-                    Mode.IDLE -> IdleDots(sc, if (s.expandDir == 0) 0f else (if (s.expandDir == 1) 1f else -1f) * (idleW / 2f - maxOf(gap / 2f, 15f * sc)))
+                    Mode.IDLE -> IdleDots(sc, if (s.expandDir == 0) 0f else (if (s.expandDir == 1) 1f else -1f) * (idleW / 2f - maxOf(gap / 2f, 15f * sc)), s.expandDir)
                     Mode.NOTE -> NotePanel(s.notes, bsc, Modifier.requiredSize(bigW.dp, (250f * fsc).dp), onUsed = { touch++ })
                     Mode.CALC -> CalcPanel(bsc, Modifier.requiredSize(bigW.dp, (292f * fsc).dp)) { touch++ }
                     Mode.QUICK -> QuickPanel(quickPages, bsc, Modifier.requiredSize(bigW.dp, (quickBaseH * fsc).dp)) { touch++ }
@@ -1172,15 +1172,16 @@ internal fun IslandHostBody() {
 }
 
 @Composable
-internal fun IdleDots(sc: Float, offsetX: Float = 0f) {
+internal fun IdleDots(sc: Float, offsetX: Float = 0f, camSide: Int = 0) {
     Row(
         modifier = Modifier.offset(x = offsetX.dp),
         horizontalArrangement = Arrangement.spacedBy((6f * sc).dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size((4f * sc).dp).clip(CircleShape).background(DotGray))
+        // Kamera rechts (1): rechter grauer Punkt weg, Kamera links (2): linker grauer Punkt weg.
+        if (camSide != 2) Box(Modifier.size((4f * sc).dp).clip(CircleShape).background(DotGray))
         Box(Modifier.size((6f * sc).dp).clip(CircleShape).background(NothingRed))
-        Box(Modifier.size((4f * sc).dp).clip(CircleShape).background(DotGray))
+        if (camSide != 1) Box(Modifier.size((4f * sc).dp).clip(CircleShape).background(DotGray))
     }
 }
 
