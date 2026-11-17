@@ -1054,10 +1054,10 @@ internal fun IslandHostBody() {
                     Mode.CALC -> CalcPanel(bsc, Modifier.requiredSize(bigW.dp, (292f * fsc).dp)) { touch++ }
                     Mode.QUICK -> QuickPanel(quickPages, bsc, Modifier.requiredSize(bigW.dp, (quickBaseH * fsc).dp)) { touch++ }
                     Mode.COMPACT -> shownCurrent?.let {
-                        CompactContent(it, sc, gap, s.iconTextGap.toFloat(), s.equalizer, s.workoutMetric, Modifier.requiredSize(compactW.dp, smallH.dp))
+                        CompactContent(it, sc, gap, s.iconTextGap.toFloat(), s.equalizer, s.workoutMetric, Modifier.requiredSize(compactW.dp, smallH.dp), s.expandDir)
                     }
                     Mode.MESSAGE -> (lingering ?: lastMessage)?.let {
-                        MessageContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(messageW.dp, smallH.dp))
+                        MessageContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(messageW.dp, smallH.dp), s.expandDir)
                     }
                     Mode.ALERT -> (alert ?: lastAlert)?.let {
                         AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp), if (s.multiNotif) pendingList.size else 0, onMarkRead = {
@@ -1270,6 +1270,7 @@ internal fun SplitRow(
     iconGap: Float,
     modifier: Modifier,
     rightAlignStart: Boolean = false,
+    camSide: Int = 0,
     left: @Composable RowScope.() -> Unit,
     right: @Composable BoxScope.() -> Unit,
 ) {
@@ -1277,29 +1278,33 @@ internal fun SplitRow(
         modifier = modifier.padding(horizontal = (11f * sc).dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Kamera an der festen Kante (camSide 1 = rechts, 2 = links): Lücke dort, Inhalt daneben.
+        if (camSide == 2) Spacer(Modifier.width(gap.dp))
         Row(
             modifier = Modifier.weight(1f),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy((iconGap * sc).dp),
             content = left,
         )
-        Spacer(Modifier.width(gap.dp))
+        if (camSide == 0) Spacer(Modifier.width(gap.dp))
         Box(
             modifier = Modifier.weight(1f),
             contentAlignment = if (rightAlignStart) Alignment.CenterStart else Alignment.CenterEnd,
             content = right,
         )
+        if (camSide == 1) Spacer(Modifier.width(gap.dp))
     }
 }
 
 /** Links Name (bei Navigation nur die Entfernung), rechts Zeit (bei Navigation der Abbiege-Pfeil). */
 @Composable
-internal fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float, eq: Boolean, workoutMetric: String, modifier: Modifier) {
+internal fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float, eq: Boolean, workoutMetric: String, modifier: Modifier, camSide: Int = 0) {
     val nav = e.kind == Kind.NAVIGATION
     val workout = e.kind == Kind.WORKOUT
     SplitRow(
         sc = sc,
         gap = gap,
+        camSide = camSide,
         iconGap = iconGap,
         modifier = modifier,
         left = {
@@ -1371,10 +1376,11 @@ internal fun CompactContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Floa
 
 /** Nach dem Verkleinern einer Meldung: Absender links, Nachricht rechts der Kamera. */
 @Composable
-internal fun MessageContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float, modifier: Modifier) {
+internal fun MessageContent(e: IslandEvent, sc: Float, gap: Float, iconGap: Float, modifier: Modifier, camSide: Int = 0) {
     SplitRow(
         sc = sc,
         gap = gap,
+        camSide = camSide,
         iconGap = iconGap,
         modifier = modifier,
         rightAlignStart = e.kind != Kind.STATUS,
