@@ -202,6 +202,8 @@ class IslandListenerService : NotificationListenerService() {
         }
     }
 
+    private val artCache = HashMap<String, Pair<Bitmap, ImageBitmap>>()
+
     private fun buildEvent(sbn: StatusBarNotification, kind: Kind): IslandEvent {
         val n = sbn.notification
         val ex = n.extras
@@ -280,7 +282,14 @@ class IslandListenerService : NotificationListenerService() {
                     durationMs = md.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION)
                     val bmp = md.getBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART)
                         ?: md.getBitmap(android.media.MediaMetadata.METADATA_KEY_ART)
-                    art = bmp?.let { Bitmap.createScaledBitmap(it, 160, 160, true).asImageBitmap() }
+                    // Cover nur neu skalieren, wenn es ein anderes Bild ist (Pause/Weiter liefert dasselbe Bild).
+                    art = bmp?.let { src ->
+                        artCache[sbn.packageName]?.takeIf { it.first === src }?.second
+                            ?: Bitmap.createScaledBitmap(src, 160, 160, true).asImageBitmap().also {
+                                if (artCache.size > 6) artCache.clear()
+                                artCache[sbn.packageName] = src to it
+                            }
+                    }
                 }
                 if (art == null) art = runCatching {
                     n.getLargeIcon()?.loadDrawable(this)?.toBitmap(160, 160)?.asImageBitmap()

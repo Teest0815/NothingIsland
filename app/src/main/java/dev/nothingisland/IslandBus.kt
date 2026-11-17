@@ -463,20 +463,6 @@ object IslandBus {
         _current.value = event
     }
 
-    /** Karten stapeln: Oberste Karte nach hinten (dir > 0) oder hinterste nach vorn (dir < 0). */
-    fun cycle(dir: Int) {
-        val cur = _current.value ?: return
-        val list = _pending.value
-        if (list.isEmpty()) return
-        if (dir >= 0) {
-            _pending.value = list.drop(1) + cur
-            _current.value = list.first()
-        } else {
-            _pending.value = listOf(cur) + list.dropLast(1)
-            _current.value = list.last()
-        }
-    }
-
     /** Eine Karte hinter der obersten entfernen (ihre Zeit ist abgelaufen). */
     fun removePending(id: Long) {
         _pending.update { list -> list.filterNot { it.id == id } }

@@ -92,6 +92,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeJoin
@@ -2935,14 +2936,17 @@ private fun coverGlowColor(art: ImageBitmap): Color = runCatching {
 
 @Composable
 private fun GlowLayer(spec: GlowSpec, strength: Float, sizeDp: Int, corner: Dp, modifier: Modifier) {
-    val inf = androidx.compose.animation.core.rememberInfiniteTransition(label = "glow")
-    val ph by inf.animateFloat(
-        0f, 1f,
-        androidx.compose.animation.core.infiniteRepeatable(
-            androidx.compose.animation.core.tween(spec.period, easing = androidx.compose.animation.core.LinearEasing),
-        ),
-        label = "glowPhase",
-    )
+    // Phase mit ca. 30 Bildern pro Sekunde statt Bildschirmrate: Der Schein ist weich, das spart Akku bei dauerhaftem Leuchten.
+    val ph = remember { mutableFloatStateOf(0f) }
+    val screenOn by IslandBus.screenOn.collectAsState()
+    LaunchedEffect(spec.period, screenOn) {
+        if (!screenOn) return@LaunchedEffect
+        val t0 = withFrameMillis { it }
+        while (true) {
+            withFrameMillis { ph.floatValue = ((it - t0) % spec.period).toFloat() / spec.period }
+            delay(30)
+        }
+    }
     val flash = remember(spec.key) { Animatable(if (spec.flash) 1f else 0f) }
     LaunchedEffect(spec.key) {
         if (spec.flash) {
@@ -2954,17 +2958,17 @@ private fun GlowLayer(spec: GlowSpec, strength: Float, sizeDp: Int, corner: Dp, 
     LaunchedEffect(Unit) { appear.animateTo(1f, androidx.compose.animation.core.tween(500)) }
     Box(
         modifier.drawBehind {
-            val breathe = 0.5f + 0.5f * kotlin.math.sin(ph * 2f * Math.PI.toFloat())
+            val breathe = 0.5f + 0.5f * kotlin.math.sin(ph.floatValue * 2f * Math.PI.toFloat())
             val inten = (spec.lo + (spec.hi - spec.lo) * breathe) * (1f + 0.9f * flash.value) * appear.value * strength
             if (inten <= 0.01f) return@drawBehind
             val reach = sizeDp.dp.toPx()
-            val layers = 14
+            val layers = 10
             val c = corner.toPx()
             for (i in layers downTo 1) {
                 val g = reach * i / layers
                 // Stärker nach unten: Der Schein kommt von unter der Island.
                 drawRoundRect(
-                    color = spec.color.copy(alpha = (inten * 0.075f).coerceIn(0f, 1f)),
+                    color = spec.color.copy(alpha = (inten * 0.105f).coerceIn(0f, 1f)),
                     // Rundum, nach unten etwas weiter: auch über der kleinen Island sieht man den Schein.
                     topLeft = androidx.compose.ui.geometry.Offset(-g, -g * 0.9f),
                     size = androidx.compose.ui.geometry.Size(size.width + 2f * g, size.height + g * 1.9f),
