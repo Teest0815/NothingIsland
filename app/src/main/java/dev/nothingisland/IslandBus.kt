@@ -246,6 +246,9 @@ object IslandBus {
     /** Zählt hoch, wenn der Bildschirm angeht (löst das federnde Hereinkommen der Pille aus). */
     val wakeTick: StateFlow<Int> = _wakeTick.asStateFlow()
 
+    /** Zeitpunkt des letzten Aufwachens (Leuchten blitzt direkt danach nicht auf). */
+    @Volatile var lastWakeAt: Long = 0L
+
     fun bumpWake() {
         _wakeTick.value += 1
     }

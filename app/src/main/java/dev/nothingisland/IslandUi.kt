@@ -276,8 +276,9 @@ internal fun IslandHostBody() {
     // Frischer Aufbau (z. B. nach dem Aufwecken): Die Pille kommt von ihrer Mitte aus herein, wie beim Auftauchen einer Status-Pille.
     val wakeTick by IslandBus.wakeTick.collectAsState()
     // Einblenden (monoton, kein Flackern) und Größe (federt) getrennt: Die Feder darf überschwingen, die Deckkraft nicht.
-    val wakeFade = remember { Animatable(1f) }
-    val wakeScale = remember { Animatable(1f) }
+    // Startwerte schon "klein und unsichtbar": Das erste Bild eines frischen Aufbaus darf nicht in voller Größe aufblitzen.
+    val wakeFade = remember { Animatable(0f) }
+    val wakeScale = remember { Animatable(0.55f) }
     LaunchedEffect(wakeTick) {
         wakeFade.snapTo(0f)
         wakeScale.snapTo(0.55f)

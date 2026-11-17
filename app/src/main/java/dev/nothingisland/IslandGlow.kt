@@ -175,9 +175,10 @@ internal fun GlowLayer(spec: GlowSpec, strength: Float, sizeDp: Int, corner: Dp,
             delay(30)
         }
     }
-    val flash = remember(spec.key) { Animatable(if (spec.flash) 1f else 0f) }
+    val flash = remember(spec.key) { Animatable(if (spec.flash && System.currentTimeMillis() - IslandBus.lastWakeAt > 1800L) 1f else 0f) }
     LaunchedEffect(spec.key) {
-        if (spec.flash) {
+        // Direkt nach dem Aufwecken kein Aufblitzen (der Schein ist dann nur wieder neu aufgebaut, nichts Neues passiert).
+        if (spec.flash && System.currentTimeMillis() - IslandBus.lastWakeAt > 1800L) {
             flash.snapTo(1f)
             flash.animateTo(0f, androidx.compose.animation.core.tween(1300))
         }
