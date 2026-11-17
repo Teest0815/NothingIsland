@@ -811,7 +811,7 @@ internal fun IslandHostBody() {
                         swipeScope.launch {
                             if (y > trigger) {
                                 val a = alertNow
-                                a?.markRead?.let { runCatching { it.send() } }
+                                a?.markRead?.let { pi -> launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { pi.send() } } }
                                 if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                                 armed = false
                                 suppressLinger = true
@@ -1071,7 +1071,7 @@ internal fun IslandHostBody() {
                     Mode.ALERT -> (alert ?: lastAlert)?.let {
                         AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp), if (s.multiNotif) pendingList.size else 0, onMarkRead = {
                             // Als gelesen markieren: Aktion der App auslösen, Meldung verschwindet (nächste kommt nach).
-                            runCatching { it.markRead?.send() }
+                            it.markRead?.let { pi -> swipeScope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { pi.send() } } }
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                             suppressLinger = true
                             if (pendingList.isNotEmpty()) swipeScope.launch {

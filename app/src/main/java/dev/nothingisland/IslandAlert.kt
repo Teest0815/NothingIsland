@@ -176,11 +176,23 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
         }
         event.picture?.let { pic ->
             Spacer(Modifier.width((10f * sc).dp))
+            // Bild/Sticker poppt federnd auf.
+            val pop = remember(pic) { androidx.compose.animation.core.Animatable(0f) }
+            LaunchedEffect(pic) { pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.4f, stiffness = 300f)) }
             Image(
                 bitmap = pic,
                 contentDescription = null,
                 contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                modifier = Modifier.size((52f * sc).dp).clip(RoundedCornerShape((10f * sc).dp)),
+                modifier = Modifier
+                    .size((52f * sc).dp)
+                    .graphicsLayer {
+                        val k = pop.value
+                        scaleX = k
+                        scaleY = k
+                        rotationZ = (1f - k) * -14f
+                        alpha = (k * 2f).coerceIn(0f, 1f)
+                    }
+                    .clip(RoundedCornerShape((10f * sc).dp)),
             )
         }
         if (more > 0) {
