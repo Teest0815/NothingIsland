@@ -438,14 +438,7 @@ object IslandBus {
     }
 
     // ---- Kurzzeit-Meldungen (neue Benachrichtigungen) ----
-    /** Zuletzt gezeigte Ereignisse, damit die Antwort-Ansicht sie per ID findet. */
-    private val recent = LinkedHashMap<Long, IslandEvent>()
-
     fun post(event: IslandEvent) {
-        if (event.reply != null) synchronized(recent) {
-            recent[event.id] = event
-            while (recent.size > 20) recent.remove(recent.keys.first())
-        }
         val cur = _current.value
         val group = _settings.value.groupNotif
         if (_settings.value.multiNotif && cur != null && !cur.quiet && !event.quiet) {
