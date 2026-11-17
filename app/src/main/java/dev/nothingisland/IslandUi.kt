@@ -694,8 +694,8 @@ internal fun IslandHostBody() {
         else Modifier.width(span.dp)),
         contentAlignment = Alignment.TopCenter,
     ) {
-    Row(modifier = (if (dir == 1) Modifier.wrapContentWidth(Alignment.End, unbounded = true)
-        else if (dir == 2) Modifier.wrapContentWidth(Alignment.Start, unbounded = true) else Modifier)
+    Row(modifier = (if (dir == 1) Modifier.fillMaxWidth().wrapContentWidth(Alignment.End, unbounded = true)
+        else if (dir == 2) Modifier.fillMaxWidth().wrapContentWidth(Alignment.Start, unbounded = true) else Modifier)
         .padding(top = maxOf(topPad, 0.dp)), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.width(slot))
 
