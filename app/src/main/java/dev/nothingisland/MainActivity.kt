@@ -302,7 +302,7 @@ class MainActivity : ComponentActivity() {
         }
 
         val sv by IslandBus.settings.collectAsState()
-        FoldCard("SPARMODUS", false) {
+        FoldCard("SPARMODUS", false, sv.powerSaver != 0) {
             Text(
                 "Spart Akku: keine Dauer-Animationen (Equalizer, Puls), Zustände werden seltener geprüft. Bei ausgeschaltetem Bildschirm pausiert die Prüfung immer.",
                 color = Muted,
@@ -591,7 +591,7 @@ class MainActivity : ComponentActivity() {
             ToggleRow("Ladeanzeige animieren (Balken & Prozent)", s.chargeAnim) { c -> edit { it.copy(chargeAnim = c) } }
         }
 
-        FoldCard("LEUCHTEN", false) {
+        FoldCard("LEUCHTEN", false, s.glow) {
             ToggleRow("Leuchten um die Island", s.glow) { c -> edit { it.copy(glow = c) } }
             SettingSlider("Stärke", "${(s.glowStrength * 100).roundToInt()} %", s.glowStrength, 0.1f..1f) { v ->
                 edit { it.copy(glowStrength = (v * 20f).roundToInt() / 20f) }
@@ -611,7 +611,7 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        FoldCard("HINTERGRUND", false) {
+        FoldCard("HINTERGRUND", false, s.keepAlive) {
             ToggleRow("Im Hintergrund aktiv halten (stille Benachrichtigung)", s.keepAlive) { c ->
                 edit { it.copy(keepAlive = c) }
                 if (c) KeepAliveService.start(ctx) else KeepAliveService.stop(ctx)
@@ -643,11 +643,11 @@ class MainActivity : ComponentActivity() {
             Spacer(Modifier.height(8.dp))
         }
 
-        FoldCard("NACH UNTEN ZIEHEN", false) {
+        FoldCard("NACH UNTEN ZIEHEN", false, s.swipeUpAction.isNotEmpty() || s.swipeDownPause) {
             SwipeUpSettings(s)
         }
 
-        FoldCard("HAPTIK", false) {
+        FoldCard("HAPTIK", false, s.haptics) {
             ToggleRow("Kurz vibrieren beim Aufklappen", s.haptics) { c ->
                 edit { it.copy(haptics = c) }
                 if (c) QuickActions.hapticPlay(ctx, s.hapticStyle, s.hapticMs, s.hapticAmp)
@@ -676,7 +676,7 @@ class MainActivity : ComponentActivity() {
             Spacer(Modifier.height(8.dp))
         }
 
-        FoldCard("STATUS-ANZEIGEN", false) {
+        FoldCard("STATUS-ANZEIGEN", false, s.statusPills) {
             ToggleRow("Status in der Pille anzeigen", s.statusPills) { c -> edit { it.copy(statusPills = c) } }
             Text(
                 "Die Pille zeigt es, solange es aktiv ist. Wähle, was angezeigt wird:",
@@ -711,7 +711,7 @@ class MainActivity : ComponentActivity() {
 
         FoldCard("SMART HOME (HOME ASSISTANT)", false) { HomeAssistantSettings() }
 
-        FoldCard("SCHNELLZUGRIFF", false) {
+        FoldCard("SCHNELLZUGRIFF", false, s.quickPanel) {
             ToggleRow("Schnellzugriff-Panel aktivieren", s.quickPanel) { c ->
                 edit { it.copy(quickPanel = c) }
                 if (!c) IslandBus.setQuick(false)
@@ -1248,7 +1248,7 @@ private fun MiniButton(text: String, enabled: Boolean, onClick: () -> Unit) {
 
 /** Aufklappbarer Bereich: Titel und Inhalt liegen immer in einem Rahmen, der beim Öffnen weich größer wird. */
 @Composable
-private fun FoldCard(text: String, defaultOpen: Boolean, content: @Composable () -> Unit) {
+private fun FoldCard(text: String, defaultOpen: Boolean, enabled: Boolean = true, content: @Composable () -> Unit) {
     var open by rememberSaveable(text) { mutableStateOf(defaultOpen) }
     val rot by animateFloatAsState(if (open) 90f else 0f, spring(dampingRatio = 0.6f, stiffness = 500f), label = "chev")
     val shape = RoundedCornerShape(20.dp)
@@ -1269,7 +1269,7 @@ private fun FoldCard(text: String, defaultOpen: Boolean, content: @Composable ()
         ) {
             Text(
                 text,
-                color = AppAccent,
+                color = if (enabled) AppAccent else Color(0xFF6E6E6E),
                 fontFamily = FontFamily.Monospace,
                 fontSize = 12.sp,
                 letterSpacing = 2.sp,
@@ -1343,8 +1343,7 @@ private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Un
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Ausgeschaltet: Schrift etwas grauer.
-        Text(label, color = if (checked) Color.White else Color(0xFF8E8E8E), fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Text(label, color = Color.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
         Switch(
             checked = checked,
             onCheckedChange = onChange,
