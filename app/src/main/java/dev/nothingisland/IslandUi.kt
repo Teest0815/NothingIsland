@@ -476,13 +476,15 @@ internal fun IslandHostBody() {
     // Gilt, wenn die große Bubble zur kleinen Pille wird.
     var squashHold by remember { mutableStateOf(false) }
     var squashBounce by remember { mutableStateOf(false) }
+    // Nach oben weggezogen: kein Squash (die Bubble ist schon oben, erst-kleiner-dann-größer wäre unsinnig).
+    var skipSquash by remember { mutableStateOf(false) }
     var lastMode by remember { mutableStateOf(mode) }
     LaunchedEffect(mode) {
         val was = lastMode
         lastMode = mode
         val small = mode == Mode.IDLE || mode == Mode.COMPACT || mode == Mode.MESSAGE
         val big = was == Mode.ALERT || was == Mode.EXPANDED || was == Mode.QUICK || was == Mode.CALC || was == Mode.NOTE
-        if (s.squashEntry && small && big) {
+        if (s.squashEntry && small && big && !skipSquash) {
             squashBounce = false
             squashHold = true
             delay(140)
@@ -793,6 +795,8 @@ internal fun IslandHostBody() {
                                     if (!ev.pkg.startsWith("test.")) IslandBus.mute(ev.pkg, s.muteMinutes)
                                     if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                                     armed = false
+                                    skipSquash = true
+                                    launch { delay(1500); skipSquash = false }
                                     launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(220, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
                                     if (mode == Mode.ALERT) { suppressLinger = true; IslandBus.dismiss() } else lingering = null
                                     IslandBus.post(
