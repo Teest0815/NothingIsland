@@ -647,6 +647,22 @@ class MainActivity : ComponentActivity() {
             SwipeUpSettings(s)
         }
 
+        FoldCard("APP STUMMSCHALTEN", false, s.muteOnSwipeUp) {
+            ToggleRow("Meldung nach oben wischen schaltet die App stumm", s.muteOnSwipeUp) { c -> edit { it.copy(muteOnSwipeUp = c) } }
+            Text("Dauer", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp, bottom = 6.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(1, 5, 15, 30, 60).forEach { m ->
+                    Chip(if (m == 60) "1 STD" else "$m MIN", s.muteMinutes == m) { edit { it.copy(muteMinutes = m) } }
+                }
+            }
+            Text(
+                "Die App erscheint so lange nicht in der Island. Die Android-Benachrichtigung bleibt wie sie ist, Anrufe und laufende Aktivitäten (Musik, Timer) sind nicht betroffen.",
+                color = Muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp),
+            )
+            PillButton("ALLE STUMMSCHALTUNGEN AUFHEBEN", filled = false, modifier = Modifier.fillMaxWidth()) { IslandBus.clearMutes() }
+            Spacer(Modifier.height(8.dp))
+        }
+
         FoldCard("HAPTIK", false, s.haptics) {
             ToggleRow("Kurz vibrieren beim Aufklappen", s.haptics) { c ->
                 edit { it.copy(haptics = c) }

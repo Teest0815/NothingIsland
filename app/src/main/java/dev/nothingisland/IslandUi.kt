@@ -559,7 +559,11 @@ internal fun IslandHostBody() {
     val alertNow by rememberUpdatedState(alert)
     val canPullRead = mode == Mode.ALERT && s.swipeDownRead && (alert ?: lastAlert)?.markRead != null
     // Wird die Meldung mitten im Ziehen beendet, bleibt sonst der Versatz stehen.
-    LaunchedEffect(canPullRead) { if (!canPullRead) pullY = 0f }
+    // Meldung nach oben wischen = App stummschalten (große Meldung und die kleine Meldungs-Pille).
+    val msgNow by rememberUpdatedState(lingering)
+    val canMute = s.muteOnSwipeUp && (mode == Mode.ALERT || mode == Mode.MESSAGE) &&
+        (if (mode == Mode.ALERT) (alert ?: lastAlert) else lingering)?.let { it.kind == Kind.OTHER && it.pkg.isNotEmpty() } == true
+    LaunchedEffect(canPullRead, canMute) { if (!canPullRead && !canMute) pullY = 0f }
     val canSkip = mode == Mode.COMPACT && s.swipeSkip && current?.kind == Kind.MEDIA && current.media != null
     val curForSkip by rememberUpdatedState(current)
     val stackBehind = if (mode == Mode.ALERT && s.multiNotif) minOf(pendingList.size, 3) else 0
@@ -771,8 +775,8 @@ internal fun IslandHostBody() {
                 .clip(shape)
                 .background(Bg)
                 .border(1.dp, Hairline, shape)
-                .pointerInput(canPullRead) {
-                    if (!canPullRead) return@pointerInput
+                .pointerInput(canPullRead, canMute) {
+                    if (!canPullRead && !canMute) return@pointerInput
                     val maxPull = 30.dp.toPx()
                     val trigger = 18.dp.toPx()
                     // Gummiband: zieht sich ein Stück mit und gibt immer mehr Widerstand.
@@ -782,7 +786,23 @@ internal fun IslandHostBody() {
                         val y = pullY
                         pullRaw = 0f
                         swipeScope.launch {
-                            if (y > trigger) {
+                            if (y < -trigger && canMute) {
+                                // Nach oben: App stummschalten.
+                                val ev = if (mode == Mode.ALERT) alertNow else msgNow
+                                if (ev != null) {
+                                    IslandBus.mute(ev.pkg, s.muteMinutes)
+                                    if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
+                                    armed = false
+                                    launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(220, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
+                                    if (mode == Mode.ALERT) { suppressLinger = true; IslandBus.dismiss() } else lingering = null
+                                    IslandBus.post(
+                                        IslandEvent(
+                                            key = "mute-" + ev.pkg, kind = Kind.STATUS, app = ev.app, title = ev.app.uppercase(),
+                                            text = "STUMM · ${s.muteMinutes} MIN", textShort = "${s.muteMinutes} MIN", quiet = true,
+                                        ),
+                                    )
+                                }
+                            } else if (y > trigger && canPullRead) {
                                 val a = alertNow
                                 a?.markRead?.let { pi -> launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { pi.send() } } }
                                 if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
@@ -814,9 +834,9 @@ internal fun IslandHostBody() {
                         onDragCancel = { release() },
                         onVerticalDrag = { change, dragAmount ->
                             change.consume()
-                            pullRaw = (pullRaw + dragAmount).coerceAtLeast(0f)
-                            pullY = band(pullRaw)
-                            val over = pullY > trigger
+                            pullRaw = (pullRaw + dragAmount).coerceIn(if (canMute) -1000f else 0f, if (canPullRead) 1000f else 0f)
+                            pullY = if (pullRaw < 0f) -band(-pullRaw) else band(pullRaw)
+                            val over = if (pullY < 0f) -pullY > trigger else pullY > trigger
                             if (over && !armed && s.haptics) QuickActions.haptic(ctx, 1)
                             armed = over
                         },

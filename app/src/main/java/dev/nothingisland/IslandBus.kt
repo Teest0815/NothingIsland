@@ -27,6 +27,8 @@ class IslandReply(
 data class IslandEvent(
     val id: Long = System.nanoTime(),
     val key: String = "",
+    /** Paketname der absendenden App (zum Stummschalten). */
+    val pkg: String = "",
     val kind: Kind = Kind.OTHER,
     val app: String,
     val title: String,
@@ -161,6 +163,9 @@ data class IslandSettings(
     val pillIconNotif: Int = 0,
     /** Bei Musik: Nach-unten-Ziehen pausiert/startet die Wiedergabe. */
     val swipeDownPause: Boolean = false,
+    /** Meldung nach oben wischen = App für [muteMinutes] stummschalten (nur in der Island, Android-Meldung bleibt). */
+    val muteOnSwipeUp: Boolean = true,
+    val muteMinutes: Int = 5,
     /** Bilder und Sticker aus Meldungen (z. B. WhatsApp) anzeigen. */
     val showPictures: Boolean = true,
     /** Bei einseitigem Aufgehen: auch große Blasen wachsen aus der Kamera-Kante statt mittig. */
@@ -471,6 +476,24 @@ object IslandBus {
         _pending.update { list -> list.filterNot { it.id == id } }
     }
 
+    // ---- Stummschalten einzelner Apps (nur in der Island) ----
+    private val mutedUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    fun isMuted(pkg: String): Boolean {
+        val until = mutedUntil[pkg] ?: return false
+        if (System.currentTimeMillis() < until) return true
+        mutedUntil.remove(pkg)
+        return false
+    }
+
+    /** App für [minutes] Minuten stummschalten; schon wartende Meldungen der App fallen weg. */
+    fun mute(pkg: String, minutes: Int) {
+        mutedUntil[pkg] = System.currentTimeMillis() + minutes * 60_000L
+        _pending.update { l -> l.filterNot { it.pkg == pkg } }
+    }
+
+    fun clearMutes() = mutedUntil.clear()
+
     fun dismiss() {
         val next = _pending.value.firstOrNull()
         if (next != null) {
@@ -555,6 +578,8 @@ object IslandBus {
             swipeUpAction = p.getString("swipeUpAction", d.swipeUpAction) ?: d.swipeUpAction,
             pillIconNotif = p.getInt("pillIconNotif", d.pillIconNotif),
             swipeDownPause = p.getBoolean("swipeDownPause", d.swipeDownPause),
+            muteOnSwipeUp = p.getBoolean("muteOnSwipeUp", d.muteOnSwipeUp),
+            muteMinutes = p.getInt("muteMinutes", d.muteMinutes),
             showPictures = p.getBoolean("showPictures", d.showPictures),
             bigFromCamera = p.getBoolean("bigFromCamera", d.bigFromCamera),
             glow = p.getBoolean("glow", d.glow),
@@ -631,6 +656,8 @@ object IslandBus {
             .putString("swipeUpAction", s.swipeUpAction)
             .putInt("pillIconNotif", s.pillIconNotif)
             .putBoolean("swipeDownPause", s.swipeDownPause)
+            .putBoolean("muteOnSwipeUp", s.muteOnSwipeUp)
+            .putInt("muteMinutes", s.muteMinutes)
             .putBoolean("showPictures", s.showPictures)
             .putBoolean("bigFromCamera", s.bigFromCamera)
             .putBoolean("glow", s.glow)

@@ -149,6 +149,7 @@ class IslandListenerService : NotificationListenerService() {
             return
         }
         if (sbn.isOngoing || !allowAlert) return
+        if (IslandBus.isMuted(sbn.packageName)) return
 
         val event = buildEvent(sbn, Kind.OTHER).copy(quiet = rule == "QUIET")
         if (event.title.isBlank() && event.text.isBlank()) return
@@ -317,6 +318,7 @@ class IslandListenerService : NotificationListenerService() {
 
         return IslandEvent(
             key = sbn.key,
+            pkg = sbn.packageName,
             kind = kind,
             app = appName,
             title = title,
