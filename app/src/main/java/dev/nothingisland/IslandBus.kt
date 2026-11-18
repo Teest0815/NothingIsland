@@ -479,6 +479,9 @@ object IslandBus {
     // ---- Stummschalten einzelner Apps (nur in der Island) ----
     private val mutedUntil = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
+    /** Verbleibende Stummzeit in Millisekunden (0 = nicht stumm). */
+    fun muteRemainingMs(pkg: String): Long = if (isMuted(pkg)) (mutedUntil[pkg] ?: 0L) - System.currentTimeMillis() else 0L
+
     fun isMuted(pkg: String): Boolean {
         val until = mutedUntil[pkg] ?: return false
         if (System.currentTimeMillis() < until) return true

@@ -448,6 +448,13 @@ class MainActivity : ComponentActivity() {
 
     /** Test-Meldung mit Antwort und "Als gelesen markieren". [n] unterscheidet die Meldungen voneinander. */
     private fun postTestMessage(app: String, title: String, text: String, n: Int) {
+        // Test-Apps haben einen eigenen Paketnamen, damit sich das Stummschalten ausprobieren lässt.
+        val pkg = "test.$app"
+        val left = IslandBus.muteRemainingMs(pkg)
+        if (left > 0L) {
+            android.widget.Toast.makeText(this, "$app ist stumm (noch ${(left + 59_999L) / 60_000L} Min)", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         val replyPi = android.app.PendingIntent.getBroadcast(
             this, 31, Intent(this, TestReceiver::class.java).setAction(TestReceiver.ACTION_REPLY),
             android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
@@ -458,7 +465,7 @@ class MainActivity : ComponentActivity() {
         )
         IslandBus.post(
             IslandEvent(
-                key = "test-$n", app = app, title = title, text = text,
+                key = "test-$n", pkg = pkg, app = app, title = title, text = text,
                 reply = IslandReply(replyPi, android.app.RemoteInput.Builder(TestReceiver.KEY_REPLY).setLabel("Antworten").build()),
                 markRead = readPi,
             ),
