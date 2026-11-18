@@ -219,6 +219,8 @@ internal fun IslandHostBody() {
     var touch by remember { mutableIntStateOf(0) }
     var pullY by remember { mutableFloatStateOf(0f) }
     var pullRaw by remember { mutableFloatStateOf(0f) }
+    // Nach oben wischen: 0..1, wie weit die Meldung schon zur kleinen Pille geschrumpft ist.
+    var upP by remember { mutableFloatStateOf(0f) }
     // Gummiband-Dehnung der kleinen Pille beim Nach-unten-Ziehen (0..1, beim Loslassen schnellt sie federnd zurück).
     var rubber by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(quick, touch) {
@@ -563,7 +565,7 @@ internal fun IslandHostBody() {
     val msgNow by rememberUpdatedState(lingering)
     val canMute = s.muteOnSwipeUp && (mode == Mode.ALERT || mode == Mode.MESSAGE) &&
         (if (mode == Mode.ALERT) (alert ?: lastAlert) else lingering)?.let { it.kind == Kind.OTHER && it.pkg.isNotEmpty() } == true
-    LaunchedEffect(canPullRead, canMute) { if (!canPullRead && !canMute) pullY = 0f }
+    LaunchedEffect(canPullRead, canMute) { if (!canPullRead && !canMute) { pullY = 0f; upP = 0f } }
     val canSkip = mode == Mode.COMPACT && s.swipeSkip && current?.kind == Kind.MEDIA && current.media != null
     val curForSkip by rememberUpdatedState(current)
     val stackBehind = if (mode == Mode.ALERT && s.multiNotif) minOf(pendingList.size, 3) else 0
@@ -740,6 +742,14 @@ internal fun IslandHostBody() {
                     scaleY = pressScale * pop * bump.value.coerceAtMost(1.05f) * wakeScale.value
                     translationX = swipeX.value + stretchPx / 2f
                     translationY = pullY + dropY.value
+                    if (upP > 0f) {
+                        // Wird beim Hochziehen immer mehr zur kleinen Pille.
+                        val tw = (idleW.dp.toPx() / size.width.coerceAtLeast(1f)).coerceAtMost(1f)
+                        val th = (smallH.dp.toPx() / size.height.coerceAtLeast(1f)).coerceAtMost(1f)
+                        scaleX *= 1f + (tw - 1f) * upP
+                        scaleY *= 1f + (th - 1f) * upP
+                        transformOrigin = TransformOrigin(0.5f, 0f)
+                    }
                     if (rubber != 0f) {
                         // Zieht sich etwas in die Höhe und wird schmaler.
                         scaleY *= 1f + 0.16f * rubber
@@ -786,15 +796,15 @@ internal fun IslandHostBody() {
                         val y = pullY
                         pullRaw = 0f
                         swipeScope.launch {
-                            if (y < -trigger && canMute) {
-                                // Nach oben: App stummschalten.
+                            if (upP > 0.5f && canMute) {
+                                // Nach oben: App stummschalten (Test-Meldungen nur zum Ausprobieren, ohne echte Stummschaltung).
                                 val ev = if (mode == Mode.ALERT) alertNow else msgNow
                                 if (ev != null) {
-                                    IslandBus.mute(ev.pkg, s.muteMinutes)
+                                    if (!ev.pkg.startsWith("test.")) IslandBus.mute(ev.pkg, s.muteMinutes)
                                     if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
-                                    armed = false
-                                    launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(220, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
+                                    androidx.compose.animation.core.animate(upP, 1f, animationSpec = tween(110, easing = FastOutSlowInEasing)) { v, _ -> upP = v }
                                     if (mode == Mode.ALERT) { suppressLinger = true; IslandBus.dismiss() } else lingering = null
+                                    upP = 0f
                                     IslandBus.post(
                                         IslandEvent(
                                             key = "mute-" + ev.pkg, kind = Kind.STATUS, app = ev.app, title = ev.app.uppercase(),
@@ -802,6 +812,8 @@ internal fun IslandHostBody() {
                                         ),
                                     )
                                 }
+                            } else if (upP > 0f) {
+                                androidx.compose.animation.core.animate(upP, 0f, animationSpec = spring(dampingRatio = 0.6f, stiffness = 380f)) { v, _ -> upP = v }
                             } else if (y > trigger && canPullRead) {
                                 val a = alertNow
                                 a?.markRead?.let { pi -> launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { pi.send() } } }
@@ -835,10 +847,17 @@ internal fun IslandHostBody() {
                         onVerticalDrag = { change, dragAmount ->
                             change.consume()
                             pullRaw = (pullRaw + dragAmount).coerceIn(if (canMute) -1000f else 0f, if (canPullRead) 1000f else 0f)
-                            pullY = if (pullRaw < 0f) -band(-pullRaw) else band(pullRaw)
-                            val over = if (pullY < 0f) -pullY > trigger else pullY > trigger
-                            if (over && !armed && s.haptics) QuickActions.haptic(ctx, 1)
-                            armed = over
+                            if (pullRaw < 0f) {
+                                // Nach oben: stufenlos, kein Einrasten.
+                                upP = (-pullRaw / 90.dp.toPx()).coerceIn(0f, 1f)
+                                pullY = 0f
+                            } else {
+                                upP = 0f
+                                pullY = band(pullRaw)
+                                val over = pullY > trigger
+                                if (over && !armed && s.haptics) QuickActions.haptic(ctx, 1)
+                                armed = over
+                            }
                         },
                     )
                 }
