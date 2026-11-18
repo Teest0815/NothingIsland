@@ -742,14 +742,6 @@ internal fun IslandHostBody() {
                     scaleY = pressScale * pop * bump.value.coerceAtMost(1.05f) * wakeScale.value
                     translationX = swipeX.value + stretchPx / 2f
                     translationY = pullY + dropY.value
-                    if (upP > 0f) {
-                        // Wird beim Hochziehen immer mehr zur kleinen Pille.
-                        val tw = (idleW.dp.toPx() / size.width.coerceAtLeast(1f)).coerceAtMost(1f)
-                        val th = (smallH.dp.toPx() / size.height.coerceAtLeast(1f)).coerceAtMost(1f)
-                        scaleX *= 1f + (tw - 1f) * upP
-                        scaleY *= 1f + (th - 1f) * upP
-                        transformOrigin = TransformOrigin(0.5f, 0f)
-                    }
                     if (rubber != 0f) {
                         // Zieht sich etwas in die Höhe und wird schmaler.
                         scaleY *= 1f + 0.16f * rubber
@@ -779,8 +771,11 @@ internal fun IslandHostBody() {
                     val wCap = if (growing) minOf(targetW * 1.07f, idleW + (targetW - idleW) * (0.3f + 0.7f * hp)) else Float.MAX_VALUE
                     val w = (if (growing) minOf(width.roundToPx(), wCap.dp.roundToPx()) else width.roundToPx()) + abs(stretchPx).roundToInt()
                     val h = if (growing) minOf(height.roundToPx(), (targetH * 1.08f).dp.roundToPx()) else height.roundToPx()
-                    val pl = m.measure(Constraints.fixed(w, h))
-                    layout(w, h) { pl.place(0, 0) }
+                    // Nach oben wischen: echte Größe schrumpft stufenlos zur kleinen Pille (wie das normale Zuklappen).
+                    val w2 = if (upP > 0f) (w + (minOf(w, idleW.dp.roundToPx()) - w) * upP).roundToInt() else w
+                    val h2 = if (upP > 0f) (h + (minOf(h, smallH.dp.roundToPx()) - h) * upP).roundToInt() else h
+                    val pl = m.measure(Constraints.fixed(w2, h2))
+                    layout(w2, h2) { pl.place(0, 0) }
                 }
                 .clip(shape)
                 .background(Bg)
@@ -802,9 +797,13 @@ internal fun IslandHostBody() {
                                 if (ev != null) {
                                     if (!ev.pkg.startsWith("test.")) IslandBus.mute(ev.pkg, s.muteMinutes)
                                     if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
-                                    androidx.compose.animation.core.animate(upP, 1f, animationSpec = tween(110, easing = FastOutSlowInEasing)) { v, _ -> upP = v }
+                                    // Normales Zuklappen übernimmt; die Wisch-Größe läuft sanft aus.
                                     if (mode == Mode.ALERT) { suppressLinger = true; IslandBus.dismiss() } else lingering = null
-                                    upP = 0f
+                                    launch {
+                                        androidx.compose.animation.core.animate(upP, 1f, animationSpec = tween(90, easing = FastOutSlowInEasing)) { v, _ -> upP = v }
+                                        delay(160)
+                                        androidx.compose.animation.core.animate(upP, 0f, animationSpec = tween(200, easing = FastOutSlowInEasing)) { v, _ -> upP = v }
+                                    }
                                     IslandBus.post(
                                         IslandEvent(
                                             key = "mute-" + ev.pkg, kind = Kind.STATUS, app = ev.app, title = ev.app.uppercase(),
