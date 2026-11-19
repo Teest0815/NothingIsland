@@ -625,7 +625,7 @@ internal fun IslandHostBody() {
     val canMute = s.muteOnSwipeUp && (mode == Mode.ALERT || mode == Mode.MESSAGE) &&
         (if (mode == Mode.ALERT) (alert ?: lastAlert) else lingering)?.let { it.kind == Kind.OTHER && it.pkg.isNotEmpty() } == true
     LaunchedEffect(canPullRead, canMute) { if (!canPullRead && !canMute) pullY = 0f }
-    val canSkip = !vert && mode == Mode.COMPACT && s.swipeSkip && current?.kind == Kind.MEDIA && current.media != null
+    val canSkip = mode == Mode.COMPACT && s.swipeSkip && current?.kind == Kind.MEDIA && current.media != null
     val curForSkip by rememberUpdatedState(current)
     val stackBehind = if (mode == Mode.ALERT && s.multiNotif) minOf(pendingList.size, 3) else 0
     val stackOffDp = 9f - 7f * s.stackCompact
@@ -636,7 +636,7 @@ internal fun IslandHostBody() {
         val pl = pullY / with(dens) { 18.dp.toPx() }
         maxOf(sw, pl, leave.value, if (stackHold) 1f else 0f).coerceIn(0f, 1f)
     }
-    val swipeable = !vert && (mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE) || (mode == Mode.QUICK && quickPages.size <= 1)
+    val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || (mode == Mode.QUICK && quickPages.size <= 1)
     LaunchedEffect(mode) { swipeX.snapTo(0f) }
     val onSwipeAway: () -> Unit = {
         when (mode) {
@@ -799,11 +799,11 @@ internal fun IslandHostBody() {
         Box(
             modifier = Modifier
                 .graphicsLayer {
-                    val pop = 0.6f + 0.4f * appear.value
+                    val pop = (0.6f + 0.4f * appear.value) * (if (land && (topAlert || topSnap || topFx.value < 1f)) 0.9f + 0.1f * (if (topSnap) 0f else topFx.value.coerceIn(0f, 1f)) else 1f)
                     scaleX = pressScale * pop * bump.value.coerceAtMost(1.05f) * wakeScale.value
                     scaleY = pressScale * pop * bump.value.coerceAtMost(1.05f) * wakeScale.value
-                    translationX = swipeX.value + stretchPx / 2f + (if (vert) outSgn * pullY else 0f)
-                    translationY = (if (vert) 0f else pullY) + dropY.value - (if (topAlert) (1f - topFx.value) * 40.dp.toPx() else 0f)
+                    translationX = (if (vert) 0f else swipeX.value + stretchPx / 2f) + (if (vert) outSgn * pullY else 0f)
+                    translationY = (if (vert) swipeX.value + stretchPx / 2f else pullY) + dropY.value - (if (topAlert) (1f - topFx.value) * 40.dp.toPx() else 0f)
                     if (rubber != 0f) {
                         // Zieht sich etwas in die Höhe und wird schmaler.
                         if (vert) {
@@ -831,7 +831,7 @@ internal fun IslandHostBody() {
                     // Zieht sich beim Ziehen leicht in die Länge.
                     if (pullY > 0f && vert) scaleX *= 1f + (pullY / size.width.coerceAtLeast(1f)) * 0.35f
                     else if (pullY > 0f && !land) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
-                    alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f) * wakeFade.value * rotFade.value * (if (topSnap) 0f else topFx.value.coerceIn(0f, 1f)) *
+                    alpha = (1f - abs(swipeX.value) / ((if (vert) size.height else size.width) * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f) * wakeFade.value * rotFade.value * (if (topSnap) 0f else topFx.value.coerceIn(0f, 1f)) *
                         (if (stackBehind > 0) 1f - leave.value.coerceAtLeast(0f).let { it * it } else 1f)
                 }
                 .layout { m, _ ->
@@ -839,8 +839,8 @@ internal fun IslandHostBody() {
                     // Beim Aufklappen wächst die Breite höchstens so schnell wie die Höhe (kein plötzliches Breitwerden beim Spammen).
                     val hp = if (growing && !land && targetH > smallH) ((height.value - smallH) / (targetH - smallH)).coerceIn(0f, 1f) else 1f
                     val wCap = if (growing && land) targetW * 1.07f else if (growing) minOf(targetW * 1.07f, idleW + (targetW - idleW) * (0.3f + 0.7f * hp)) else Float.MAX_VALUE
-                    val w = (if (growing) minOf(width.roundToPx(), wCap.dp.roundToPx()) else width.roundToPx()) + abs(stretchPx).roundToInt()
-                    val h = if (growing) minOf(height.roundToPx(), (targetH * 1.08f).dp.roundToPx()) else height.roundToPx()
+                    val w = (if (growing) minOf(width.roundToPx(), wCap.dp.roundToPx()) else width.roundToPx()) + (if (vert) 0 else abs(stretchPx).roundToInt())
+                    val h = (if (growing) minOf(height.roundToPx(), (targetH * 1.08f).dp.roundToPx()) else height.roundToPx()) + (if (vert) abs(stretchPx).roundToInt() else 0)
                     val pl = m.measure(Constraints.fixed(w, h))
                     layout(w, h) { pl.place(0, 0) }
                 }
@@ -922,7 +922,7 @@ internal fun IslandHostBody() {
                         onVerticalDrag = { change, a -> onPull(change, a) },
                     )
                 }
-                .pointerInput(mode, canSkip, stackBehind) {
+                .pointerInput(mode, canSkip, stackBehind, vert) {
                     if (canSkip) {
                         val maxS = 48.dp.toPx()
                         val trigger = 24.dp.toPx()
@@ -945,17 +945,23 @@ internal fun IslandHostBody() {
                                 ) { v, _ -> stretchPx = v }
                             }
                         }
-                        detectHorizontalDragGestures(
+                        val onStretch: (androidx.compose.ui.input.pointer.PointerInputChange, Float) -> Unit = { change, dragAmount ->
+                            change.consume()
+                            stretchRaw += dragAmount
+                            stretchPx = band(stretchRaw)
+                            val over = abs(stretchPx) > trigger
+                            if (over && !armed && s.haptics) QuickActions.haptic(ctx, 1)
+                            armed = over
+                        }
+                        // Querformat: Titel überspringen entlang der Kante (unten = weiter).
+                        if (vert) detectVerticalDragGestures(
                             onDragEnd = { release() },
                             onDragCancel = { release() },
-                            onHorizontalDrag = { change, dragAmount ->
-                                change.consume()
-                                stretchRaw += dragAmount
-                                stretchPx = band(stretchRaw)
-                                val over = abs(stretchPx) > trigger
-                                if (over && !armed && s.haptics) QuickActions.haptic(ctx, 1)
-                                armed = over
-                            },
+                            onVerticalDrag = { change, a -> onStretch(change, a) },
+                        ) else detectHorizontalDragGestures(
+                            onDragEnd = { release() },
+                            onDragCancel = { release() },
+                            onHorizontalDrag = { change, a -> onStretch(change, a) },
                         )
                         return@pointerInput
                     }
@@ -965,7 +971,47 @@ internal fun IslandHostBody() {
                     var lastT = 0L
                     val away = if (mode == Mode.MESSAGE) 26.dp.toPx() else 80.dp.toPx()
                     val flingV = 650.dp.toPx() // px pro Sekunde
-                    detectHorizontalDragGestures(
+                    val ext = { if (vert) size.height.toFloat() else size.width.toFloat() }
+                    val onSwipeDrag: (androidx.compose.ui.input.pointer.PointerInputChange, Float) -> Unit = { change, dragAmount ->
+                        change.consume()
+                        val dt = change.uptimeMillis - lastT
+                        if (lastT != 0L && dt > 0) vel = vel * 0.5f + (dragAmount / dt * 1000f) * 0.5f
+                        lastT = change.uptimeMillis
+                        swipeScope.launch { swipeX.snapTo(swipeX.value + dragAmount) }
+                    }
+                    val dragEnd: () -> Unit = {
+                        val x = swipeX.value
+                        val flung = abs(vel) > flingV && abs(x) > 8.dp.toPx() && sign(vel) == sign(x)
+                        val x2 = if (flung && abs(x) <= away) sign(x) * (away + 1f) else x
+                        swipeScope.launch {
+                            if (abs(x2) > away && stackBehind > 0) {
+                                swipeX.animateTo(sign(x) * ext() * 0.7f, tween(150))
+                                suppressLinger = true
+                                IslandBus.dismiss()
+                                swipeX.snapTo(0f)
+                                if (s.haptics) QuickActions.haptic(ctx, 1)
+                            } else if (abs(x2) > away) {
+                                swipeX.animateTo(sign(x2) * ext() * 0.8f, tween(if (flung) 110 else 160, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
+                                snapNext = true
+                                appear.snapTo(0f)
+                                onSwipeAway()
+                                swipeX.snapTo(0f)
+                                launch { delay(60); snapNext = false }
+                                appear.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 360f))
+                                snapNext = false
+                            } else {
+                                swipeX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f))
+                            }
+                        }
+                    }
+                    val dragCancel: () -> Unit = { swipeScope.launch { swipeX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f)) } }
+                    // Querformat: kleine Pille wird entlang der Kante (nach oben/unten) weggewischt.
+                    if (vert) detectVerticalDragGestures(
+                        onDragStart = { vel = 0f; lastT = 0L },
+                        onDragEnd = { dragEnd() },
+                        onDragCancel = { dragCancel() },
+                        onVerticalDrag = { change, a -> onSwipeDrag(change, a) },
+                    ) else detectHorizontalDragGestures(
                         onDragStart = { vel = 0f; lastT = 0L },
                         onDragEnd = {
                             val x = swipeX.value
