@@ -550,6 +550,20 @@ class MainActivity : ComponentActivity() {
             SettingSlider("Abstand Symbol → Text (links)", "${s.iconTextGap} dp", s.iconTextGap.toFloat(), 0f..24f) { v -> edit { it.copy(iconTextGap = v.roundToInt()) } }
         }
 
+        FoldCard("QUERFORMAT", false) {
+            Text("Kamera links oder rechts: Die kleine Pille steht senkrecht am Rand, große Bubbles hängen daneben.", color = TextGray, fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp))
+            SettingSlider("Position entlang der Kante (+ = nach unten)", "${s.landShift} dp", s.landShift.toFloat(), -200f..200f) { v -> edit { it.copy(landShift = v.roundToInt()) } }
+            SettingSlider("Abstand zum Rand (kleine Pille)", "${s.landEdge} dp", s.landEdge.toFloat(), 0f..60f) { v -> edit { it.copy(landEdge = v.roundToInt()) } }
+            SettingSlider("Breite der großen Bubble", "${s.landBigW} dp", s.landBigW.toFloat(), 140f..480f) { v ->
+                edit { it.copy(landBigW = v.roundToInt()) }
+                IslandBus.post(previewAlert())
+            }
+            SettingSlider("Größe der großen Bubble", "${(s.landBigScale * 100).roundToInt()} %", s.landBigScale, 0.6f..1.5f) { v ->
+                edit { it.copy(landBigScale = (v * 20f).roundToInt() / 20f) }
+                IslandBus.post(previewAlert())
+            }
+        }
+
         FoldCard("AUFGEKLAPPTE PILLE", false) {
             SettingSlider("Größe", "${(s.expandedScale * 100).roundToInt()} %", s.expandedScale, 0.7f..2f) { v ->
                 edit { it.copy(expandedScale = (v * 20f).roundToInt() / 20f) }

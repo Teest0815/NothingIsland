@@ -178,6 +178,10 @@ data class IslandSettings(
     val showPictures: Boolean = true,
     /** Bei einseitigem Aufgehen: auch große Blasen wachsen aus der Kamera-Kante statt mittig. */
     val bigFromCamera: Boolean = false,
+    val landShift: Int = 0,
+    val landEdge: Int = 4,
+    val landBigW: Int = 260,
+    val landBigScale: Float = 1f,
     /** Leuchten um die Island. */
     val glow: Boolean = true,
     val glowStrength: Float = 0.7f,
@@ -631,6 +635,10 @@ object IslandBus {
             muteMinutes = p.getInt("muteMinutes", d.muteMinutes),
             showPictures = p.getBoolean("showPictures", d.showPictures),
             bigFromCamera = p.getBoolean("bigFromCamera", d.bigFromCamera),
+            landShift = p.getInt("landShift", d.landShift),
+            landEdge = p.getInt("landEdge", d.landEdge),
+            landBigW = p.getInt("landBigW", d.landBigW),
+            landBigScale = p.getFloat("landBigScale", d.landBigScale),
             glow = p.getBoolean("glow", d.glow),
             glowStrength = p.getFloat("glowStrength", d.glowStrength),
             glowSize = p.getInt("glowSize", d.glowSize),
@@ -712,6 +720,10 @@ object IslandBus {
             .putInt("muteMinutes", s.muteMinutes)
             .putBoolean("showPictures", s.showPictures)
             .putBoolean("bigFromCamera", s.bigFromCamera)
+            .putInt("landShift", s.landShift)
+            .putInt("landEdge", s.landEdge)
+            .putInt("landBigW", s.landBigW)
+            .putFloat("landBigScale", s.landBigScale)
             .putBoolean("glow", s.glow)
             .putFloat("glowStrength", s.glowStrength)
             .putInt("glowSize", s.glowSize)

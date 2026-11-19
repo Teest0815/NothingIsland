@@ -430,10 +430,11 @@ internal fun IslandHostBody() {
     val shortDp = minOf(dmNow.widthPixels, dmNow.heightPixels) / dmNow.density
     val screenW = (if (land) longDp else shortDp).toInt()
     val limit = minOf(s.maxWidth.toFloat(), screenW - 8f)
-    val bsc = sc * s.expandedScale // Skalierung von Text und Symbolen der aufgeklappten Pille
-    val fsc = sc * minOf(s.expandedScale, s.expandedFrameMax) // Rahmen wächst nur bis zum Limit
+    val landK = if (land) s.landBigScale else 1f
+    val bsc = sc * s.expandedScale * landK // Skalierung von Text und Symbolen der aufgeklappten Pille
+    val fsc = sc * minOf(s.expandedScale, s.expandedFrameMax) * landK // Rahmen wächst nur bis zum Limit
     // Aufgeklappt gilt nur die eigene Breite (begrenzt durch den Bildschirm), nicht die "Maximale Breite".
-    val bigW = minOf(s.expandedWidth.toFloat(), screenW - 8f)
+    val bigW = minOf((if (land) s.landBigW else s.expandedWidth).toFloat(), screenW - 8f)
     val hasActions = current?.actions?.isNotEmpty() == true || (current?.kind == Kind.CALL && current.chronoBase != null)
     val quickKeys = remember(s.quickTiles) {
         s.quickTiles.split(',').mapNotNull { QuickActions.tile(it) }.take(24)
@@ -544,7 +545,7 @@ internal fun IslandHostBody() {
     )
     // Große Pille kann auf anderer Höhe sitzen als die kleine: Abstand im Layout, weich animiert.
     // Querformat: Höhe der Kamera am Rand (Horizontal-Wert verschiebt entlang der Kante), große Blasen mittig dazu.
-    val centerYLand = shortDp / 2f + (if (rot == 1) -s.offsetX else s.offsetX)
+    val centerYLand = shortDp / 2f + s.landShift
     val bigTopLand = (centerYLand - targetH / 2f).coerceIn(6f, maxOf(6f, shortDp - targetH - 6f))
     val topBaseTarget = if (land) (if (growing) bigTopLand else (centerYLand - targetH / 2f).coerceIn(6f, maxOf(6f, shortDp - targetH - 6f)))
         else ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
@@ -644,7 +645,7 @@ internal fun IslandHostBody() {
     val span = if (dir != 0) screenW.toFloat() else minOf(rowBig + 2f * WINDOW_MARGIN, screenW.toFloat())
     val sw = screenW.toFloat()
     // Querformat: Abstand der kleinen Pille zum Rand = der Vertikal-Wert (wie oben am Rand im Hochformat), weich animiert.
-    val edgeTarget = if (land) (if (vert) s.offsetY.toFloat() else 8f) else 0f
+    val edgeTarget = if (land) (if (vert) s.landEdge.toFloat() else 8f) else 0f
     val edge by animateFloatAsState(edgeTarget, spring(dampingRatio = 0.85f, stiffness = 380f), label = "edge")
     val anchor = if (land) (if (rot == 1) edge else sw - edge) else s.anchorDp(sw)
     // Linke Fensterkante in dp: bei einseitigem Aufgehen hängt die Pille an der festen Kante (Kamera-Seite).
