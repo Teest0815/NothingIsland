@@ -443,7 +443,7 @@ internal fun IslandHostBody() {
     val longDp = maxOf(dmNow.widthPixels, dmNow.heightPixels) / dmNow.density
     val shortDp = minOf(dmNow.widthPixels, dmNow.heightPixels) / dmNow.density
     val screenW = (if (land) longDp else shortDp).toInt()
-    val capH: (Float) -> Float = { h -> if (land) minOf(h * s.landBigH, shortDp - 12f) else h }
+    val capH: (Float) -> Float = { h -> if (land) landCapH(s, shortDp, h * s.landBigH) else h }
     val limit = minOf(s.maxWidth.toFloat(), screenW - 8f)
     val landK = if (land) s.landBigScale else 1f
     val bsc = sc * s.expandedScale * landK // Skalierung von Text und Symbolen der aufgeklappten Pille
@@ -806,7 +806,7 @@ internal fun IslandHostBody() {
                         transformOrigin = TransformOrigin(0.5f, 0f)
                     }
                     // Zieht sich beim Ziehen leicht in die Länge.
-                    if (pullY > 0f) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
+                    if (pullY > 0f && !land) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
                     alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f) * wakeFade.value * rotFade.value *
                         (if (stackBehind > 0) 1f - leave.value.coerceAtLeast(0f).let { it * it } else 1f)
                 }

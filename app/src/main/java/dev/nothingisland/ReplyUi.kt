@@ -58,9 +58,15 @@ import androidx.compose.ui.unit.sp
 internal fun landReplyH(s: IslandSettings, note: Boolean, shortDp: Float): Float {
     val fsc = s.scale * minOf(s.expandedScale, s.expandedFrameMax) * s.landBigScale
     val sc = s.scale * s.expandedScale * s.landBigScale
-    val cap = shortDp - 12f
-    return if (note) minOf(320f * fsc * s.landBigH, cap)
-    else minOf(minOf(BASE_ALERT_TALL_H * fsc * s.landBigH, cap) + 96f * sc, cap)
+    return if (note) landCapH(s, shortDp, 320f * fsc * s.landBigH)
+    else landCapH(s, shortDp, landCapH(s, shortDp, BASE_ALERT_TALL_H * fsc * s.landBigH) + 96f * sc)
+}
+
+/** Höchste Höhe, die noch symmetrisch um die (verschobene) Kamera-Mitte passt: so bleibt die Bubble immer mittig. */
+internal fun landCapH(s: IslandSettings, shortDp: Float, h: Float): Float {
+    val cy = shortDp / 2f + s.landShift
+    val half = minOf(cy, shortDp - cy) - 6f
+    return minOf(h, 2f * half).coerceAtLeast(60f)
 }
 
 /** Antwort-Leiste direkt in der Island: Texteingabe an der Stelle der aufgeklappten Pille. */
@@ -289,7 +295,7 @@ fun ReplyBar() {
         return
     }
     var expanded by remember(e.id) { mutableStateOf(false) }
-    val alertH = if (land) minOf(BASE_ALERT_TALL_H * fsc * st.landBigH, shortDpR - 12f) else 84f * fsc
+    val alertH = if (land) landCapH(st, shortDpR, BASE_ALERT_TALL_H * fsc * st.landBigH) else 84f * fsc
     val fullH = if (land) landReplyH(st, false, shortDpR) else alertH + 62f * sc
     val h by animateDpAsState(
         targetValue = (if (expanded) fullH else alertH).dp,

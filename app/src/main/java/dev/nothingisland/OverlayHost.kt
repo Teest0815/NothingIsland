@@ -366,6 +366,7 @@ class OverlayHost(
             }
             setContent { ReplyBar() }
         }
+        var imeReposition: ((Int) -> Unit)? = null
         if (IslandBus.replyTarget.value?.noteSink != null) {
             // Unsichtbare Fläche hinter dem Notiz-Fenster (nur über der Tastatur): Tippen darauf schließt die Notiz.
             val sv = View(context)
@@ -387,6 +388,7 @@ class OverlayHost(
                 view.setOnApplyWindowInsetsListener { v, insets ->
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                         val ime = insets.getInsets(android.view.WindowInsets.Type.ime()).bottom
+                        imeReposition?.invoke(ime)
                         val hh = if (ime > 0) dm.heightPixels - ime else dm.heightPixels
                         if (slp.height != hh) {
                             slp.height = hh
@@ -434,6 +436,23 @@ class OverlayHost(
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            }
+        }
+        if (landR) {
+            // Querformat: Tastatur ist hoch. Der Rahmen rutscht so weit nach oben, dass Eingabefeld und Knopf frei bleiben.
+            val y0 = lp.y
+            imeReposition = { ime ->
+                val newY = if (ime > 0) minOf(y0, dm.heightPixels - ime - lp.height - (4f * d).toInt()) else y0
+                if (lp.y != newY) {
+                    lp.y = newY
+                    runCatching { wm.updateViewLayout(view, lp) }
+                }
+            }
+            if (!isNote && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                view.setOnApplyWindowInsetsListener { v, insets ->
+                    imeReposition?.invoke(insets.getInsets(android.view.WindowInsets.Type.ime()).bottom)
+                    v.onApplyWindowInsets(insets)
+                }
             }
         }
         if (runCatching { wm.addView(view, lp) }.isSuccess) {
