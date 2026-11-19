@@ -331,7 +331,7 @@ internal fun IslandHostBody() {
         if (pendingList.isNotEmpty()) {
             // Nur diese Karte geht weg (schrumpft nach oben), die nächste rückt nach vorn.
             try {
-                leave.animateTo(1f, androidx.compose.animation.core.keyframes<Float> { durationMillis = 190; 0f at 0; 1f at 190 using FastOutSlowInEasing })
+                leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f))
                 IslandBus.dismiss()
             } finally {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { leave.snapTo(0f) }
@@ -532,11 +532,11 @@ internal fun IslandHostBody() {
     val slow = (1f / bigK).coerceIn(0.5f, 1f)
     val calm = (bigK - 1f).coerceIn(0f, 0.6f) * 0.15f
     val widthSpec = spring<Dp>(
-        dampingRatio = (if (growing) 0.6f else 0.88f) + calm * 0.3f,
+        dampingRatio = (if (growing) (if (mode == Mode.ALERT && !land) 0.74f else 0.6f) else 0.88f) + calm * 0.3f,
         stiffness = (if (growing) 400f else 600f) * slow,
     )
     val heightSpec = spring<Dp>(
-        dampingRatio = (if (growing) 0.64f else 0.92f) + calm * 0.3f,
+        dampingRatio = (if (growing) (if (mode == Mode.ALERT && !land) 0.78f else 0.64f) else 0.92f) + calm * 0.3f,
         stiffness = (if (growing) 520f else 680f) * slow,
     )
     // Squash-Eintritt: Pille zieht sich kurz zusammen, federt dann etwas breiter und setzt sich.
@@ -903,7 +903,7 @@ internal fun IslandHostBody() {
                                     // die nächste bleibt vorn.
                                     stackHold = true
                                     launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(190, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
-                                    leave.animateTo(1f, androidx.compose.animation.core.keyframes<Float> { durationMillis = 190; 0f at 0; 1f at 190 using FastOutSlowInEasing })
+                                    leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f))
                                     IslandBus.dismiss()
                                     pullY = 0f
                                     leave.snapTo(0f)
@@ -1231,7 +1231,7 @@ internal fun IslandHostBody() {
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                             suppressLinger = true
                             if (pendingList.isNotEmpty()) swipeScope.launch {
-                                leave.animateTo(1f, androidx.compose.animation.core.keyframes<Float> { durationMillis = 200; 0f at 0; -0.06f at 40 using FastOutSlowInEasing; 1f at 200 using FastOutSlowInEasing })
+                                leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f))
                                 IslandBus.dismiss()
                                 leave.snapTo(0f)
                             } else IslandBus.dismiss()
@@ -1880,12 +1880,12 @@ private fun TopAlertBubble(
                 launch { shift.snapTo(1f); shift.animateTo(0f, spring(dampingRatio = 0.78f, stiffness = 420f)) }
             } else if (replace) {
                 // Neue Meldung fällt von oben auf den Stapel, die bisherige rutscht dahinter.
-                launch { drop.snapTo(with(dens) { -46.dp.toPx() }); drop.animateTo(0f, spring(dampingRatio = 0.58f, stiffness = 380f)) }
+                launch { drop.snapTo(with(dens) { -56.dp.toPx() }); drop.animateTo(0f, spring(dampingRatio = 0.42f, stiffness = 380f)) }
                 launch { shift.snapTo(-1f); shift.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = 300f)) }
                 p.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 520f))
             } else {
                 // Erscheint erst kleiner und federt dann auf die volle Größe.
-                launch { pop.snapTo(0.62f); pop.animateTo(1f, spring(dampingRatio = 0.42f, stiffness = 460f)) }
+                launch { pop.snapTo(0.5f); pop.animateTo(1f, spring(dampingRatio = 0.3f, stiffness = 420f)) }
                 p.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 560f))
             }
         } else {
@@ -1945,7 +1945,7 @@ private fun TopAlertBubble(
                     transformOrigin = TransformOrigin(0.5f, 0f)
                     translationY = -(1f - k) * (h + 24f) * density * 0.5f + pull.value + drop.value
                     translationX = swipe.value
-                    val landing = 1f - 0.07f * (abs(drop.value) / (46f * density)).coerceIn(0f, 1f)
+                    val landing = 1f - 0.07f * (abs(drop.value) / (56f * density)).coerceIn(0f, 1f)
                     val fi = front.value
                     translationY += fi * 8f * density
                     val sk = pop.value * (0.9f + 0.1f * k.coerceAtMost(1f)) * landing * (1f - 0.05f * fi)
