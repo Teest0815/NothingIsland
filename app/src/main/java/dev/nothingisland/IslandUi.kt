@@ -643,7 +643,10 @@ internal fun IslandHostBody() {
     val dir = if (land) (if (rot == 1) 2 else 1) else s.expandDir
     val span = if (dir != 0) screenW.toFloat() else minOf(rowBig + 2f * WINDOW_MARGIN, screenW.toFloat())
     val sw = screenW.toFloat()
-    val anchor = if (land) (if (rot == 1) 0f else sw) else s.anchorDp(sw)
+    // Querformat: Abstand der kleinen Pille zum Rand = der Vertikal-Wert (wie oben am Rand im Hochformat), weich animiert.
+    val edgeTarget = if (land) (if (vert) s.offsetY.toFloat() else 8f) else 0f
+    val edge by animateFloatAsState(edgeTarget, spring(dampingRatio = 0.85f, stiffness = 380f), label = "edge")
+    val anchor = if (land) (if (rot == 1) edge else sw - edge) else s.anchorDp(sw)
     // Linke Fensterkante in dp: bei einseitigem Aufgehen hängt die Pille an der festen Kante (Kamera-Seite).
     val winLeft = when (dir) {
         1 -> (anchor - span).coerceIn(0f, maxOf(0f, sw - span))
@@ -1577,7 +1580,7 @@ internal fun VText(
     weight: FontWeight = FontWeight.Normal,
 ) {
     androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
-        val lineH = with(androidx.compose.ui.platform.LocalDensity.current) { size.toDp() } * 1.18f
+        val lineH = with(androidx.compose.ui.platform.LocalDensity.current) { size.toDp() } * 0.98f
         val n = (maxHeight / lineH).toInt().coerceAtLeast(1)
         val cps = text.trim().codePoints().toArray().map { String(Character.toChars(it)) }
         val shown = if (cps.size > n) cps.take(maxOf(n - 1, 0)) + "\u2026" else cps
