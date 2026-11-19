@@ -537,18 +537,7 @@ internal fun IslandHostBody() {
             squashBounce = false
         }
     }
-    // Meldung oben in der Mitte (Querformat): erscheint dort direkt und rutscht von oben ein, fliegt nicht quer über den Bildschirm.
-    var topPrev by remember { mutableStateOf(topAlert) }
-    val topFx = remember { Animatable(1f) }
-    val topSnap = topPrev != topAlert
-    LaunchedEffect(topAlert) {
-        if (topPrev != topAlert) {
-            topFx.snapTo(0f)
-            topPrev = topAlert
-            topFx.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 380f))
-        }
-    }
-    val snapAll = snapNext || rotSnap || topSnap
+    val snapAll = snapNext || rotSnap
     val holding = squashHold && !snapAll
     val widthTarget = if (holding) targetW * 0.82f else targetW
     val width by animateDpAsState(
@@ -799,11 +788,11 @@ internal fun IslandHostBody() {
         Box(
             modifier = Modifier
                 .graphicsLayer {
-                    val pop = (0.6f + 0.4f * appear.value) * (if (land && (topAlert || topSnap || topFx.value < 1f)) 0.9f + 0.1f * (if (topSnap) 0f else topFx.value.coerceIn(0f, 1f)) else 1f)
+                    val pop = 0.6f + 0.4f * appear.value
                     scaleX = pressScale * pop * bump.value.coerceAtMost(1.05f) * wakeScale.value
                     scaleY = pressScale * pop * bump.value.coerceAtMost(1.05f) * wakeScale.value
                     translationX = (if (vert) 0f else swipeX.value + stretchPx / 2f) + (if (vert) outSgn * pullY else 0f)
-                    translationY = (if (vert) swipeX.value + stretchPx / 2f else pullY) + dropY.value - (if (topAlert) (1f - topFx.value) * 40.dp.toPx() else 0f)
+                    translationY = (if (vert) swipeX.value + stretchPx / 2f else pullY) + dropY.value
                     if (rubber != 0f) {
                         // Zieht sich etwas in die Höhe und wird schmaler.
                         if (vert) {
@@ -831,7 +820,7 @@ internal fun IslandHostBody() {
                     // Zieht sich beim Ziehen leicht in die Länge.
                     if (pullY > 0f && vert) scaleX *= 1f + (pullY / size.width.coerceAtLeast(1f)) * 0.35f
                     else if (pullY > 0f && !land) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
-                    alpha = (1f - abs(swipeX.value) / ((if (vert) size.height else size.width) * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f) * wakeFade.value * rotFade.value * (if (topSnap) 0f else topFx.value.coerceIn(0f, 1f)) *
+                    alpha = (1f - abs(swipeX.value) / ((if (vert) size.height else size.width) * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f) * wakeFade.value * rotFade.value *
                         (if (stackBehind > 0) 1f - leave.value.coerceAtLeast(0f).let { it * it } else 1f)
                 }
                 .layout { m, _ ->
