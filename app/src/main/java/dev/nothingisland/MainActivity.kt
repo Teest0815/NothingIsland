@@ -597,7 +597,7 @@ class MainActivity : ComponentActivity() {
             ToggleRow("Musik, Timer & Co. dauerhaft anzeigen", s.showOngoing) { c -> edit { it.copy(showOngoing = c) } }
             ToggleRow("Auf dem Sperrbildschirm antippbar", s.lockTouch) { c -> edit { it.copy(lockTouch = c) } }
             ToggleRow("Bei Vollbild ausblenden (Video, Spiele)", s.hideFullscreen) { c -> edit { it.copy(hideFullscreen = c) } }
-            ToggleRow("Im Querformat ausblenden (aus: Island dreht sich und bleibt an der Kamera)", s.hideLandscape) { c -> edit { it.copy(hideLandscape = c) } }
+            ToggleRow("Im Querformat ausblenden (aus: Island bleibt an der Kamera-Seite)", s.hideLandscape) { c -> edit { it.copy(hideLandscape = c) } }
             SettingSlider("Neue Meldung sichtbar für", "${s.alertSeconds} s", s.alertSeconds.toFloat(), 2f..15f) { v -> edit { it.copy(alertSeconds = v.roundToInt()) } }
         }
 

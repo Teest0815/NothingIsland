@@ -478,18 +478,11 @@ class OverlayHost(
             nw = (size.first * d).toInt().coerceAtLeast(1)
             nh = (size.second * d).toInt().coerceAtLeast(1)
         } else {
-            // Gedreht: die Island hängt mit ihrer Oberkante an der Kamera-Seite; Breite und Höhe tauschen die Achsen.
-            val shortDp = minOf(dm.widthPixels, dm.heightPixels) / d
-            val longDp = maxOf(dm.widthPixels, dm.heightPixels) / d
-            nw = (size.second * d).toInt().coerceAtLeast(1)
-            nh = (size.first * d).toInt().coerceAtLeast(1)
-            if (rot == 1) {
-                p.x = (s.windowTop * d).toInt()
-                p.y = ((shortDp - size.third - size.first) * d).toInt()
-            } else {
-                p.x = ((longDp - s.windowTop - size.second) * d).toInt()
-                p.y = (size.third * d).toInt()
-            }
+            // Querformat: festes Fenster über dem ganzen Bildschirm (kein Umbauen, kein Hin- und Herspringen).
+            p.x = 0
+            p.y = 0
+            nw = maxOf(dm.widthPixels, dm.heightPixels)
+            nh = minOf(dm.widthPixels, dm.heightPixels)
         }
         val changed = p.width != nw || p.height != nh || p.x != lastAx || p.y != lastAy
         p.width = nw
@@ -503,23 +496,10 @@ class OverlayHost(
         val tp = touchParams
         val tv = touchView
         if (tp != null && tv != null) {
-            if (!land) {
-                tp.x = p.x + (r[0] * d).toInt()
-                tp.y = p.y + (r[1] * d).toInt()
-                tp.width = (r[2] * d).toInt().coerceAtLeast(1)
-                tp.height = (r[3] * d).toInt().coerceAtLeast(1)
-            } else {
-                // Rechteck der Island (Hochformat-Koordinaten) in Bildschirmkoordinaten umrechnen.
-                if (rot == 1) {
-                    tp.x = p.x + (r[1] * d).toInt()
-                    tp.y = p.y + ((size.first - (r[0] + r[2])) * d).toInt()
-                } else {
-                    tp.x = p.x + ((size.second - (r[1] + r[3])) * d).toInt()
-                    tp.y = p.y + (r[0] * d).toInt()
-                }
-                tp.width = (r[3] * d).toInt().coerceAtLeast(1)
-                tp.height = (r[2] * d).toInt().coerceAtLeast(1)
-            }
+            tp.x = p.x + (r[0] * d).toInt()
+            tp.y = p.y + (r[1] * d).toInt()
+            tp.width = (r[2] * d).toInt().coerceAtLeast(1)
+            tp.height = (r[3] * d).toInt().coerceAtLeast(1)
             runCatching { windowManager?.updateViewLayout(tv, tp) }
         }
     }

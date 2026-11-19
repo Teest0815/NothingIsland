@@ -419,11 +419,14 @@ internal fun IslandHostBody() {
     }
     val sc = s.scale
     val gap = s.cameraGap.toFloat()
-    // Breite in Hochformat-Richtung (kurze Seite): im Querformat wird die ganze Island gedreht, ihre Breite bleibt gleich.
+    // Querformat (Kamera links oder rechts): Die Island bleibt aufrecht und lesbar, hängt aber mit ihrer Kante an der
+    // Kamera-Seite und sitzt in der Höhe der Kamera. Das Fenster ist dann fest (ganzer Bildschirm), es wird nie umgebaut.
     val dmNow = androidx.compose.ui.platform.LocalContext.current.resources.displayMetrics
-    val screenW = (minOf(dmNow.widthPixels, dmNow.heightPixels) / dmNow.density).toInt()
     val rot by IslandBus.rotation.collectAsState()
     val land = rot == 1 || rot == 3
+    val longDp = maxOf(dmNow.widthPixels, dmNow.heightPixels) / dmNow.density
+    val shortDp = minOf(dmNow.widthPixels, dmNow.heightPixels) / dmNow.density
+    val screenW = (if (land) longDp else shortDp).toInt()
     val limit = minOf(s.maxWidth.toFloat(), screenW - 8f)
     val bsc = sc * s.expandedScale // Skalierung von Text und Symbolen der aufgeklappten Pille
     val fsc = sc * minOf(s.expandedScale, s.expandedFrameMax) // Rahmen wächst nur bis zum Limit
@@ -535,8 +538,13 @@ internal fun IslandHostBody() {
         label = "press",
     )
     // Große Pille kann auf anderer Höhe sitzen als die kleine: Abstand im Layout, weich animiert.
+    // Querformat: Höhe der Kamera am Rand (Horizontal-Wert verschiebt entlang der Kante), große Blasen mittig dazu.
+    val centerYLand = shortDp / 2f + (if (rot == 1) -s.offsetX else s.offsetX)
+    val bigTopLand = (centerYLand - targetH / 2f).coerceIn(6f, maxOf(6f, shortDp - targetH - 6f))
+    val topBaseTarget = if (land) (if (growing) bigTopLand else centerYLand - smallH / 2f)
+        else ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
     val topPad by animateDpAsState(
-        ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).dp,
+        topBaseTarget.dp,
         if (snapNext) snap<Dp>() else spring<Dp>(dampingRatio = 0.8f, stiffness = 380f),
         label = "top",
     )
@@ -627,10 +635,10 @@ internal fun IslandHostBody() {
     // Das sichtbare Fenster hat immer dieselbe Breite (kein seitlicher Versatz beim Auf- und Zuklappen)
     // und nimmt selbst keine Touches an. Ein unsichtbares, passgenaues Touch-Fenster reicht sie durch.
     val rowBig = maxOf(bigW, compactW, messageW) + 2f * slotMax
-    val dir = s.expandDir
+    val dir = if (land) (if (rot == 1) 2 else 1) else s.expandDir
     val span = if (dir != 0) screenW.toFloat() else minOf(rowBig + 2f * WINDOW_MARGIN, screenW.toFloat())
     val sw = screenW.toFloat()
-    val anchor = s.anchorDp(sw)
+    val anchor = if (land) (if (rot == 1) 0f else sw) else s.anchorDp(sw)
     // Linke Fensterkante in dp: bei einseitigem Aufgehen hängt die Pille an der festen Kante (Kamera-Seite).
     val winLeft = when (dir) {
         1 -> (anchor - span).coerceIn(0f, maxOf(0f, sw - span))
@@ -638,7 +646,7 @@ internal fun IslandHostBody() {
         else -> sw / 2f + s.offsetX - span / 2f
     }
     val slotTarget = if (circleItem != null) slotMax else 0f
-    val topTarget = ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
+    val topTarget = topBaseTarget
     // Beim Herunterziehen einer Meldung braucht das Fenster Platz nach unten, sonst wird sie abgeschnitten.
     val winH = topTarget + targetH + WINDOW_MARGIN + (if (canPullRead) 40f else 0f) + (if (mode == Mode.ALERT && s.multiNotif && pendingList.isNotEmpty()) stackOffDp * stackBehind + 6f else 0f)
     LaunchedEffect(winH, span, winLeft) {
@@ -660,12 +668,12 @@ internal fun IslandHostBody() {
     // Einseitig: große Blasen sind in der Bildschirmmitte (der Horizontal-Wert gilt nur für die kleine Pille).
     val centerX = if (dir == 0) sw / 2f + s.offsetX else sw / 2f
     val rowLeftScreen = when {
-        bigMode && !s.bigFromCamera -> (centerX - rowW / 2f).coerceIn(4f, maxOf(4f, sw - 4f - rowW))
+        bigMode && !s.bigFromCamera && !land -> (centerX - rowW / 2f).coerceIn(4f, maxOf(4f, sw - 4f - rowW))
         dir == 1 -> (anchor - rowW).coerceIn(4f, maxOf(4f, sw - 4f - rowW))
         dir == 2 -> anchor.coerceIn(4f, maxOf(4f, sw - 4f - rowW))
         else -> 0f
     }
-    val bigMix by animateFloatAsState(if (bigMode && !s.bigFromCamera) 1f else 0f, spring(dampingRatio = 0.85f, stiffness = 380f), label = "bigMix")
+    val bigMix by animateFloatAsState(if (bigMode && !s.bigFromCamera && !land) 1f else 0f, spring(dampingRatio = 0.85f, stiffness = 380f), label = "bigMix")
     SideEffect {
         if (noteReplyHidden) IslandBus.setTouchRect(0f, 0f, 1f, 1f)
         else IslandBus.setTouchRect(
@@ -675,16 +683,8 @@ internal fun IslandHostBody() {
     }
     val shape = RoundedCornerShape(corner)
 
-    // Querformat: Die Island hängt an der Kamera-Seite (links oder rechts) und ist mit dem Gerät gedreht.
-    val ghDp = maxOf(winH, reported.second)
-    Box(
-        Modifier.fillMaxSize().graphicsLayer { alpha = if (noteReplyHidden) 0f else 1f }
-            .then(if (land) Modifier else Modifier.wrapContentSize(Alignment.TopStart, unbounded = true)),
-        contentAlignment = if (land) Alignment.Center else Alignment.TopStart,
-    ) {
-    Box(
-        if (land) Modifier.requiredSize(span.dp, ghDp.dp).graphicsLayer { rotationZ = if (rot == 1) -90f else 90f } else Modifier,
-    ) {
+    Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (noteReplyHidden) 0f else 1f }
+    .wrapContentSize(Alignment.TopStart, unbounded = true)) {
     Box(
         Modifier.width(span.dp),
         contentAlignment = Alignment.TopCenter,
@@ -1188,7 +1188,6 @@ internal fun IslandHostBody() {
                 }
             }
         }
-    }
     }
     }
     }
