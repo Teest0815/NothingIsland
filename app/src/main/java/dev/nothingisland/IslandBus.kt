@@ -182,6 +182,7 @@ data class IslandSettings(
     val landEdge: Int = 4,
     val landBigW: Int = 200,
     val landBigScale: Float = 1f,
+    val landBigH: Float = 1f,
     /** Leuchten um die Island. */
     val glow: Boolean = true,
     val glowStrength: Float = 0.7f,
@@ -639,6 +640,7 @@ object IslandBus {
             landEdge = p.getInt("landEdge", d.landEdge),
             landBigW = p.getInt("landBigW3", d.landBigW),
             landBigScale = p.getFloat("landBigScale", d.landBigScale),
+            landBigH = p.getFloat("landBigH", d.landBigH),
             glow = p.getBoolean("glow", d.glow),
             glowStrength = p.getFloat("glowStrength", d.glowStrength),
             glowSize = p.getInt("glowSize", d.glowSize),
@@ -724,6 +726,7 @@ object IslandBus {
             .putInt("landEdge", s.landEdge)
             .putInt("landBigW3", s.landBigW)
             .putFloat("landBigScale", s.landBigScale)
+            .putFloat("landBigH", s.landBigH)
             .putBoolean("glow", s.glow)
             .putFloat("glowStrength", s.glowStrength)
             .putInt("glowSize", s.glowSize)

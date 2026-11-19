@@ -558,6 +558,10 @@ class MainActivity : ComponentActivity() {
                 edit { it.copy(landBigW = v.roundToInt()) }
                 IslandBus.post(previewAlert())
             }
+            SettingSlider("Höhe der großen Bubbles", "${(s.landBigH * 100).roundToInt()} %", s.landBigH, 0.6f..1.8f) { v ->
+                edit { it.copy(landBigH = (v * 20f).roundToInt() / 20f) }
+                IslandBus.post(previewAlert())
+            }
             SettingSlider("Größe der großen Bubbles", "${(s.landBigScale * 100).roundToInt()} %", s.landBigScale, 0.6f..1.5f) { v ->
                 edit { it.copy(landBigScale = (v * 20f).roundToInt() / 20f) }
                 IslandBus.post(previewAlert())

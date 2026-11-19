@@ -428,10 +428,22 @@ internal fun IslandHostBody() {
     val dmNow = androidx.compose.ui.platform.LocalContext.current.resources.displayMetrics
     val rot by IslandBus.rotation.collectAsState()
     val land = rot == 1 || rot == 3
+    // Drehen: kurz ausblenden, Größen und Position sofort umschalten (ohne Federn), dann weich einblenden.
+    var rotShown by remember { mutableIntStateOf(rot) }
+    val rotFade = remember { Animatable(1f) }
+    val rotSnap = rotShown != rot
+    LaunchedEffect(rot) {
+        if (rotShown != rot) {
+            rotFade.snapTo(0f)
+            delay(140)
+            rotShown = rot
+            rotFade.animateTo(1f, tween(260))
+        }
+    }
     val longDp = maxOf(dmNow.widthPixels, dmNow.heightPixels) / dmNow.density
     val shortDp = minOf(dmNow.widthPixels, dmNow.heightPixels) / dmNow.density
     val screenW = (if (land) longDp else shortDp).toInt()
-    val capH: (Float) -> Float = { h -> if (land) minOf(h, shortDp - 12f) else h }
+    val capH: (Float) -> Float = { h -> if (land) minOf(h * s.landBigH, shortDp - 12f) else h }
     val limit = minOf(s.maxWidth.toFloat(), screenW - 8f)
     val landK = if (land) s.landBigScale else 1f
     val bsc = sc * s.expandedScale * landK // Skalierung von Text und Symbolen der aufgeklappten Pille
@@ -520,20 +532,21 @@ internal fun IslandHostBody() {
             squashBounce = false
         }
     }
-    val holding = squashHold && !snapNext
+    val snapAll = snapNext || rotSnap
+    val holding = squashHold && !snapAll
     val widthTarget = if (holding) targetW * 0.82f else targetW
     val width by animateDpAsState(
         widthTarget.dp,
         when {
-            snapNext -> snap<Dp>()
+            snapAll -> snap<Dp>()
             holding -> tween(110, easing = FastOutSlowInEasing)
             squashBounce -> spring(dampingRatio = 0.48f, stiffness = 430f)
             else -> widthSpec
         },
         label = "w",
     )
-    val height by animateDpAsState(targetH.dp, if (snapNext) snap<Dp>() else heightSpec, label = "h")
-    val corner by animateDpAsState(targetCorner.dp, if (snapNext) snap<Dp>() else motion, label = "c")
+    val height by animateDpAsState(targetH.dp, if (snapAll) snap<Dp>() else heightSpec, label = "h")
+    val corner by animateDpAsState(targetCorner.dp, if (snapAll) snap<Dp>() else motion, label = "c")
     // Gleich großer freier Platz links und rechts, damit die Pille mittig (über der Kamera) bleibt.
     val slot by animateDpAsState(
         if (circleItem != null) (smallH + 6f * sc).dp else 0.dp,
@@ -561,7 +574,7 @@ internal fun IslandHostBody() {
         else ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
     val topPadAnim by animateDpAsState(
         topBaseTarget.dp,
-        if (snapNext) snap<Dp>() else spring<Dp>(dampingRatio = 0.8f, stiffness = 380f),
+        if (snapAll) snap<Dp>() else spring<Dp>(dampingRatio = 0.8f, stiffness = 380f),
         label = "top",
     )
     // Querformat: immer aus der aktuellen (animierten) Höhe mittig zur Kamera, damit beim Wachsen/Schließen nichts verrutscht.
@@ -658,7 +671,7 @@ internal fun IslandHostBody() {
     val sw = screenW.toFloat()
     // Querformat: Abstand der kleinen Pille zum Rand = der Vertikal-Wert (wie oben am Rand im Hochformat), weich animiert.
     val edgeTarget = if (land) (if (vert) s.landEdge.toFloat() else 8f) else 0f
-    val edge by animateFloatAsState(edgeTarget, spring(dampingRatio = 0.85f, stiffness = 380f), label = "edge")
+    val edge by animateFloatAsState(edgeTarget, if (rotSnap) snap() else spring(dampingRatio = 0.85f, stiffness = 380f), label = "edge")
     val anchor = if (land) (if (rot == 1) edge else sw - edge) else s.anchorDp(sw)
     // Linke Fensterkante in dp: bei einseitigem Aufgehen hängt die Pille an der festen Kante (Kamera-Seite).
     val winLeft = when (dir) {
@@ -794,7 +807,7 @@ internal fun IslandHostBody() {
                     }
                     // Zieht sich beim Ziehen leicht in die Länge.
                     if (pullY > 0f) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
-                    alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f) * wakeFade.value *
+                    alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f) * wakeFade.value * rotFade.value *
                         (if (stackBehind > 0) 1f - leave.value.coerceAtLeast(0f).let { it * it } else 1f)
                 }
                 .layout { m, _ ->
