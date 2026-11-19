@@ -475,6 +475,8 @@ internal fun IslandHostBody() {
 
     // Querformat: kleine Pille steht senkrecht am Rand (Dicke = Höhe, Länge = Breite).
     val vert = land && (mode == Mode.IDLE || mode == Mode.COMPACT || mode == Mode.MESSAGE)
+    // Querformat: "nach unten" der kleinen Pille ist vom Kamera-Rand weg (nach innen).
+    val outSgn = if (rot == 1) 1f else -1f
     val smallLen = when (mode) { Mode.IDLE -> idleW; Mode.COMPACT -> compactW; Mode.MESSAGE -> messageW; else -> 0f }
     val targetW = if (vert) smallH else when (mode) {
         Mode.IDLE -> idleW
@@ -535,7 +537,18 @@ internal fun IslandHostBody() {
             squashBounce = false
         }
     }
-    val snapAll = snapNext || rotSnap
+    // Meldung oben in der Mitte (Querformat): erscheint dort direkt und rutscht von oben ein, fliegt nicht quer über den Bildschirm.
+    var topPrev by remember { mutableStateOf(topAlert) }
+    val topFx = remember { Animatable(1f) }
+    val topSnap = topPrev != topAlert
+    LaunchedEffect(topAlert) {
+        if (topPrev != topAlert) {
+            topFx.snapTo(0f)
+            topPrev = topAlert
+            topFx.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 380f))
+        }
+    }
+    val snapAll = snapNext || rotSnap || topSnap
     val holding = squashHold && !snapAll
     val widthTarget = if (holding) targetW * 0.82f else targetW
     val width by animateDpAsState(
@@ -612,7 +625,7 @@ internal fun IslandHostBody() {
     val canMute = s.muteOnSwipeUp && (mode == Mode.ALERT || mode == Mode.MESSAGE) &&
         (if (mode == Mode.ALERT) (alert ?: lastAlert) else lingering)?.let { it.kind == Kind.OTHER && it.pkg.isNotEmpty() } == true
     LaunchedEffect(canPullRead, canMute) { if (!canPullRead && !canMute) pullY = 0f }
-    val canSkip = mode == Mode.COMPACT && s.swipeSkip && current?.kind == Kind.MEDIA && current.media != null
+    val canSkip = !vert && mode == Mode.COMPACT && s.swipeSkip && current?.kind == Kind.MEDIA && current.media != null
     val curForSkip by rememberUpdatedState(current)
     val stackBehind = if (mode == Mode.ALERT && s.multiNotif) minOf(pendingList.size, 3) else 0
     val stackOffDp = 9f - 7f * s.stackCompact
@@ -623,7 +636,7 @@ internal fun IslandHostBody() {
         val pl = pullY / with(dens) { 18.dp.toPx() }
         maxOf(sw, pl, leave.value, if (stackHold) 1f else 0f).coerceIn(0f, 1f)
     }
-    val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || (mode == Mode.QUICK && quickPages.size <= 1)
+    val swipeable = !vert && (mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE) || (mode == Mode.QUICK && quickPages.size <= 1)
     LaunchedEffect(mode) { swipeX.snapTo(0f) }
     val onSwipeAway: () -> Unit = {
         when (mode) {
@@ -789,13 +802,20 @@ internal fun IslandHostBody() {
                     val pop = 0.6f + 0.4f * appear.value
                     scaleX = pressScale * pop * bump.value.coerceAtMost(1.05f) * wakeScale.value
                     scaleY = pressScale * pop * bump.value.coerceAtMost(1.05f) * wakeScale.value
-                    translationX = swipeX.value + stretchPx / 2f
-                    translationY = pullY + dropY.value
+                    translationX = swipeX.value + stretchPx / 2f + (if (vert) outSgn * pullY else 0f)
+                    translationY = (if (vert) 0f else pullY) + dropY.value - (if (topAlert) (1f - topFx.value) * 40.dp.toPx() else 0f)
                     if (rubber != 0f) {
                         // Zieht sich etwas in die Höhe und wird schmaler.
-                        scaleY *= 1f + 0.16f * rubber
-                        scaleX *= 1f - 0.12f * rubber
-                        transformOrigin = TransformOrigin(0.5f, 0f)
+                        if (vert) {
+                            // Querformat: dieselbe Dehnung, nur vom Rand weg (nach innen) statt nach unten.
+                            scaleX *= 1f + 0.16f * rubber
+                            scaleY *= 1f - 0.12f * rubber
+                            transformOrigin = TransformOrigin(if (rot == 1) 0f else 1f, 0.5f)
+                        } else {
+                            scaleY *= 1f + 0.16f * rubber
+                            scaleX *= 1f - 0.12f * rubber
+                            transformOrigin = TransformOrigin(0.5f, 0f)
+                        }
                     }
                     // Gestapelte Karten kippen beim Wischen leicht, fallen mit leichter Schräglage ein.
                     if (stackBehind > 0) {
@@ -809,8 +829,9 @@ internal fun IslandHostBody() {
                         transformOrigin = TransformOrigin(0.5f, 0f)
                     }
                     // Zieht sich beim Ziehen leicht in die Länge.
-                    if (pullY > 0f && (!land || vert)) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
-                    alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f) * wakeFade.value * rotFade.value *
+                    if (pullY > 0f && vert) scaleX *= 1f + (pullY / size.width.coerceAtLeast(1f)) * 0.35f
+                    else if (pullY > 0f && !land) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
+                    alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f) * wakeFade.value * rotFade.value * (if (topSnap) 0f else topFx.value.coerceIn(0f, 1f)) *
                         (if (stackBehind > 0) 1f - leave.value.coerceAtLeast(0f).let { it * it } else 1f)
                 }
                 .layout { m, _ ->
@@ -826,7 +847,7 @@ internal fun IslandHostBody() {
                 .clip(shape)
                 .background(Bg)
                 .border(1.dp, Hairline, shape)
-                .pointerInput(canPullRead, canMute) {
+                .pointerInput(canPullRead, canMute, vert, rot) {
                     if (!canPullRead && !canMute) return@pointerInput
                     val maxPull = 30.dp.toPx()
                     val trigger = 18.dp.toPx()
@@ -882,18 +903,23 @@ internal fun IslandHostBody() {
                             }
                         }
                     }
-                    detectVerticalDragGestures(
+                    val onPull: (androidx.compose.ui.input.pointer.PointerInputChange, Float) -> Unit = { change, dragAmount ->
+                        change.consume()
+                        pullRaw = (pullRaw + dragAmount).coerceIn(if (canMute) -1000f else 0f, if (canPullRead) 1000f else 0f)
+                        // Gummiband in beide Richtungen: nach unten = gelesen, nach oben = stumm; rastet mit einem Tick ein.
+                        pullY = if (pullRaw < 0f) -band(-pullRaw) else band(pullRaw)
+                        val over = abs(pullY) > trigger
+                        if (over && !armed && s.haptics) QuickActions.haptic(ctx, 1)
+                        armed = over
+                    }
+                    if (vert) detectHorizontalDragGestures(
                         onDragEnd = { release() },
                         onDragCancel = { release() },
-                        onVerticalDrag = { change, dragAmount ->
-                            change.consume()
-                            pullRaw = (pullRaw + dragAmount).coerceIn(if (canMute) -1000f else 0f, if (canPullRead) 1000f else 0f)
-                            // Gummiband in beide Richtungen: nach unten = gelesen, nach oben = stumm; rastet mit einem Tick ein.
-                            pullY = if (pullRaw < 0f) -band(-pullRaw) else band(pullRaw)
-                            val over = abs(pullY) > trigger
-                            if (over && !armed && s.haptics) QuickActions.haptic(ctx, 1)
-                            armed = over
-                        },
+                        onHorizontalDrag = { change, a -> onPull(change, a * outSgn) },
+                    ) else detectVerticalDragGestures(
+                        onDragEnd = { release() },
+                        onDragCancel = { release() },
+                        onVerticalDrag = { change, a -> onPull(change, a) },
                     )
                 }
                 .pointerInput(mode, canSkip, stackBehind) {
@@ -982,7 +1008,7 @@ internal fun IslandHostBody() {
                         },
                     )
                 }
-                .pointerInput(mode, s.swipeUpAction, s.swipeDownPause) {
+                .pointerInput(mode, s.swipeUpAction, s.swipeDownPause, vert, rot) {
                     if ((s.swipeUpAction.isEmpty() && !s.swipeDownPause) || (mode != Mode.IDLE && mode != Mode.COMPACT)) return@pointerInput
                     val trigger = 22.dp.toPx()
                     val maxPull = 44.dp.toPx()
@@ -998,9 +1024,7 @@ internal fun IslandHostBody() {
                             rubber = 0f
                         }
                     }
-                    detectVerticalDragGestures(
-                        onDragStart = { total = 0f; armed = false },
-                        onDragEnd = {
+                    val endRub: () -> Unit = {
                             val fire = total > trigger
                             total = 0f
                             snapBack()
@@ -1020,16 +1044,25 @@ internal fun IslandHostBody() {
                                     else runCatching { QuickActions.tile(k)?.click?.invoke(ctx) }
                                 }
                             }
-                        },
+                    }
+                    val onRub: (androidx.compose.ui.input.pointer.PointerInputChange, Float) -> Unit = { change, dragAmount ->
+                        change.consume()
+                        total = (total + dragAmount).coerceAtLeast(0f)
+                        rubber = kotlin.math.tanh(total / (maxPull * 1.4f))
+                        val over = total > trigger
+                        if (over && !armed && s.haptics) QuickActions.haptic(ctx, 1)
+                        armed = over
+                    }
+                    if (vert) detectHorizontalDragGestures(
+                        onDragStart = { total = 0f; armed = false },
+                        onDragEnd = { endRub() },
                         onDragCancel = { total = 0f; snapBack() },
-                        onVerticalDrag = { change, dragAmount ->
-                            change.consume()
-                            total = (total + dragAmount).coerceAtLeast(0f)
-                            rubber = kotlin.math.tanh(total / (maxPull * 1.4f))
-                            val over = total > trigger
-                            if (over && !armed && s.haptics) QuickActions.haptic(ctx, 1)
-                            armed = over
-                        },
+                        onHorizontalDrag = { change, a -> onRub(change, a * outSgn) },
+                    ) else detectVerticalDragGestures(
+                        onDragStart = { total = 0f; armed = false },
+                        onDragEnd = { endRub() },
+                        onDragCancel = { total = 0f; snapBack() },
+                        onVerticalDrag = { change, a -> onRub(change, a) },
                     )
                 }
                 .combinedClickable(
