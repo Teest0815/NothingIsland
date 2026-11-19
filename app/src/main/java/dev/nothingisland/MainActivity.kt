@@ -552,6 +552,7 @@ class MainActivity : ComponentActivity() {
 
         FoldCard("QUERFORMAT", false) {
             Text("Kamera links oder rechts: Die kleine Pille steht senkrecht am Rand, große Bubbles hängen daneben.", color = TextGray, fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp))
+            ToggleRow("Meldungen oben in der Mitte (statt senkrecht am Rand; zeigt sie auch bei \"Im Querformat ausblenden\")", s.landTopAlert) { c -> edit { it.copy(landTopAlert = c) } }
             SettingSlider("Position entlang der Kante (+ = nach unten)", "${s.landShift} dp", s.landShift.toFloat(), -200f..200f) { v -> edit { it.copy(landShift = v.roundToInt()) } }
             SettingSlider("Abstand zum Rand (kleine Pille)", "${s.landEdge} dp", s.landEdge.toFloat(), 0f..60f) { v -> edit { it.copy(landEdge = v.roundToInt()) } }
             SettingSlider("Breite der senkrechten Bubbles", "${s.landBigW} dp", s.landBigW.toFloat(), 120f..320f) { v ->
@@ -1541,6 +1542,7 @@ private fun demoNav(): IslandEvent = IslandEvent(
 )
 
 private fun previewAlert(): IslandEvent = IslandEvent(
+    key = "preview",
     app = "Nothing Island",
     title = "Vorschau",
     text = "So groß ist die aufgeklappte Pille.",

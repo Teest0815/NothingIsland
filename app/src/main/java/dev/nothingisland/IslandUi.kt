@@ -391,7 +391,7 @@ internal fun IslandHostBody() {
     // Beim Antworten zeichnet das eigene Eingabefenster; die Pille tritt zurück.
     val fullscreenNow by IslandBus.fullscreen.collectAsState()
     val landscapeNow = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    val hideNow = ((s.hideFullscreen && fullscreenNow) || (s.hideLandscape && landscapeNow)) &&
+    val hideNow = ((s.hideFullscreen && fullscreenNow) || (s.hideLandscape && landscapeNow && !(s.landTopAlert && alert != null))) &&
         alert?.kind != Kind.CALL && !preview
     if ((mode == Mode.IDLE && !s.idleVisible && !preview) || replying || hideNow) {
         // Das Fenster behält seine Größe (nur die Touch-Fläche schrumpft): Ein Größenwechsel beim Zurückkehren
@@ -451,8 +451,11 @@ internal fun IslandHostBody() {
     // Aufgeklappt gilt nur die eigene Breite (begrenzt durch den Bildschirm), nicht die "Maximale Breite".
     // Querformat: alle großen Ansichten sind senkrechte Rahmen (Inhalt waagerecht lesbar).
     val bigW = minOf((if (land) s.landBigW else s.expandedWidth).toFloat(), screenW - 8f)
-    val alertW = bigW
-    val alertH = if (land) capH(BASE_ALERT_TALL_H * fsc) else BASE_ALERT_H * fsc
+    // Meldung im Querformat: senkrecht am Rand oder (Einstellung) oben in der Mitte wie im Hochformat.
+    val topAlert = land && s.landTopAlert && mode == Mode.ALERT
+    val landTall = land && !topAlert
+    val alertW = if (topAlert) minOf(s.expandedWidth.toFloat(), screenW - 8f) else bigW
+    val alertH = if (landTall) capH(BASE_ALERT_TALL_H * fsc) else BASE_ALERT_H * (fsc / landK)
     val hasActions = current?.actions?.isNotEmpty() == true || (current?.kind == Kind.CALL && current.chronoBase != null)
     val quickKeys = remember(s.quickTiles) {
         s.quickTiles.split(',').mapNotNull { QuickActions.tile(it) }.take(24)
@@ -570,7 +573,7 @@ internal fun IslandHostBody() {
     // Querformat: Höhe der Kamera am Rand (Horizontal-Wert verschiebt entlang der Kante), große Blasen mittig dazu.
     val centerYLand = shortDp / 2f + s.landShift
     val bigTopLand = (centerYLand - targetH / 2f).coerceIn(6f, maxOf(6f, shortDp - targetH - 6f))
-    val topBaseTarget = if (land) (if (growing) bigTopLand else (centerYLand - targetH / 2f).coerceIn(6f, maxOf(6f, shortDp - targetH - 6f)))
+    val topBaseTarget = if (topAlert) 8f else if (land) (if (growing) bigTopLand else (centerYLand - targetH / 2f).coerceIn(6f, maxOf(6f, shortDp - targetH - 6f)))
         else ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
     val topPadAnim by animateDpAsState(
         topBaseTarget.dp,
@@ -578,7 +581,7 @@ internal fun IslandHostBody() {
         label = "top",
     )
     // Querformat: immer aus der aktuellen (animierten) Höhe mittig zur Kamera, damit beim Wachsen/Schließen nichts verrutscht.
-    val topPad = if (land) (centerYLand - height.value / 2f).coerceIn(6f, maxOf(6f, shortDp - height.value - 6f)).dp else topPadAnim
+    val topPad = if (land && !topAlert) (centerYLand - height.value / 2f).coerceIn(6f, maxOf(6f, shortDp - height.value - 6f)).dp else topPadAnim
     // Wischen nach links oder rechts schließt Meldung, aufgeklappte Pille und Nachricht.
     // Neue Inhalte in der kleinen Pille (Taschenlampe, Flugmodus ...) poppen mit Nachfedern auf.
     val bump = remember { Animatable(1f) }
@@ -666,13 +669,13 @@ internal fun IslandHostBody() {
     // Das sichtbare Fenster hat immer dieselbe Breite (kein seitlicher Versatz beim Auf- und Zuklappen)
     // und nimmt selbst keine Touches an. Ein unsichtbares, passgenaues Touch-Fenster reicht sie durch.
     val rowBig = maxOf(bigW, compactW, messageW) + 2f * slotMax
-    val dir = if (land) (if (rot == 1) 2 else 1) else s.expandDir
+    val dir = if (topAlert) 2 else if (land) (if (rot == 1) 2 else 1) else s.expandDir
     val span = if (dir != 0) screenW.toFloat() else minOf(rowBig + 2f * WINDOW_MARGIN, screenW.toFloat())
     val sw = screenW.toFloat()
     // Querformat: Abstand der kleinen Pille zum Rand = der Vertikal-Wert (wie oben am Rand im Hochformat), weich animiert.
     val edgeTarget = if (land) (if (vert) s.landEdge.toFloat() else 8f) else 0f
     val edge by animateFloatAsState(edgeTarget, if (rotSnap) snap() else spring(dampingRatio = 0.85f, stiffness = 380f), label = "edge")
-    val anchor = if (land) (if (rot == 1) edge else sw - edge) else s.anchorDp(sw)
+    val anchor = if (topAlert) (sw - alertW) / 2f else if (land) (if (rot == 1) edge else sw - edge) else s.anchorDp(sw)
     // Linke Fensterkante in dp: bei einseitigem Aufgehen hängt die Pille an der festen Kante (Kamera-Seite).
     val winLeft = when (dir) {
         1 -> (anchor - span).coerceIn(0f, maxOf(0f, sw - span))
@@ -774,7 +777,7 @@ internal fun IslandHostBody() {
                 ) {
                     if (i == 1) {
                         Box(Modifier.graphicsLayer { val d = (1f - stackP() + stackShift.value).coerceIn(0f, 1f); alpha = (1f - d) * (1f - d) }) {
-                            AlertContent(ev, bsc, Modifier.requiredSize(alertW.dp, alertH.dp), tall = land) { }
+                            AlertContent(ev, bsc / landK.coerceAtLeast(0.01f).let { if (topAlert) it else 1f }, Modifier.requiredSize(alertW.dp, alertH.dp), tall = landTall) { }
                         }
                     }
                 }
@@ -806,7 +809,7 @@ internal fun IslandHostBody() {
                         transformOrigin = TransformOrigin(0.5f, 0f)
                     }
                     // Zieht sich beim Ziehen leicht in die Länge.
-                    if (pullY > 0f && !land) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
+                    if (pullY > 0f && (!land || vert)) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
                     alpha = (1f - abs(swipeX.value) / (size.width * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f) * wakeFade.value * rotFade.value *
                         (if (stackBehind > 0) 1f - leave.value.coerceAtLeast(0f).let { it * it } else 1f)
                 }
@@ -1127,7 +1130,7 @@ internal fun IslandHostBody() {
                         else MessageContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(messageW.dp, smallH.dp), s.expandDir)
                     }
                     Mode.ALERT -> (alert ?: lastAlert)?.let {
-                        AlertContent(it, bsc, Modifier.requiredSize(alertW.dp, alertH.dp), if (s.multiNotif) pendingList.size else 0, tall = land, onMarkRead = {
+                        AlertContent(it, bsc / landK.coerceAtLeast(0.01f).let { if (topAlert) it else 1f }, Modifier.requiredSize(alertW.dp, alertH.dp), if (s.multiNotif) pendingList.size else 0, tall = landTall, onMarkRead = {
                             // Als gelesen markieren: Aktion der App auslösen, Meldung verschwindet (nächste kommt nach).
                             it.markRead?.let { pi -> swipeScope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { pi.send() } } }
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)

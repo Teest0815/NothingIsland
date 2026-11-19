@@ -101,7 +101,7 @@ fun ReplyBar() {
     if (reply == null && sink == null) return
     val ctx = LocalContext.current
     val rotNow by IslandBus.rotation.collectAsState()
-    val land = rotNow == 1 || rotNow == 3
+    val land = (rotNow == 1 || rotNow == 3) && !(st.landTopAlert && sink == null)
     val landK = if (land) st.landBigScale else 1f
     val sc = st.scale * st.expandedScale * landK
     val fsc = st.scale * minOf(st.expandedScale, st.expandedFrameMax) * landK

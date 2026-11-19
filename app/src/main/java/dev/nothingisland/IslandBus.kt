@@ -179,6 +179,7 @@ data class IslandSettings(
     /** Bei einseitigem Aufgehen: auch große Blasen wachsen aus der Kamera-Kante statt mittig. */
     val bigFromCamera: Boolean = false,
     val landShift: Int = 0,
+    val landTopAlert: Boolean = false,
     val landEdge: Int = 4,
     val landBigW: Int = 200,
     val landBigScale: Float = 1f,
@@ -637,6 +638,7 @@ object IslandBus {
             showPictures = p.getBoolean("showPictures", d.showPictures),
             bigFromCamera = p.getBoolean("bigFromCamera", d.bigFromCamera),
             landShift = p.getInt("landShift", d.landShift),
+            landTopAlert = p.getBoolean("landTopAlert", d.landTopAlert),
             landEdge = p.getInt("landEdge", d.landEdge),
             landBigW = p.getInt("landBigW3", d.landBigW),
             landBigScale = p.getFloat("landBigScale", d.landBigScale),
@@ -723,6 +725,7 @@ object IslandBus {
             .putBoolean("showPictures", s.showPictures)
             .putBoolean("bigFromCamera", s.bigFromCamera)
             .putInt("landShift", s.landShift)
+            .putBoolean("landTopAlert", s.landTopAlert)
             .putInt("landEdge", s.landEdge)
             .putInt("landBigW3", s.landBigW)
             .putFloat("landBigScale", s.landBigScale)

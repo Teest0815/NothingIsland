@@ -339,7 +339,11 @@ class OverlayHost(
         val d = dm.density
         val s = IslandBus.settings.value
         val rotNow = IslandBus.rotation.value
-        val landR = rotNow == 1 || rotNow == 3
+        val isNote0 = IslandBus.replyTarget.value?.noteSink != null
+        val landAny = rotNow == 1 || rotNow == 3
+        // Meldungen oben in der Mitte (Einstellung): Antwortfenster wie im Hochformat, Notizen bleiben senkrecht.
+        val landTop = landAny && s.landTopAlert && !isNote0
+        val landR = landAny && !landTop
         val bigW = minOf((if (landR) s.landBigW else s.expandedWidth).toFloat(), maxOf(dm.widthPixels, dm.heightPixels) / d - 8f)
         val view = ComposeView(context).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
@@ -416,7 +420,10 @@ class OverlayHost(
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            if (landR) {
+            if (landTop) {
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                x = 0
+            } else if (landR) {
                 // Querformat: senkrechter Rahmen am Kamera-Rand, mittig zur Kamera (wie die Island selbst).
                 gravity = Gravity.TOP or Gravity.START
                 x = (((if (rotNow == 1) 8f else longDpR - 8f - bigW) - 12f) * d).toInt()
@@ -428,7 +435,9 @@ class OverlayHost(
                 gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
                 x = if (s.expandDir == 0) (s.offsetX * d).toInt() else 0
             }
-            y = if (landR) {
+            y = if (landTop) {
+                ((8f - 12f) * d).toInt()
+            } else if (landR) {
                 val cy = shortDpR / 2f + s.landShift
                 (((cy - frameH / 2f).coerceIn(6f, maxOf(6f, shortDpR - frameH - 6f)) - 12f) * d).toInt()
             } else ((s.expandedTop - 12) * d).toInt()
