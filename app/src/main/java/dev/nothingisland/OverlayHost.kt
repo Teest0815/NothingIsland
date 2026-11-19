@@ -77,6 +77,8 @@ class OverlayHost(
     private var lockReceiver: BroadcastReceiver? = null
     private var displayListener: android.hardware.display.DisplayManager.DisplayListener? = null
     private var touchParams: WindowManager.LayoutParams? = null
+    private var touchView2: View? = null
+    private var touchParams2: WindowManager.LayoutParams? = null
     private var lastAx = Int.MIN_VALUE
     private var lastAy = Int.MIN_VALUE
 
@@ -214,6 +216,36 @@ class OverlayHost(
             touchParams = tp
             updateLockState()
         }
+        // Zweites Touch-Fenster für die Meldung oben in der Mitte (Querformat), gleiche Weiterleitung.
+        val tv2 = View(context)
+        tv2.setOnTouchListener { _, ev ->
+            if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE) {
+                false
+            } else {
+                val a = params
+                val b = touchParams2
+                if (a != null && b != null) {
+                    val copy = MotionEvent.obtain(ev)
+                    copy.offsetLocation((b.x - a.x).toFloat(), (b.y - a.y).toFloat())
+                    overlay?.dispatchTouchEvent(copy)
+                    copy.recycle()
+                }
+                true
+            }
+        }
+        val tp2 = WindowManager.LayoutParams(
+            1, 1, windowType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT,
+        ).apply { gravity = Gravity.TOP or Gravity.START }
+        if (runCatching { wm.addView(tv2, tp2) }.isSuccess) {
+            touchView2 = tv2
+            touchParams2 = tp2
+        }
         val pv = View(context)
         val pp = WindowManager.LayoutParams(
             1, 1, windowType,
@@ -292,10 +324,10 @@ class OverlayHost(
         dmgr.registerDisplayListener(dl, android.os.Handler(android.os.Looper.getMainLooper()))
         displayListener = dl
         layoutJob = scope.launch {
-            combine(IslandBus.settings, IslandBus.windowSize, IslandBus.touchRect, IslandBus.rotation) { st, size, r, rot -> arrayOf(st, size, r, rot) }
+            combine(IslandBus.settings, IslandBus.windowSize, IslandBus.touchRect, IslandBus.rotation, IslandBus.touchRect2) { st, size, r, rot, r2 -> arrayOf(st, size, r, rot, r2) }
                 .collect { a ->
                     @Suppress("UNCHECKED_CAST")
-                    applyLayout(a[0] as IslandSettings, a[1] as Triple<Float, Float, Float>, a[2] as FloatArray, a[3] as Int)
+                    applyLayout(a[0] as IslandSettings, a[1] as Triple<Float, Float, Float>, a[2] as FloatArray, a[3] as Int, a[4] as FloatArray)
                 }
         }
         return true
@@ -322,6 +354,9 @@ class OverlayHost(
         touchView?.let { v -> runCatching { windowManager?.removeView(v) } }
         touchView = null
         touchParams = null
+        touchView2?.let { v -> runCatching { windowManager?.removeView(v) } }
+        touchView2 = null
+        touchParams2 = null
         overlay?.let { v -> runCatching { windowManager?.removeView(v) } }
         owner?.stop()
         overlay = null
@@ -505,7 +540,7 @@ class OverlayHost(
         runCatching { windowManager?.updateViewLayout(tv, tp) }
     }
 
-    private fun applyLayout(s: IslandSettings, size: Triple<Float, Float, Float>, r: FloatArray, rot: Int) {
+    private fun applyLayout(s: IslandSettings, size: Triple<Float, Float, Float>, r: FloatArray, rot: Int, r2: FloatArray) {
         val p = params ?: return
         val v = overlay ?: return
         val d = context.resources.displayMetrics.density
@@ -542,6 +577,20 @@ class OverlayHost(
             tp.width = (r[2] * d).toInt().coerceAtLeast(1)
             tp.height = (r[3] * d).toInt().coerceAtLeast(1)
             runCatching { windowManager?.updateViewLayout(tv, tp) }
+        }
+        val tp2 = touchParams2
+        val tv2 = touchView2
+        if (tp2 != null && tv2 != null) {
+            // Zweiter Bereich nur im Querformat (Meldung oben in der Mitte); sonst 1x1 und berührungslos.
+            val active = r2[2] > 1f
+            tp2.x = p.x + (r2[0] * d).toInt()
+            tp2.y = p.y + (r2[1] * d).toInt()
+            tp2.width = (r2[2] * d).toInt().coerceAtLeast(1)
+            tp2.height = (r2[3] * d).toInt().coerceAtLeast(1)
+            val locked = (context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager)?.isKeyguardLocked == true && !s.lockTouch
+            tp2.flags = if (!active || locked) tp2.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            else tp2.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+            runCatching { windowManager?.updateViewLayout(tv2, tp2) }
         }
     }
 }

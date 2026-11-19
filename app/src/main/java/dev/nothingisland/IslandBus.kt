@@ -266,6 +266,18 @@ object IslandBus {
     /** Berührbarer Bereich (links, oben, Breite, Höhe) in dp relativ zum Overlay-Fenster. */
     val touchRect: StateFlow<FloatArray> = _touchRect.asStateFlow()
 
+    private val _touchRect2 = MutableStateFlow(floatArrayOf(0f, 0f, 1f, 1f))
+
+    /** Zweiter berührbarer Bereich (Meldung oben in der Mitte im Querformat), gleiche Einheiten wie touchRect. */
+    val touchRect2: StateFlow<FloatArray> = _touchRect2.asStateFlow()
+
+    fun setTouchRect2(left: Float, top: Float, width: Float, height: Float) {
+        val c = _touchRect2.value
+        if (c[0] != left || c[1] != top || c[2] != width || c[3] != height) {
+            _touchRect2.value = floatArrayOf(left, top, width, height)
+        }
+    }
+
     fun setTouchRect(left: Float, top: Float, width: Float, height: Float) {
         val c = _touchRect.value
         if (c[0] != left || c[1] != top || c[2] != width || c[3] != height) {

@@ -378,8 +378,11 @@ internal fun IslandHostBody() {
     }
 
     val current = ongoing.firstOrNull { it.key == primaryKey } ?: ongoing.lastOrNull()
+    // Querformat + "Meldungen oben in der Mitte": die Meldung ist ein eigenes Element, die Pille am Rand bleibt, wie sie ist.
+    val rotE by IslandBus.rotation.collectAsState()
+    val topAlertOn = (rotE == 1 || rotE == 3) && s.landTopAlert
     val mode = when {
-        alert != null -> Mode.ALERT
+        alert != null && !topAlertOn -> Mode.ALERT
         calc -> Mode.CALC
         note -> Mode.NOTE
         quick && s.quickPanel -> Mode.QUICK
@@ -391,8 +394,43 @@ internal fun IslandHostBody() {
     // Beim Antworten zeichnet das eigene Eingabefenster; die Pille tritt zurück.
     val fullscreenNow by IslandBus.fullscreen.collectAsState()
     val landscapeNow = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    val hideNow = ((s.hideFullscreen && fullscreenNow) || (s.hideLandscape && landscapeNow && !(s.landTopAlert && alert != null))) &&
+    val hideNow = ((s.hideFullscreen && fullscreenNow) || (s.hideLandscape && landscapeNow)) &&
         alert?.kind != Kind.CALL && !preview
+    val topScope = rememberCoroutineScope()
+    TopAlertBubble(
+        s = s,
+        alert = if (topAlertOn) alert else null,
+        hidden = replying,
+        more = if (s.multiNotif) pendingList.size else 0,
+        onOpen = { a ->
+            runCatching { a.action?.send() }
+            suppressLinger = true
+            IslandBus.dismiss()
+        },
+        onMarkRead = { a ->
+            a.markRead?.let { pi -> topScope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { pi.send() } } }
+            if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
+            suppressLinger = true
+            IslandBus.dismiss()
+        },
+        onCopy = { a ->
+            a.code?.let { c ->
+                if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
+                suppressLinger = true
+                IslandBus.dismiss()
+                QuickActions.copyCode(ctx, c)
+            }
+        },
+        onReply = { a ->
+            IslandBus.startReply(a)
+            suppressLinger = true
+        },
+        onAway = {
+            suppressLinger = true
+            if (s.haptics) QuickActions.haptic(ctx, 1)
+            IslandBus.dismiss()
+        },
+    )
     if ((mode == Mode.IDLE && !s.idleVisible && !preview) || replying || hideNow) {
         // Das Fenster behält seine Größe (nur die Touch-Fläche schrumpft): Ein Größenwechsel beim Zurückkehren
         // ließ die kleine Pille kurz nach links oder rechts springen.
@@ -1795,4 +1833,129 @@ internal fun MessageColumn(e: IslandEvent, sc: Float, gap: Float, modifier: Modi
             )
         },
     )
+}
+
+
+/**
+ * Querformat, Einstellung "Meldungen oben in der Mitte": Die Meldung ist ein eigenes Element oben in der Mitte.
+ * Sie rutscht von oben ein und nach der Anzeigezeit wieder nach oben weg. Die Pille am Rand bleibt unberührt.
+ */
+@Composable
+private fun TopAlertBubble(
+    s: IslandSettings,
+    alert: IslandEvent?,
+    hidden: Boolean,
+    more: Int,
+    onOpen: (IslandEvent) -> Unit,
+    onMarkRead: (IslandEvent) -> Unit,
+    onCopy: (IslandEvent) -> Unit,
+    onReply: (IslandEvent) -> Unit,
+    onAway: () -> Unit,
+) {
+    var shown by remember { mutableStateOf<IslandEvent?>(null) }
+    if (alert != null) shown = alert
+    val visible = alert != null && !hidden
+    val p = remember { Animatable(0f) }
+    LaunchedEffect(visible, alert?.id) {
+        if (visible) {
+            // Neue Meldung ersetzt eine sichtbare: kurz zurückfedern, sonst von oben einrutschen.
+            if (p.value > 0.9f) p.snapTo(0.78f)
+            p.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 330f))
+        } else {
+            p.animateTo(0f, tween(230, easing = FastOutSlowInEasing))
+        }
+    }
+    val ev = shown
+    val dens = androidx.compose.ui.platform.LocalDensity.current
+    val dm = androidx.compose.ui.platform.LocalContext.current.resources.displayMetrics
+    val screenW = maxOf(dm.widthPixels, dm.heightPixels) / dm.density
+    val sc = s.scale * s.expandedScale
+    val fsc = s.scale * minOf(s.expandedScale, s.expandedFrameMax)
+    val w = minOf(s.expandedWidth.toFloat(), screenW - 8f)
+    val h = BASE_ALERT_H * fsc
+    val left = (screenW - w) / 2f
+    val top = 8f
+    val show = ev != null && p.value > 0.002f
+    SideEffect {
+        if (visible && ev != null) IslandBus.setTouchRect2(left - 4f, top - 4f, w + 8f, h + 8f)
+        else IslandBus.setTouchRect2(0f, 0f, 1f, 1f)
+    }
+    if (!show || ev == null) return
+    val swipe = remember { Animatable(0f) }
+    val pull = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val shape = RoundedCornerShape((minOf(s.expandedCorner * fsc, 42f * fsc)).dp)
+    val canRead = s.swipeDownRead && ev.markRead != null
+    Box(Modifier.fillMaxSize()) {
+        Box(
+            Modifier
+                .offset(left.dp, top.dp)
+                .size(w.dp, h.dp)
+                .graphicsLayer {
+                    val k = p.value
+                    transformOrigin = TransformOrigin(0.5f, 0f)
+                    translationY = -(1f - k) * (h + 24f) * density * 0.5f + pull.value
+                    translationX = swipe.value
+                    val sk = 0.86f + 0.14f * k.coerceAtMost(1.04f)
+                    scaleX = sk; scaleY = sk
+                    alpha = (k * 2.2f).coerceIn(0f, 1f) * (1f - abs(swipe.value) / (w * density * 0.9f)).coerceIn(0f, 1f)
+                }
+                .clip(shape)
+                .background(Bg)
+                .border(1.dp, Hairline, shape)
+                .pointerInput(Unit) {
+                    var vel = 0f
+                    var last = 0L
+                    detectHorizontalDragGestures(
+                        onDragStart = { vel = 0f; last = 0L },
+                        onDragEnd = {
+                            val x = swipe.value
+                            val away = 70.dp.toPx()
+                            val flung = abs(vel) > 650.dp.toPx() && abs(x) > 8.dp.toPx() && sign(vel) == sign(x)
+                            scope.launch {
+                                if (abs(x) > away || flung) {
+                                    swipe.animateTo(sign(x) * size.width * 0.8f, tween(150, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
+                                    onAway()
+                                    swipe.snapTo(0f)
+                                } else swipe.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f))
+                            }
+                        },
+                        onDragCancel = { scope.launch { swipe.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f)) } },
+                        onHorizontalDrag = { change, amount ->
+                            change.consume()
+                            val dt = change.uptimeMillis - last
+                            if (last != 0L && dt > 0) vel = vel * 0.5f + (amount / dt * 1000f) * 0.5f
+                            last = change.uptimeMillis
+                            scope.launch { swipe.snapTo(swipe.value + amount) }
+                        },
+                    )
+                }
+                .pointerInput(canRead) {
+                    if (!canRead) return@pointerInput
+                    var raw = 0f
+                    val maxPull = 30.dp.toPx()
+                    val trigger = 18.dp.toPx()
+                    fun band(r: Float) = maxPull * kotlin.math.tanh(r / (maxPull * 1.7f))
+                    detectVerticalDragGestures(
+                        onDragEnd = {
+                            val fire = pull.value > trigger
+                            raw = 0f
+                            scope.launch {
+                                if (fire) onMarkRead(ev)
+                                pull.animateTo(0f, tween(220, easing = FastOutSlowInEasing))
+                            }
+                        },
+                        onDragCancel = { raw = 0f; scope.launch { pull.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 420f)) } },
+                        onVerticalDrag = { change, amount ->
+                            change.consume()
+                            raw = (raw + amount).coerceIn(0f, 1000f)
+                            scope.launch { pull.snapTo(band(raw)) }
+                        },
+                    )
+                }
+                .clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { onOpen(ev) },
+        ) {
+            AlertContent(ev, sc, Modifier.requiredSize(w.dp, h.dp), more, onMarkRead = { onMarkRead(ev) }, onCopyCode = { onCopy(ev) }) { onReply(ev) }
+        }
+    }
 }
