@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -788,8 +789,8 @@ internal fun IslandHostBody() {
                 .layout { m, _ ->
                     // Beim schnellen Auf- und Zuklappen darf die Feder nicht weit über das Ziel schießen.
                     // Beim Aufklappen wächst die Breite höchstens so schnell wie die Höhe (kein plötzliches Breitwerden beim Spammen).
-                    val hp = if (growing && targetH > smallH) ((height.value - smallH) / (targetH - smallH)).coerceIn(0f, 1f) else 1f
-                    val wCap = if (growing) minOf(targetW * 1.07f, idleW + (targetW - idleW) * (0.3f + 0.7f * hp)) else Float.MAX_VALUE
+                    val hp = if (growing && !land && targetH > smallH) ((height.value - smallH) / (targetH - smallH)).coerceIn(0f, 1f) else 1f
+                    val wCap = if (growing && land) targetW * 1.07f else if (growing) minOf(targetW * 1.07f, idleW + (targetW - idleW) * (0.3f + 0.7f * hp)) else Float.MAX_VALUE
                     val w = (if (growing) minOf(width.roundToPx(), wCap.dp.roundToPx()) else width.roundToPx()) + abs(stretchPx).roundToInt()
                     val h = if (growing) minOf(height.roundToPx(), (targetH * 1.08f).dp.roundToPx()) else height.roundToPx()
                     val pl = m.measure(Constraints.fixed(w, h))
@@ -1077,7 +1078,7 @@ internal fun IslandHostBody() {
                             scaleIn(
                                 spring(dampingRatio = 0.78f, stiffness = 380f),
                                 initialScale = if (toBig) 0.88f else 0.94f,
-                                transformOrigin = TransformOrigin(0.5f, if (toBig) 0f else 0.5f),
+                                transformOrigin = if (land) TransformOrigin(if (rot == 1) 0f else 1f, 0.5f) else TransformOrigin(0.5f, if (toBig) 0f else 0.5f),
                             ),
                         initialContentExit = fadeOut(tween(90)) +
                             scaleOut(tween(140), targetScale = 0.94f),
@@ -1581,7 +1582,7 @@ internal fun VText(
     weight: FontWeight = FontWeight.Normal,
 ) {
     androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
-        val lineH = with(androidx.compose.ui.platform.LocalDensity.current) { size.toDp() } * 0.98f
+        val lineH = with(androidx.compose.ui.platform.LocalDensity.current) { size.toDp() } * 0.84f
         val n = (maxHeight / lineH).toInt().coerceAtLeast(1)
         val cps = text.trim().codePoints().toArray().map { String(Character.toChars(it)) }
         val shown = if (cps.size > n) cps.take(maxOf(n - 1, 0)) + "\u2026" else cps
@@ -1592,7 +1593,7 @@ internal fun VText(
                     ch, color = color, fontSize = size, fontWeight = weight,
                     fontFamily = if (mono) Mono else FontFamily.Default,
                     maxLines = 1, softWrap = false,
-                    modifier = Modifier.height(lineH),
+                    modifier = Modifier.height(lineH).wrapContentHeight(Alignment.CenterVertically, unbounded = true),
                 )
             }
         }
