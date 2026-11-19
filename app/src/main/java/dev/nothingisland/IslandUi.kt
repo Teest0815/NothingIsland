@@ -398,7 +398,8 @@ internal fun IslandHostBody() {
     }
 
     // Zweite Aktivität als Kreis neben der Pille (wie bei Apple).
-    val circleItem = when (mode) {
+    val landNow0 = IslandBus.rotation.collectAsState().value.let { it == 1 || it == 3 }
+    val circleItem = if (landNow0) null else when (mode) {
         Mode.COMPACT -> ongoing.lastOrNull { it.key != current?.key }
         Mode.MESSAGE -> current
         else -> null
@@ -446,13 +447,16 @@ internal fun IslandHostBody() {
     val messageW = minOf(2f * BASE_MESSAGE_SIDE * sc * s.widthFactor + gap, limit)
     val smallH = BASE_SMALL_H * sc
 
-    val targetW = when (mode) {
+    // Querformat: kleine Pille steht senkrecht am Rand (Dicke = Höhe, Länge = Breite).
+    val vert = land && (mode == Mode.IDLE || mode == Mode.COMPACT || mode == Mode.MESSAGE)
+    val smallLen = when (mode) { Mode.IDLE -> idleW; Mode.COMPACT -> compactW; Mode.MESSAGE -> messageW; else -> 0f }
+    val targetW = if (vert) smallH else when (mode) {
         Mode.IDLE -> idleW
         Mode.COMPACT -> compactW
         Mode.MESSAGE -> messageW
         else -> bigW
     }
-    val targetH = when (mode) {
+    val targetH = if (vert) minOf(smallLen, shortDp - 12f) else when (mode) {
         Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH
         Mode.ALERT -> BASE_ALERT_H * fsc
         Mode.EXPANDED -> expandedH
@@ -541,7 +545,7 @@ internal fun IslandHostBody() {
     // Querformat: Höhe der Kamera am Rand (Horizontal-Wert verschiebt entlang der Kante), große Blasen mittig dazu.
     val centerYLand = shortDp / 2f + (if (rot == 1) -s.offsetX else s.offsetX)
     val bigTopLand = (centerYLand - targetH / 2f).coerceIn(6f, maxOf(6f, shortDp - targetH - 6f))
-    val topBaseTarget = if (land) (if (growing) bigTopLand else centerYLand - smallH / 2f)
+    val topBaseTarget = if (land) (if (growing) bigTopLand else (centerYLand - targetH / 2f).coerceIn(6f, maxOf(6f, shortDp - targetH - 6f)))
         else ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
     val topPad by animateDpAsState(
         topBaseTarget.dp,
@@ -1080,15 +1084,17 @@ internal fun IslandHostBody() {
                 label = "mode",
             ) { st ->
                 when (st.first) {
-                    Mode.IDLE -> IdleDots(sc, camSide = s.expandDir, offsetX = if (s.expandDir == 0) 0f else (if (s.expandDir == 1) 1f else -1f) * (idleW / 2f - maxOf(gap / 2f, 15f * sc)))
+                    Mode.IDLE -> if (land) IdleColumn(sc) else IdleDots(sc, camSide = s.expandDir, offsetX = if (s.expandDir == 0) 0f else (if (s.expandDir == 1) 1f else -1f) * (idleW / 2f - maxOf(gap / 2f, 15f * sc)))
                     Mode.NOTE -> NotePanel(s.notes, bsc, Modifier.requiredSize(bigW.dp, (250f * fsc).dp), onUsed = { touch++ })
                     Mode.CALC -> CalcPanel(bsc, Modifier.requiredSize(bigW.dp, (292f * fsc).dp)) { touch++ }
                     Mode.QUICK -> QuickPanel(quickPages, bsc, Modifier.requiredSize(bigW.dp, (quickBaseH * fsc).dp)) { touch++ }
                     Mode.COMPACT -> shownCurrent?.let {
-                        CompactContent(it, sc, gap, s.iconTextGap.toFloat(), s.equalizer, s.workoutMetric, Modifier.requiredSize(compactW.dp, smallH.dp), s.expandDir)
+                        if (land) CompactColumn(it, sc, gap, s.equalizer, s.workoutMetric, Modifier.requiredSize(smallH.dp, targetH.dp))
+                        else CompactContent(it, sc, gap, s.iconTextGap.toFloat(), s.equalizer, s.workoutMetric, Modifier.requiredSize(compactW.dp, smallH.dp), s.expandDir)
                     }
                     Mode.MESSAGE -> (lingering ?: lastMessage)?.let {
-                        MessageContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(messageW.dp, smallH.dp), s.expandDir)
+                        if (land) MessageColumn(it, sc, gap, Modifier.requiredSize(smallH.dp, targetH.dp))
+                        else MessageContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(messageW.dp, smallH.dp), s.expandDir)
                     }
                     Mode.ALERT -> (alert ?: lastAlert)?.let {
                         AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp), if (s.multiNotif) pendingList.size else 0, onMarkRead = {
@@ -1481,6 +1487,14 @@ internal fun Chrono(
     modifier: Modifier = Modifier,
     color: Color = Fg,
 ) {
+    val txt = chronoText(e) ?: return
+    val rollSetting = IslandBus.settings.collectAsState().value.rollDigits
+    RollingText(txt, size, color, rollSetting, modifier)
+}
+
+/** Laufende Zeit als Text (null, wenn kein Zähler). Tickt nur bei eingeschaltetem Bildschirm. */
+@Composable
+internal fun chronoText(e: IslandEvent): String? {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val screenOn by IslandBus.screenOn.collectAsState()
     LaunchedEffect(e.chronoBase, screenOn) {
@@ -1491,10 +1505,9 @@ internal fun Chrono(
             delay(1000L - (now % 1000L) + 5L)
         }
     }
-    val base = e.chronoBase ?: return
+    val base = e.chronoBase ?: return null
     val ms = if (e.countDown) base - now else now - base
-    val rollSetting = IslandBus.settings.collectAsState().value.rollDigits
-    RollingText(formatClock(ms), size, color, rollSetting, modifier)
+    return formatClock(ms)
 }
 
 /** Ersetzt die Prozentzahl am Anfang des Titels ("62 % · LÄDT") durch den animierten Wert. */
@@ -1548,3 +1561,135 @@ internal fun Modifier.bounceClick(onClick: () -> Unit, src: MutableInteractionSo
 // ------------------------------------------------------------------ Notiz-Pille
 
 // ------------------------------------------------------------------ Leuchten
+
+
+// ---------------------------------------------------------------- Querformat: senkrechte Pille
+
+/** Text als einzelne, aufrechte Buchstaben untereinander. Passt er nicht, wird er mit "…" gekürzt. */
+@Composable
+internal fun VText(
+    text: String,
+    size: androidx.compose.ui.unit.TextUnit,
+    color: Color,
+    modifier: Modifier = Modifier,
+    mono: Boolean = false,
+    weight: FontWeight = FontWeight.Normal,
+) {
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier) {
+        val lineH = with(androidx.compose.ui.platform.LocalDensity.current) { size.toDp() } * 1.18f
+        val n = (maxHeight / lineH).toInt().coerceAtLeast(1)
+        val cps = text.trim().codePoints().toArray().map { String(Character.toChars(it)) }
+        val shown = if (cps.size > n) cps.take(maxOf(n - 1, 0)) + "\u2026" else cps
+        androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            shown.forEach { ch ->
+                if (ch.isBlank()) Spacer(Modifier.height(lineH * 0.5f))
+                else Text(
+                    ch, color = color, fontSize = size, fontWeight = weight,
+                    fontFamily = if (mono) Mono else FontFamily.Default,
+                    maxLines = 1, softWrap = false,
+                    modifier = Modifier.height(lineH),
+                )
+            }
+        }
+    }
+}
+
+/** Ruhezustand senkrecht: drei Punkte untereinander, der rote auf Kamerahöhe. */
+@Composable
+internal fun IdleColumn(sc: Float) {
+    androidx.compose.foundation.layout.Column(
+        verticalArrangement = Arrangement.spacedBy((6f * sc).dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.size((4f * sc).dp).clip(CircleShape).background(DotGray))
+        Box(Modifier.size((6f * sc).dp).clip(CircleShape).background(NothingRed))
+        Box(Modifier.size((4f * sc).dp).clip(CircleShape).background(DotGray))
+    }
+}
+
+/** Oben Inhalt, in der Mitte Platz für die Kamera, unten Inhalt. */
+@Composable
+internal fun SplitCol(
+    sc: Float,
+    gap: Float,
+    modifier: Modifier,
+    bottomAlignStart: Boolean = false,
+    top: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+    bottom: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
+) {
+    androidx.compose.foundation.layout.Column(
+        modifier = modifier.padding(vertical = (11f * sc).dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        androidx.compose.foundation.layout.Column(
+            Modifier.weight(1f).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy((4f * sc).dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            content = top,
+        )
+        Spacer(Modifier.height(gap.dp))
+        androidx.compose.foundation.layout.Column(
+            Modifier.weight(1f).fillMaxWidth(),
+            verticalArrangement = if (bottomAlignStart) Arrangement.Top else Arrangement.Bottom,
+            horizontalAlignment = Alignment.CenterHorizontally,
+            content = bottom,
+        )
+    }
+}
+
+@Composable
+internal fun CompactColumn(e: IslandEvent, sc: Float, gap: Float, eq: Boolean, workoutMetric: String, modifier: Modifier) {
+    val nav = e.kind == Kind.NAVIGATION
+    val workout = e.kind == Kind.WORKOUT
+    val paused = (e.kind == Kind.MEDIA && !e.playing) || (e.kind == Kind.TIMER && e.chronoBase == null)
+    val timeColor by androidx.compose.animation.animateColorAsState(if (paused) TextGray else Fg, tween(250), label = "timeColor")
+    val clock = chronoText(e)
+    SplitCol(sc, gap, modifier,
+        top = {
+            PillIcon(e, (14f * sc).dp, pulse = e.kind == Kind.CALL && e.chronoBase == null)
+            val t = when {
+                workout -> clock ?: e.metrics["time"] ?: e.title.ifBlank { e.app }
+                nav -> navDistance(e)
+                else -> e.title.ifBlank { e.app }
+            }
+            VText(t, (if (nav || workout) 12f else 11f).let { (it * sc).sp }, Fg, Modifier.weight(1f, fill = false), mono = nav || workout,
+                weight = if (nav || workout) FontWeight.Medium else FontWeight.Normal)
+        },
+        bottom = {
+            val turn = if (nav) navTurn(e) else Turn.NONE
+            val wv = if (workout) workoutValue(e, workoutMetric) else null
+            val fs = (12f * sc).sp
+            when {
+                workout -> if (wv != null) VText(wv.uppercase(), fs, if (workoutMetric == "bpm") AccentText else Fg, Modifier.weight(1f, fill = false), mono = true, weight = FontWeight.Medium) else LivePulse(sc)
+                nav && turn != Turn.NONE -> TurnArrow(turn, (16f * sc).dp)
+                clock != null || (e.kind == Kind.MEDIA && e.rightText != null) -> {
+                    val t = clock ?: e.rightText ?: ""
+                    VText(t, fs, timeColor, Modifier.weight(1f, fill = false), mono = true, weight = FontWeight.Medium)
+                    if (eq && e.kind == Kind.MEDIA) Equalizer(e.playing || e.chronoBase != null, sc)
+                }
+                e.rightText != null -> VText(e.rightText, fs, timeColor, Modifier.weight(1f, fill = false), mono = true, weight = FontWeight.Medium)
+                else -> LivePulse(sc)
+            }
+        },
+    )
+}
+
+@Composable
+internal fun MessageColumn(e: IslandEvent, sc: Float, gap: Float, modifier: Modifier) {
+    val status = e.kind == Kind.STATUS
+    SplitCol(sc, gap, modifier, bottomAlignStart = !status,
+        top = {
+            PillIcon(e, (14f * sc).dp)
+            VText(e.title.ifBlank { e.app }, (11f * sc).sp, Fg, Modifier.weight(1f, fill = false), weight = FontWeight.Medium)
+        },
+        bottom = {
+            VText(
+                if (e.textShort != null) e.textShort else e.text,
+                (if (status) 12f else 11f).let { (it * sc).sp },
+                if (status) Fg else TextGray,
+                Modifier.weight(1f, fill = false), mono = status,
+                weight = if (status) FontWeight.Medium else FontWeight.Normal,
+            )
+        },
+    )
+}
