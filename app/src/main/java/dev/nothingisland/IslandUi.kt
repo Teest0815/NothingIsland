@@ -112,6 +112,7 @@ internal enum class Mode { IDLE, COMPACT, MESSAGE, ALERT, EXPANDED, QUICK, CALC,
 /** Reserve um die Pille, damit Überschwingen der Feder nicht abgeschnitten wird. */
 internal const val WINDOW_MARGIN = 24f
 internal const val BASE_ALERT_H = 84f
+internal const val BASE_ALERT_TALL_H = 210f
 internal const val BASE_EXPANDED_H = 84f
 internal const val BASE_EXPANDED_ACTIONS_H = 134f
 internal const val BASE_EXPANDED_MEDIA_H = 156f
@@ -435,7 +436,10 @@ internal fun IslandHostBody() {
     val bsc = sc * s.expandedScale * landK // Skalierung von Text und Symbolen der aufgeklappten Pille
     val fsc = sc * minOf(s.expandedScale, s.expandedFrameMax) * landK // Rahmen wächst nur bis zum Limit
     // Aufgeklappt gilt nur die eigene Breite (begrenzt durch den Bildschirm), nicht die "Maximale Breite".
-    val bigW = minOf((if (land) s.landBigW else s.expandedWidth).toFloat(), screenW - 8f)
+    val bigW = minOf(s.expandedWidth.toFloat(), screenW - 8f)
+    // Querformat: Meldung ist ein senkrechter Rahmen (Inhalt waagerecht lesbar).
+    val alertW = if (land) minOf(s.landBigW.toFloat(), screenW - 8f) else bigW
+    val alertH = if (land) minOf(BASE_ALERT_TALL_H * fsc, shortDp - 12f) else BASE_ALERT_H * fsc
     val hasActions = current?.actions?.isNotEmpty() == true || (current?.kind == Kind.CALL && current.chronoBase != null)
     val quickKeys = remember(s.quickTiles) {
         s.quickTiles.split(',').mapNotNull { QuickActions.tile(it) }.take(24)
@@ -457,11 +461,12 @@ internal fun IslandHostBody() {
         Mode.IDLE -> idleW
         Mode.COMPACT -> compactW
         Mode.MESSAGE -> messageW
+        Mode.ALERT -> alertW
         else -> bigW
     }
     val targetH = if (vert) minOf(smallLen, shortDp - 12f) else when (mode) {
         Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH
-        Mode.ALERT -> BASE_ALERT_H * fsc
+        Mode.ALERT -> alertH
         Mode.EXPANDED -> expandedH
         Mode.QUICK -> quickBaseH * fsc
         Mode.CALC -> 292f * fsc
@@ -550,11 +555,13 @@ internal fun IslandHostBody() {
     val bigTopLand = (centerYLand - targetH / 2f).coerceIn(6f, maxOf(6f, shortDp - targetH - 6f))
     val topBaseTarget = if (land) (if (growing) bigTopLand else (centerYLand - targetH / 2f).coerceIn(6f, maxOf(6f, shortDp - targetH - 6f)))
         else ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
-    val topPad by animateDpAsState(
+    val topPadAnim by animateDpAsState(
         topBaseTarget.dp,
         if (snapNext) snap<Dp>() else spring<Dp>(dampingRatio = 0.8f, stiffness = 380f),
         label = "top",
     )
+    // Querformat: immer aus der aktuellen (animierten) Höhe mittig zur Kamera, damit beim Wachsen/Schließen nichts verrutscht.
+    val topPad = if (land) (centerYLand - height.value / 2f).coerceIn(6f, maxOf(6f, shortDp - height.value - 6f)).dp else topPadAnim
     // Wischen nach links oder rechts schließt Meldung, aufgeklappte Pille und Nachricht.
     // Neue Inhalte in der kleinen Pille (Taschenlampe, Flugmodus ...) poppen mit Nachfedern auf.
     val bump = remember { Animatable(1f) }
@@ -750,7 +757,7 @@ internal fun IslandHostBody() {
                 ) {
                     if (i == 1) {
                         Box(Modifier.graphicsLayer { val d = (1f - stackP() + stackShift.value).coerceIn(0f, 1f); alpha = (1f - d) * (1f - d) }) {
-                            AlertContent(ev, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp)) { }
+                            AlertContent(ev, bsc, Modifier.requiredSize(alertW.dp, alertH.dp), tall = land) { }
                         }
                     }
                 }
@@ -1103,7 +1110,7 @@ internal fun IslandHostBody() {
                         else MessageContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(messageW.dp, smallH.dp), s.expandDir)
                     }
                     Mode.ALERT -> (alert ?: lastAlert)?.let {
-                        AlertContent(it, bsc, Modifier.requiredSize(bigW.dp, (BASE_ALERT_H * fsc).dp), if (s.multiNotif) pendingList.size else 0, onMarkRead = {
+                        AlertContent(it, bsc, Modifier.requiredSize(alertW.dp, alertH.dp), if (s.multiNotif) pendingList.size else 0, tall = land, onMarkRead = {
                             // Als gelesen markieren: Aktion der App auslösen, Meldung verschwindet (nächste kommt nach).
                             it.markRead?.let { pi -> swipeScope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { pi.send() } } }
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)

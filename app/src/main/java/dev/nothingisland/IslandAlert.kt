@@ -56,7 +56,8 @@ import kotlin.math.sin
 
 /** Aufgeklappte Meldung bei neuer Benachrichtigung. */
 @Composable
-internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, more: Int = 0, onMarkRead: () -> Unit = {}, onCopyCode: () -> Unit = {}, onReply: () -> Unit) {
+internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, more: Int = 0, tall: Boolean = false, onMarkRead: () -> Unit = {}, onCopyCode: () -> Unit = {}, onReply: () -> Unit) {
+    if (tall) { AlertColumn(event, sc, modifier, more, onMarkRead, onCopyCode, onReply); return }
     Row(
         modifier = modifier.padding(horizontal = (18f * sc).dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -454,6 +455,67 @@ internal fun DotRing(modifier: Modifier = Modifier, dots: Int = 24) {
                 radius = (1.3f + glow * 0.9f).dp.toPx(),
                 center = Offset(c.x + r * cos(a), c.y + r * sin(a)),
             )
+        }
+    }
+}
+
+
+/** Querformat: senkrechter Rahmen, Inhalt untereinander und waagerecht lesbar. */
+@Composable
+internal fun AlertColumn(event: IslandEvent, sc: Float, modifier: Modifier, more: Int, onMarkRead: () -> Unit, onCopyCode: () -> Unit, onReply: () -> Unit) {
+    androidx.compose.foundation.layout.Column(
+        modifier = modifier.padding(horizontal = (14f * sc).dp, vertical = (12f * sc).dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy((6f * sc).dp, Alignment.CenterVertically),
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size((44f * sc).dp)) {
+            DotRing(Modifier.fillMaxSize())
+            val usePic = IslandBus.settings.collectAsState().value.pillIconNotif == 1 && event.avatar != null
+            if (usePic) {
+                Image(
+                    bitmap = event.avatar!!, contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.size((32f * sc).dp).clip(CircleShape),
+                )
+            } else event.icon?.let {
+                Image(bitmap = it, contentDescription = null, colorFilter = ColorFilter.tint(Fg), modifier = Modifier.size((18f * sc).dp))
+            }
+        }
+        AppLabel(if (event.count > 1) "${event.app} · ${event.count}" else event.app, sc)
+        if (event.title.isNotBlank()) Text(
+            event.title, color = Fg, fontSize = (14f * sc).sp, fontWeight = FontWeight.Medium,
+            maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        if (event.text.isNotBlank()) Text(
+            event.text, color = TextGray, fontSize = (12f * sc).sp,
+            maxLines = 3, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        event.picture?.let { pic ->
+            Image(
+                bitmap = pic, contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier.size((40f * sc).dp).clip(RoundedCornerShape((8f * sc).dp)),
+            )
+        }
+        if (more > 0 || event.code != null || event.markRead != null || event.reply != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy((8f * sc).dp), verticalAlignment = Alignment.CenterVertically) {
+                if (more > 0) Box(
+                    Modifier.clip(CircleShape).background(ButtonBg).padding(horizontal = (8f * sc).dp, vertical = (4f * sc).dp),
+                    contentAlignment = Alignment.Center,
+                ) { Text("+$more", color = Fg, fontFamily = Mono, fontSize = (11f * sc).sp, fontWeight = FontWeight.Medium) }
+                if (event.code != null) Box(
+                    Modifier.height((32f * sc).dp).clip(CircleShape).background(NothingRed).bounceClick(onCopyCode).padding(horizontal = (10f * sc).dp),
+                    contentAlignment = Alignment.Center,
+                ) { Text(event.code, color = OnAccent, fontFamily = Mono, fontWeight = FontWeight.Medium, fontSize = (12f * sc).sp, maxLines = 1) }
+                if (event.markRead != null) Box(
+                    Modifier.size((32f * sc).dp).clip(CircleShape).background(ButtonBg).bounceClick(onMarkRead),
+                    contentAlignment = Alignment.Center,
+                ) { Image(bitmap = QuickActions.icon("check"), contentDescription = "Als gelesen markieren", colorFilter = ColorFilter.tint(Fg), modifier = Modifier.size((15f * sc).dp)) }
+                if (event.reply != null) Box(
+                    Modifier.size((32f * sc).dp).clip(CircleShape).background(ButtonBg).bounceClick(onReply),
+                    contentAlignment = Alignment.Center,
+                ) { Image(bitmap = QuickActions.icon("reply"), contentDescription = "Antworten", colorFilter = ColorFilter.tint(Fg), modifier = Modifier.size((15f * sc).dp)) }
+            }
         }
     }
 }
