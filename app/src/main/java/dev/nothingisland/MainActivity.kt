@@ -50,6 +50,9 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
@@ -259,6 +262,58 @@ class MainActivity : ComponentActivity() {
             }.getOrDefault("Version unbekannt")
         }
         Text(ver, color = Muted, fontFamily = FontFamily.Monospace, fontSize = 11.sp, modifier = Modifier.padding(bottom = 8.dp))
+
+        // Update-Hinweis: sucht beim Öffnen (höchstens alle 6 Stunden) oder auf Knopfdruck.
+        val sUpd by IslandBus.settings.collectAsState()
+        var upd by remember { mutableStateOf<UpdateCheck.Result?>(null) }
+        var updBusy by remember { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
+        fun runCheck() {
+            if (updBusy) return
+            updBusy = true
+            scope.launch {
+                val r = withContext(kotlinx.coroutines.Dispatchers.IO) { UpdateCheck.fetch(ctx) }
+                upd = r
+                updBusy = false
+                getSharedPreferences("island_prefs", MODE_PRIVATE).edit().putLong("lastUpdateCheck", System.currentTimeMillis()).apply()
+            }
+        }
+        LaunchedEffect(Unit) {
+            val last = getSharedPreferences("island_prefs", MODE_PRIVATE).getLong("lastUpdateCheck", 0L)
+            if (sUpd.updateCheck && System.currentTimeMillis() - last > 6 * 3_600_000L) runCheck()
+        }
+        val found = upd as? UpdateCheck.Result.Newer
+        if (found != null) {
+            Column(
+                Modifier.fillMaxWidth().padding(bottom = 14.dp).clip(RoundedCornerShape(20.dp))
+                    .border(1.dp, AppAccent, RoundedCornerShape(20.dp)).padding(20.dp),
+            ) {
+                Text("UPDATE VERFÜGBAR", color = AppAccent, fontFamily = FontFamily.Monospace, fontSize = 12.sp, letterSpacing = 2.sp)
+                Spacer(Modifier.height(6.dp))
+                Text(found.info.name, color = Color.White, fontSize = 15.sp)
+                Spacer(Modifier.height(12.dp))
+                PillButton("HERUNTERLADEN", filled = true, modifier = Modifier.fillMaxWidth()) {
+                    runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(found.info.apkUrl))) }
+                }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    when {
+                        updBusy -> "Suche nach Updates …"
+                        upd is UpdateCheck.Result.UpToDate -> "Du hast die neueste Version."
+                        upd is UpdateCheck.Result.Failed -> "Update-Suche fehlgeschlagen (kein Internet?)"
+                        else -> "Update-Suche"
+                    },
+                    color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f),
+                )
+                Text(
+                    "PRÜFEN", color = AppAccent, fontFamily = FontFamily.Monospace, fontSize = 11.sp, letterSpacing = 1.sp,
+                    modifier = Modifier.clickable { runCheck() }.padding(8.dp),
+                )
+            }
+        }
+        ToggleRow("Beim Öffnen nach Updates suchen", sUpd.updateCheck) { c -> IslandBus.updateSettings(ctx) { it.copy(updateCheck = c) } }
 
         SectionLabel("SETUP")
         StepRow("01", "Über anderen Apps anzeigen", overlayOk) {
@@ -549,6 +604,7 @@ class MainActivity : ComponentActivity() {
         FoldCard("MELDUNGEN", false) {
             ToggleRow("Meldungen stapeln (Wischen entfernt die oberste Karte)", s.multiNotif) { c -> edit { it.copy(multiNotif = c) } }
             ToggleRow("Meldungen derselben App zu einer Karte zusammenfassen (statt stapeln)", s.groupNotif) { c -> edit { it.copy(groupNotif = c) } }
+            ToggleRow("Nachrichten einer Person zu einer Karte zusammenfassen (mit Zähler)", s.groupBySender) { c -> edit { it.copy(groupBySender = c) } }
             ToggleRow("Bestätigungscodes erkennen (Tippen kopiert)", s.otpCodes) { c -> edit { it.copy(otpCodes = c) } }
             ToggleRow("Bilder und Sticker anzeigen (z. B. WhatsApp)", s.showPictures) { c -> edit { it.copy(showPictures = c) } }
             Text("Symbol in der kleinen Pille: Meldungen", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp, bottom = 6.dp))

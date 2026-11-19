@@ -343,6 +343,7 @@ class IslandListenerService : NotificationListenerService() {
             markRead = markRead,
             code = code,
             metrics = metrics,
+            msgCount = (ex.getParcelableArray(Notification.EXTRA_MESSAGES)?.size ?: 0).coerceAtLeast(n.number).coerceAtLeast(1),
         )
     }
 

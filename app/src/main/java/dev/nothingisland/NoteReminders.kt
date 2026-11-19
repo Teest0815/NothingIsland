@@ -15,6 +15,7 @@ import org.json.JSONObject
 /** Erinnerungen zu Notizen: Alarm zur gewählten Uhrzeit, dann bleibt eine Benachrichtigung stehen, bis man sie antippt. */
 object NoteReminders {
     const val CH = "note_reminders"
+    const val ACTION_SNOOZE = "dev.nothingisland.SNOOZE"
     private const val PREFS = "island_reminders"
 
     private fun load(ctx: Context): JSONArray =
@@ -95,7 +96,13 @@ object NoteReminders {
             ctx, id, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        val snooze = PendingIntent.getBroadcast(
+            ctx, id + 1_000_000,
+            Intent(ctx, NoteReminderReceiver::class.java).setAction(ACTION_SNOOZE).putExtra("id", id).putExtra("text", text),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         val n = Notification.Builder(ctx, CH)
+            .addAction(Notification.Action.Builder(null, "+10 MIN", snooze).build())
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle("Notiz")
             .setContentText(text)
@@ -116,6 +123,11 @@ object NoteReminders {
 class NoteReminderReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) NoteReminders.rescheduleAll(ctx)
-        else NoteReminders.fire(ctx, intent.getIntExtra("id", 0), intent.getStringExtra("text") ?: return)
+        else if (intent.action == NoteReminders.ACTION_SNOOZE) {
+            // "+10 MIN": Benachrichtigung weg, Erinnerung in 10 Minuten noch einmal.
+            val text = intent.getStringExtra("text") ?: return
+            (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(intent.getIntExtra("id", 0))
+            NoteReminders.schedule(ctx, text, System.currentTimeMillis() + 10 * 60_000L)
+        } else NoteReminders.fire(ctx, intent.getIntExtra("id", 0), intent.getStringExtra("text") ?: return)
     }
 }

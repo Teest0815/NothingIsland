@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -41,10 +42,14 @@ import androidx.compose.ui.unit.sp
 internal fun NotePanel(notesJson: String, sc: Float, modifier: Modifier, onUsed: () -> Unit, bottom: (@Composable () -> Unit)? = null, middle: (@Composable () -> Unit)? = null) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val notes = remember(notesJson) { IslandBus.noteList(notesJson) }
-    val shown = remember(notesJson) {
+    val pinsJson by IslandBus.settings.collectAsState()
+    val pins = remember(pinsJson.notePins) { IslandBus.pinnedNotes(pinsJson.notePins) }
+    val shown = remember(notesJson, pins) {
         val cnt = HashMap<String, Int>()
         // Stabile Schlüssel (Text + Vorkommen), damit Einfügen und Löschen sauber animiert werden.
-        notes.mapIndexed { i, tx -> val n = (cnt[tx] ?: 0) + 1; cnt[tx] = n; Triple("$tx#$n", i, tx) }.asReversed()
+        // Angepinnte zuerst, jeweils die neuesten oben.
+        notes.mapIndexed { i, tx -> val n = (cnt[tx] ?: 0) + 1; cnt[tx] = n; Triple("$tx#$n", i, tx) }
+            .asReversed().sortedByDescending { it.third in pins }
     }
     Column(modifier.padding(horizontal = (16f * sc).dp, vertical = (12f * sc).dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -92,6 +97,11 @@ internal fun NotePanel(notesJson: String, sc: Float, modifier: Modifier, onUsed:
                         modifier = Modifier.weight(1f).padding(vertical = (4f * sc).dp)
                             .pointerInput(text) { detectTapGestures { onUsed(); QuickActions.copyCode(ctx, text, raw = true) } },
                     )
+                    val pinned = text in pins
+                    Box(
+                        Modifier.size((34f * sc).dp).clickable { onUsed(); IslandBus.togglePin(ctx, text) },
+                        contentAlignment = Alignment.Center,
+                    ) { Text(if (pinned) "★" else "☆", color = if (pinned) NothingRed else TextGray, fontSize = (15f * sc).sp) }
                     Box(
                         Modifier.size((34f * sc).dp).clickable { onUsed(); shareNote(ctx, text) },
                         contentAlignment = Alignment.Center,

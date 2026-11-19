@@ -72,6 +72,8 @@ data class IslandEvent(
     val markRead: PendingIntent? = null,
     /** Zusammengefasste Meldungen derselben App. */
     val count: Int = 1,
+    /** Ungelesene Nachrichten dieser Meldung (Messenger bündeln mehrere in einer Meldung). */
+    val msgCount: Int = 1,
     /** Erkannter Bestätigungscode (OTP). */
     val code: String? = null,
     /** Wann die Meldung eintraf (für den eigenen Ablauf jeder Karte im Stapel). */
@@ -153,6 +155,12 @@ data class IslandSettings(
     val chargeAnim: Boolean = true,
     /** Mehrere Meldungen derselben App zusammenfassen. */
     val groupNotif: Boolean = false,
+    /** Nachrichten derselben Person (gleiche App, gleicher Absender) zu einer Karte zusammenfassen. */
+    val groupBySender: Boolean = false,
+    /** Beim Öffnen nach einer neuen Version suchen. */
+    val updateCheck: Boolean = true,
+    /** Angepinnte Notizen (JSON-Liste der Texte), stehen ganz oben. */
+    val notePins: String = "[]",
     /** Bestätigungscodes erkennen und Kopieren anbieten. */
     val otpCodes: Boolean = true,
     /** Symbol der kleinen Pille bei Musik: 0 App-Symbol, 1 Musiknote, 2 Cover. */
@@ -370,9 +378,25 @@ object IslandBus {
         updateSettings(ctx) { s -> s.copy(notes = org.json.JSONArray((noteList(s.notes) + text).takeLast(30)).toString()) }
     }
 
+    fun pinnedNotes(json: String): Set<String> = noteList(json).toSet()
+
+    fun togglePin(ctx: Context, text: String) {
+        updateSettings(ctx) { s ->
+            val pins = noteList(s.notePins).toMutableList()
+            if (!pins.remove(text)) pins.add(text)
+            s.copy(notePins = org.json.JSONArray(pins).toString())
+        }
+    }
+
     fun removeNote(ctx: Context, index: Int) {
         noteList(settings.value.notes).getOrNull(index)?.let { NoteReminders.cancelForText(ctx, it) }
-        updateSettings(ctx) { s -> s.copy(notes = org.json.JSONArray(noteList(s.notes).filterIndexed { i, _ -> i != index }).toString()) }
+        updateSettings(ctx) { s ->
+            val gone = noteList(s.notes).getOrNull(index)
+            s.copy(
+                notes = org.json.JSONArray(noteList(s.notes).filterIndexed { i, _ -> i != index }).toString(),
+                notePins = org.json.JSONArray(noteList(s.notePins).filter { it != gone }).toString(),
+            )
+        }
     }
 
     /** Taschenrechner in der großen Pille. */
@@ -443,23 +467,37 @@ object IslandBus {
     }
 
     // ---- Kurzzeit-Meldungen (neue Benachrichtigungen) ----
+    /** Gehören zwei Meldungen zusammen? Gleiche App, bei "pro Person" auch gleicher Absender (Titel). */
+    private fun sameGroup(a: IslandEvent, b: IslandEvent): Boolean {
+        val s = _settings.value
+        if (!(s.groupNotif || s.groupBySender)) return false
+        if (a.kind != Kind.OTHER || b.kind != Kind.OTHER || a.code != null || b.code != null) return false
+        return a.app == b.app && (!s.groupBySender || a.title == b.title)
+    }
+
+    /** Zähler beim Zusammenfassen: pro Person zählt jede Nachricht, sonst jede neue Meldung. */
+    private fun mergedCount(old: IslandEvent, ev: IslandEvent): Int {
+        val perPerson = _settings.value.groupBySender
+        return if (ev.key == old.key) {
+            if (perPerson) maxOf(old.count, ev.msgCount) else old.count
+        } else {
+            old.count + if (perPerson) ev.msgCount else 1
+        }
+    }
+
     fun post(event: IslandEvent) {
         val cur = _current.value
-        val group = _settings.value.groupNotif
         if (_settings.value.multiNotif && cur != null && !cur.quiet && !event.quiet) {
-            if (group && event.kind == Kind.OTHER && cur.kind == Kind.OTHER && cur.app == event.app &&
-                event.code == null && cur.code == null
-            ) {
-                // Gleiche App: zusammenfassen, neueste Meldung zeigen, Zähler hochzählen.
-                _current.value = event.copy(count = if (event.key == cur.key) cur.count else cur.count + 1)
+            if (sameGroup(cur, event)) {
+                // Zusammenfassen: neueste Meldung zeigen, Zähler hochzählen.
+                _current.value = event.copy(count = mergedCount(cur, event))
             } else if (event.key.isNotEmpty() && cur.key == event.key && cur.title == event.title && cur.text == event.text) {
                 _current.value = event // gleiche Meldung nur erneut gemeldet: ersetzen statt doppelt stapeln
             } else {
                 // Neueste Meldung kommt nach oben, die bisherige oberste rutscht direkt dahinter.
                 val list = _pending.value
-                val same = if (group && event.kind == Kind.OTHER && event.code == null)
-                    list.firstOrNull { it.app == event.app && it.kind == Kind.OTHER && it.code == null } else null
-                val top = if (same != null) event.copy(count = if (event.key == same.key) same.count else same.count + 1) else event
+                val same = list.firstOrNull { sameGroup(it, event) }
+                val top = if (same != null) event.copy(count = mergedCount(same, event)) else event
                 val rest = list.filterNot {
                     it === same || (event.key.isNotEmpty() && it.key == event.key && it.title == event.title && it.text == event.text)
                 }
@@ -576,6 +614,9 @@ object IslandBus {
             rollDigits = p.getBoolean("rollDigits", d.rollDigits),
             chargeAnim = p.getBoolean("chargeAnim", d.chargeAnim),
             groupNotif = p.getBoolean("groupNotif2", d.groupNotif),
+            groupBySender = p.getBoolean("groupBySender", d.groupBySender),
+            updateCheck = p.getBoolean("updateCheck", d.updateCheck),
+            notePins = p.getString("notePins", d.notePins) ?: d.notePins,
             otpCodes = p.getBoolean("otpCodes", d.otpCodes),
             pillIconMedia = p.getInt("pillIconMedia", d.pillIconMedia),
             swipeUpAction = p.getString("swipeUpAction", d.swipeUpAction) ?: d.swipeUpAction,
@@ -654,6 +695,9 @@ object IslandBus {
             .putBoolean("rollDigits", s.rollDigits)
             .putBoolean("chargeAnim", s.chargeAnim)
             .putBoolean("groupNotif2", s.groupNotif)
+            .putBoolean("groupBySender", s.groupBySender)
+            .putBoolean("updateCheck", s.updateCheck)
+            .putString("notePins", s.notePins)
             .putBoolean("otpCodes", s.otpCodes)
             .putInt("pillIconMedia", s.pillIconMedia)
             .putString("swipeUpAction", s.swipeUpAction)
