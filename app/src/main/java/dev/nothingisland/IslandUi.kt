@@ -401,7 +401,20 @@ internal fun IslandHostBody() {
         s = s,
         alert = if (topAlertOn) alert else null,
         hidden = replying,
-        more = if (s.multiNotif) pendingList.size else 0,
+        more = 0,
+        behind = if (s.multiNotif) pendingList.take(2) else emptyList(),
+        onMute = { a ->
+            if (!a.pkg.startsWith("test.")) IslandBus.mute(a.pkg, s.muteMinutes)
+            if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
+            suppressLinger = true
+            IslandBus.dismiss()
+            IslandBus.post(
+                IslandEvent(
+                    key = "mute-" + a.pkg, kind = Kind.STATUS, app = a.app, title = a.app.uppercase(),
+                    text = "STUMM · ${s.muteMinutes} MIN", textShort = "${s.muteMinutes} MIN", quiet = true,
+                ),
+            )
+        },
         onOpen = { a ->
             runCatching { a.action?.send() }
             suppressLinger = true
@@ -1838,7 +1851,8 @@ internal fun MessageColumn(e: IslandEvent, sc: Float, gap: Float, modifier: Modi
 
 /**
  * Querformat, Einstellung "Meldungen oben in der Mitte": Die Meldung ist ein eigenes Element oben in der Mitte.
- * Sie rutscht von oben ein und nach der Anzeigezeit wieder nach oben weg. Die Pille am Rand bleibt unberührt.
+ * Sie rutscht von oben ein und nach der Anzeigezeit schnell wieder nach oben weg. Die Pille am Rand bleibt unberührt.
+ * Weitere Meldungen stapeln sich dahinter: Eine neue fällt von oben auf den Stapel, die bisherige rutscht eine Stufe zurück.
  */
 @Composable
 private fun TopAlertBubble(
@@ -1846,27 +1860,38 @@ private fun TopAlertBubble(
     alert: IslandEvent?,
     hidden: Boolean,
     more: Int,
+    behind: List<IslandEvent>,
     onOpen: (IslandEvent) -> Unit,
     onMarkRead: (IslandEvent) -> Unit,
     onCopy: (IslandEvent) -> Unit,
     onReply: (IslandEvent) -> Unit,
+    onMute: (IslandEvent) -> Unit,
     onAway: () -> Unit,
 ) {
     var shown by remember { mutableStateOf<IslandEvent?>(null) }
     if (alert != null) shown = alert
     val visible = alert != null && !hidden
     val p = remember { Animatable(0f) }
+    val drop = remember { Animatable(0f) }
+    val shift = remember { Animatable(0f) }
+    var lastId by remember { mutableStateOf<Long?>(null) }
+    val dens = androidx.compose.ui.platform.LocalDensity.current
     LaunchedEffect(visible, alert?.id) {
         if (visible) {
-            // Neue Meldung ersetzt eine sichtbare: kurz zurückfedern, sonst von oben einrutschen.
-            if (p.value > 0.9f) p.snapTo(0.78f)
-            p.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 330f))
+            val replace = lastId != null && lastId != alert?.id && p.value > 0.5f
+            lastId = alert?.id
+            if (replace) {
+                // Neue Meldung fällt von oben auf den Stapel, die bisherige rutscht dahinter.
+                launch { drop.snapTo(with(dens) { -46.dp.toPx() }); drop.animateTo(0f, spring(dampingRatio = 0.58f, stiffness = 380f)) }
+                launch { shift.snapTo(-1f); shift.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = 300f)) }
+                p.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 520f))
+            } else p.animateTo(1f, spring(dampingRatio = 0.78f, stiffness = 520f))
         } else {
-            p.animateTo(0f, tween(230, easing = FastOutSlowInEasing))
+            lastId = null
+            p.animateTo(0f, tween(130, easing = FastOutSlowInEasing))
         }
     }
     val ev = shown
-    val dens = androidx.compose.ui.platform.LocalDensity.current
     val dm = androidx.compose.ui.platform.LocalContext.current.resources.displayMetrics
     val screenW = maxOf(dm.widthPixels, dm.heightPixels) / dm.density
     val sc = s.scale * s.expandedScale
@@ -1877,7 +1902,7 @@ private fun TopAlertBubble(
     val top = 8f
     val show = ev != null && p.value > 0.002f
     SideEffect {
-        if (visible && ev != null) IslandBus.setTouchRect2(left - 4f, top - 4f, w + 8f, h + 8f)
+        if (visible && ev != null) IslandBus.setTouchRect2(left - 4f, top - 4f, w + 8f, h + 8f + behind.size * 8f)
         else IslandBus.setTouchRect2(0f, 0f, 1f, 1f)
     }
     if (!show || ev == null) return
@@ -1885,8 +1910,30 @@ private fun TopAlertBubble(
     val pull = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val shape = RoundedCornerShape((minOf(s.expandedCorner * fsc, 42f * fsc)).dp)
+    val ctxForHaptic = androidx.compose.ui.platform.LocalContext.current
     val canRead = s.swipeDownRead && ev.markRead != null
+    val canMute = s.muteOnSwipeUp && ev.kind == Kind.OTHER && ev.pkg.isNotEmpty()
     Box(Modifier.fillMaxSize()) {
+        // Karten dahinter (hinterste zuerst, damit die vordere oben liegt).
+        for (i in behind.indices.reversed()) {
+            val idx = (i + 1) + shift.value
+            Box(
+                Modifier
+                    .offset(left.dp, (top + idx * 8f).dp)
+                    .size(w.dp, h.dp)
+                    .graphicsLayer {
+                        val k = p.value
+                        transformOrigin = TransformOrigin(0.5f, 0f)
+                        translationY = -(1f - k) * (h + 24f) * density * 0.5f
+                        val sk = (0.86f + 0.14f * k.coerceAtMost(1.04f)) * (1f - 0.05f * idx)
+                        scaleX = sk; scaleY = sk
+                        alpha = (k * 2.2f).coerceIn(0f, 1f) * (1f - 0.28f * idx).coerceIn(0.2f, 1f)
+                    }
+                    .clip(shape)
+                    .background(Bg)
+                    .border(1.dp, Hairline, shape),
+            )
+        }
         Box(
             Modifier
                 .offset(left.dp, top.dp)
@@ -1894,9 +1941,10 @@ private fun TopAlertBubble(
                 .graphicsLayer {
                     val k = p.value
                     transformOrigin = TransformOrigin(0.5f, 0f)
-                    translationY = -(1f - k) * (h + 24f) * density * 0.5f + pull.value
+                    translationY = -(1f - k) * (h + 24f) * density * 0.5f + pull.value + drop.value
                     translationX = swipe.value
-                    val sk = 0.86f + 0.14f * k.coerceAtMost(1.04f)
+                    val landing = 1f - 0.07f * (abs(drop.value) / (46f * density)).coerceIn(0f, 1f)
+                    val sk = (0.86f + 0.14f * k.coerceAtMost(1.04f)) * landing
                     scaleX = sk; scaleY = sk
                     alpha = (k * 2.2f).coerceIn(0f, 1f) * (1f - abs(swipe.value) / (w * density * 0.9f)).coerceIn(0f, 1f)
                 }
@@ -1914,7 +1962,7 @@ private fun TopAlertBubble(
                             val flung = abs(vel) > 650.dp.toPx() && abs(x) > 8.dp.toPx() && sign(vel) == sign(x)
                             scope.launch {
                                 if (abs(x) > away || flung) {
-                                    swipe.animateTo(sign(x) * size.width * 0.8f, tween(150, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
+                                    swipe.animateTo(sign(x) * size.width * 0.8f, tween(130, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
                                     onAway()
                                     swipe.snapTo(0f)
                                 } else swipe.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f))
@@ -1930,26 +1978,33 @@ private fun TopAlertBubble(
                         },
                     )
                 }
-                .pointerInput(canRead) {
-                    if (!canRead) return@pointerInput
+                .pointerInput(canRead, canMute) {
+                    if (!canRead && !canMute) return@pointerInput
                     var raw = 0f
+                    var armed = false
                     val maxPull = 30.dp.toPx()
                     val trigger = 18.dp.toPx()
                     fun band(r: Float) = maxPull * kotlin.math.tanh(r / (maxPull * 1.7f))
                     detectVerticalDragGestures(
                         onDragEnd = {
-                            val fire = pull.value > trigger
+                            val y = pull.value
                             raw = 0f
+                            armed = false
                             scope.launch {
-                                if (fire) onMarkRead(ev)
-                                pull.animateTo(0f, tween(220, easing = FastOutSlowInEasing))
+                                if (y < -trigger && canMute) onMute(ev)
+                                else if (y > trigger && canRead) onMarkRead(ev)
+                                pull.animateTo(0f, tween(200, easing = FastOutSlowInEasing))
                             }
                         },
-                        onDragCancel = { raw = 0f; scope.launch { pull.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 420f)) } },
+                        onDragCancel = { raw = 0f; armed = false; scope.launch { pull.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 420f)) } },
                         onVerticalDrag = { change, amount ->
                             change.consume()
-                            raw = (raw + amount).coerceIn(0f, 1000f)
-                            scope.launch { pull.snapTo(band(raw)) }
+                            raw = (raw + amount).coerceIn(if (canMute) -1000f else 0f, if (canRead) 1000f else 0f)
+                            val y = if (raw < 0f) -band(-raw) else band(raw)
+                            val over = abs(y) > trigger
+                            if (over && !armed && s.haptics) QuickActions.haptic(ctxForHaptic, 1)
+                            armed = over
+                            scope.launch { pull.snapTo(y) }
                         },
                     )
                 }
