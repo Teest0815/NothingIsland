@@ -431,24 +431,28 @@ internal fun IslandHostBody() {
     val longDp = maxOf(dmNow.widthPixels, dmNow.heightPixels) / dmNow.density
     val shortDp = minOf(dmNow.widthPixels, dmNow.heightPixels) / dmNow.density
     val screenW = (if (land) longDp else shortDp).toInt()
+    val capH: (Float) -> Float = { h -> if (land) minOf(h, shortDp - 12f) else h }
     val limit = minOf(s.maxWidth.toFloat(), screenW - 8f)
     val landK = if (land) s.landBigScale else 1f
     val bsc = sc * s.expandedScale * landK // Skalierung von Text und Symbolen der aufgeklappten Pille
     val fsc = sc * minOf(s.expandedScale, s.expandedFrameMax) * landK // Rahmen wächst nur bis zum Limit
     // Aufgeklappt gilt nur die eigene Breite (begrenzt durch den Bildschirm), nicht die "Maximale Breite".
-    val bigW = minOf(s.expandedWidth.toFloat(), screenW - 8f)
-    // Querformat: Meldung ist ein senkrechter Rahmen (Inhalt waagerecht lesbar).
-    val alertW = if (land) minOf(s.landBigW.toFloat(), screenW - 8f) else bigW
-    val alertH = if (land) minOf(BASE_ALERT_TALL_H * fsc, shortDp - 12f) else BASE_ALERT_H * fsc
+    // Querformat: alle großen Ansichten sind senkrechte Rahmen (Inhalt waagerecht lesbar).
+    val bigW = minOf((if (land) s.landBigW else s.expandedWidth).toFloat(), screenW - 8f)
+    val alertW = bigW
+    val alertH = if (land) capH(BASE_ALERT_TALL_H * fsc) else BASE_ALERT_H * fsc
     val hasActions = current?.actions?.isNotEmpty() == true || (current?.kind == Kind.CALL && current.chronoBase != null)
     val quickKeys = remember(s.quickTiles) {
         s.quickTiles.split(',').mapNotNull { QuickActions.tile(it) }.take(24)
     }
-    val quickPages = remember(quickKeys) { buildQuickPages(quickKeys) }
-    val quickRows = (quickPages.maxOfOrNull { it.size } ?: 1).coerceIn(1, 2)
+    val quickPages = remember(quickKeys, land) { if (land) buildQuickPages(quickKeys, 2, 4) else buildQuickPages(quickKeys) }
+    val quickRows = (quickPages.maxOfOrNull { it.size } ?: 1).coerceIn(1, if (land) 4 else 2)
     val quickBaseH = quickRows * 54f + (quickRows - 1) * 10f + 28f + (if (quickPages.size > 1) 14f else 0f)
     val isMedia = current?.kind == Kind.MEDIA && current.media != null
-    val expandedH = (if (isMedia) BASE_EXPANDED_MEDIA_H else if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H) * fsc
+    val expandedH = capH((if (land) (if (isMedia) 250f else if (hasActions) 200f else 150f) else (if (isMedia) BASE_EXPANDED_MEDIA_H else if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H)) * fsc)
+    val quickH = capH(quickBaseH * fsc)
+    val calcH = capH((if (land) 330f else 292f) * fsc)
+    val noteH = capH((if (land) 320f else 250f) * fsc)
     val idleW = BASE_IDLE_W * sc * s.widthFactor
     val compactW = minOf(2f * BASE_COMPACT_SIDE * sc * s.widthFactor + gap, limit)
     val messageW = minOf(2f * BASE_MESSAGE_SIDE * sc * s.widthFactor + gap, limit)
@@ -468,9 +472,9 @@ internal fun IslandHostBody() {
         Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH
         Mode.ALERT -> alertH
         Mode.EXPANDED -> expandedH
-        Mode.QUICK -> quickBaseH * fsc
-        Mode.CALC -> 292f * fsc
-        Mode.NOTE -> 250f * fsc
+        Mode.QUICK -> quickH
+        Mode.CALC -> calcH
+        Mode.NOTE -> noteH
     }
     val targetCorner = when (mode) {
         Mode.IDLE, Mode.COMPACT, Mode.MESSAGE -> smallH / 2f * s.smallRoundness
@@ -1098,9 +1102,9 @@ internal fun IslandHostBody() {
             ) { st ->
                 when (st.first) {
                     Mode.IDLE -> if (land) IdleColumn(sc) else IdleDots(sc, camSide = s.expandDir, offsetX = if (s.expandDir == 0) 0f else (if (s.expandDir == 1) 1f else -1f) * (idleW / 2f - maxOf(gap / 2f, 15f * sc)))
-                    Mode.NOTE -> NotePanel(s.notes, bsc, Modifier.requiredSize(bigW.dp, (250f * fsc).dp), onUsed = { touch++ })
-                    Mode.CALC -> CalcPanel(bsc, Modifier.requiredSize(bigW.dp, (292f * fsc).dp)) { touch++ }
-                    Mode.QUICK -> QuickPanel(quickPages, bsc, Modifier.requiredSize(bigW.dp, (quickBaseH * fsc).dp)) { touch++ }
+                    Mode.NOTE -> NotePanel(s.notes, bsc, Modifier.requiredSize(bigW.dp, noteH.dp), onUsed = { touch++ })
+                    Mode.CALC -> CalcPanel(bsc, Modifier.requiredSize(bigW.dp, calcH.dp)) { touch++ }
+                    Mode.QUICK -> QuickPanel(quickPages, bsc, Modifier.requiredSize(bigW.dp, quickH.dp), { touch++ }, if (land) 2 else 4)
                     Mode.COMPACT -> shownCurrent?.let {
                         if (land) CompactColumn(it, sc, gap, s.equalizer, s.workoutMetric, Modifier.requiredSize(smallH.dp, targetH.dp))
                         else CompactContent(it, sc, gap, s.iconTextGap.toFloat(), s.equalizer, s.workoutMetric, Modifier.requiredSize(compactW.dp, smallH.dp), s.expandDir)
@@ -1148,6 +1152,7 @@ internal fun IslandHostBody() {
                             showSeek = s.mediaSeek,
                             eq = s.equalizer,
                             modifier = Modifier.requiredSize(bigW.dp, expandedH.dp),
+                            tall = land,
                         ) else OngoingExpanded(
                             e = cur,
                             count = ongoing.size,
@@ -1160,6 +1165,7 @@ internal fun IslandHostBody() {
                             },
                             onAction = { touch++ },
                             modifier = Modifier.requiredSize(bigW.dp, expandedH.dp),
+                            tall = land,
                         )
                     }
                 }

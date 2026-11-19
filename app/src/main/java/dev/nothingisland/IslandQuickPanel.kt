@@ -118,7 +118,7 @@ internal fun RowScope.QuickTile(icon: ImageBitmap, label: String, activeState: B
 }
 
 /** Ordnet die Kacheln in Seiten zu je zwei Reihen. Regler ("hal:") brauchen eine ganze Reihe für sich. */
-internal fun buildQuickPages(tiles: List<QuickTile>): List<List<List<QuickTile>>> {
+internal fun buildQuickPages(tiles: List<QuickTile>, cols: Int = 4, rowsPer: Int = 2): List<List<List<QuickTile>>> {
     val rows = ArrayList<List<QuickTile>>()
     var cur = ArrayList<QuickTile>()
     for (t in tiles) {
@@ -130,19 +130,19 @@ internal fun buildQuickPages(tiles: List<QuickTile>): List<List<List<QuickTile>>
             rows += listOf(t)
         } else {
             cur += t
-            if (cur.size == 4) {
+            if (cur.size == cols) {
                 rows += cur
                 cur = ArrayList()
             }
         }
     }
     if (cur.isNotEmpty()) rows += cur
-    return rows.chunked(2).ifEmpty { listOf(emptyList()) }
+    return rows.chunked(rowsPer).ifEmpty { listOf(emptyList()) }
 }
 
 /** Schnellzugriff: Seiten mit Kacheln (zwei Reihen je Seite), seitlich wischbar, Smart-Home-Regler als breite Reihe. */
 @Composable
-internal fun QuickPanel(pages: List<List<List<QuickTile>>>, sc: Float, modifier: Modifier, onUsed: () -> Unit) {
+internal fun QuickPanel(pages: List<List<List<QuickTile>>>, sc: Float, modifier: Modifier, onUsed: () -> Unit, cols: Int = 4) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var tick by remember { mutableIntStateOf(0) }
     val torch by QuickActions.torch.collectAsState()
@@ -237,7 +237,7 @@ internal fun QuickPanel(pages: List<List<List<QuickTile>>>, sc: Float, modifier:
                                         if (t.click(ctx)) IslandBus.setQuick(false) else onUsed()
                                     }
                                 }
-                                repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
+                                repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
                             }
                         }
                     }

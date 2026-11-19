@@ -170,6 +170,7 @@ internal fun MediaExpanded(
     showSeek: Boolean,
     eq: Boolean,
     modifier: Modifier,
+    tall: Boolean = false,
 ) {
     val mc = e.media ?: return
     // Titelwechsel: Cover blendet über, Text gleitet seitlich aus und ein (nur bei neuem Titel).
@@ -198,7 +199,7 @@ internal fun MediaExpanded(
         modifier = modifier.padding(horizontal = (18f * sc).dp, vertical = (12f * sc).dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        FlexRow(tall) {
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier.size((50f * sc).dp).clip(RoundedCornerShape((12f * sc).dp)).background(ButtonBg),
@@ -234,7 +235,7 @@ internal fun MediaExpanded(
                 }
             }
             Spacer(Modifier.width((12f * sc).dp))
-            Box(modifier = Modifier.weight(1f).clipToBounds()) {
+            Box(modifier = Modifier.grow().clipToBounds()) {
                 AnimatedContent(
                     targetState = track.first to track.second,
                     transitionSpec = {
@@ -355,11 +356,7 @@ internal fun MediaExpanded(
         val fwdLabel = fwdAct?.let { secRe.find(it.title)?.groupValues?.get(1) }?.let { "+$it" } ?: "»"
         val showBack = backAct != null || fallback
         val showFwd = fwdAct != null || fallback
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy((14f * sc).dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        WrapRow(tall, (if (tall) 8f else 14f).times(sc).dp) {
             if (showBack) SeekButton(backLabel, sc) {
                 if (backAct != null) backAct.intent?.let { runCatching { it.send() } }
                 else runCatching { mc.transportControls.rewind() }

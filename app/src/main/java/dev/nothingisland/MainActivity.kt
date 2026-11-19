@@ -554,7 +554,7 @@ class MainActivity : ComponentActivity() {
             Text("Kamera links oder rechts: Die kleine Pille steht senkrecht am Rand, große Bubbles hängen daneben.", color = TextGray, fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp))
             SettingSlider("Position entlang der Kante (+ = nach unten)", "${s.landShift} dp", s.landShift.toFloat(), -200f..200f) { v -> edit { it.copy(landShift = v.roundToInt()) } }
             SettingSlider("Abstand zum Rand (kleine Pille)", "${s.landEdge} dp", s.landEdge.toFloat(), 0f..60f) { v -> edit { it.copy(landEdge = v.roundToInt()) } }
-            SettingSlider("Breite der senkrechten Meldung", "${s.landBigW} dp", s.landBigW.toFloat(), 120f..320f) { v ->
+            SettingSlider("Breite der senkrechten Bubbles", "${s.landBigW} dp", s.landBigW.toFloat(), 120f..320f) { v ->
                 edit { it.copy(landBigW = v.roundToInt()) }
                 IslandBus.post(previewAlert())
             }

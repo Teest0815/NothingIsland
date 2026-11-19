@@ -215,6 +215,7 @@ internal fun OngoingExpanded(
     onCycle: () -> Unit,
     onAction: () -> Unit,
     modifier: Modifier,
+    tall: Boolean = false,
 ) {
     // Ladeanzeige: Balken füllt sich von 0, Prozent zählen hoch, Glow pulsiert beim Laden.
     val chargeOn = e.key == "charge-detail" && IslandBus.settings.collectAsState().value.chargeAnim
@@ -237,13 +238,13 @@ internal fun OngoingExpanded(
                 .padding(horizontal = (18f * sc).dp, vertical = (12f * sc).dp),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            FlexRow(tall) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.size((48f * sc).dp)) {
                     DotRing(Modifier.fillMaxSize())
                     RingIcon(e, sc)
                 }
                 Spacer(Modifier.width((14f * sc).dp))
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.grow()) {
                     AppLabel(e.app, sc)
                     if (e.kind == Kind.WORKOUT) {
                         if (e.chronoBase != null) Chrono(e, (22f * sc).sp)
@@ -307,11 +308,7 @@ internal fun OngoingExpanded(
             }
             val callActive = e.kind == Kind.CALL && e.chronoBase != null
             if (e.actions.isNotEmpty() || callActive) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy((8f * sc).dp, Alignment.CenterHorizontally),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                WrapRow(tall, (8f * sc).dp) {
                     e.actions.forEach { ActionButton(it, sc, onAction) }
                     if (callActive) CallControls(e, sc, onAction)
                 }
@@ -518,4 +515,44 @@ internal fun AlertColumn(event: IslandEvent, sc: Float, modifier: Modifier, more
             }
         }
     }
+}
+
+
+/** Bereich für Kopfzeilen: waagerecht (Row) oder im senkrechten Rahmen untereinander (Column). */
+internal interface FlexScope { fun Modifier.grow(): Modifier }
+
+@Composable
+internal fun FlexRow(tall: Boolean, content: @Composable FlexScope.() -> Unit) {
+    if (tall) {
+        androidx.compose.foundation.layout.Column(
+            Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            val sc = object : FlexScope { override fun Modifier.grow(): Modifier = this.fillMaxWidth() }
+            sc.content()
+        }
+    } else {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val rs = this
+            val sc = object : FlexScope { override fun Modifier.grow(): Modifier = with(rs) { this@grow.weight(1f) } }
+            sc.content()
+        }
+    }
+}
+
+/** Tasten in einer Reihe, im senkrechten Rahmen mit Umbruch. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+internal fun WrapRow(tall: Boolean, gap: androidx.compose.ui.unit.Dp, content: @Composable () -> Unit) {
+    if (tall) androidx.compose.foundation.layout.FlowRow(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(gap),
+    ) { content() }
+    else Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) { content() }
 }
