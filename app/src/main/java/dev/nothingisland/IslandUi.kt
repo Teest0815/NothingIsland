@@ -273,31 +273,7 @@ internal fun IslandHostBody() {
     // Karte hinter der obersten, deren Zeit abläuft: schrumpft und blendet aus, bevor sie entfernt wird.
     val backLeave = remember { Animatable(0f) }
     var backLeaveId by remember { mutableStateOf<Long?>(null) }
-    LaunchedEffect(pendingList.map { it.id }) {
-        // Jede Karte läuft nach ihrer eigenen Zeit ab: die älteste (hinterste) verschwindet zuerst.
-        pendingList.forEach { ev ->
-            launch {
-                val remaining = (ev.postedAt + s.alertSeconds * 1000L - System.currentTimeMillis()).coerceAtLeast(400L)
-                delay(remaining)
-                // Solange gezogen wird, bleibt die Karte; danach noch kurz Zeit zum Lesen.
-                if (abs(swipeX.value) > 0.5f || pullY > 0f) {
-                    while (abs(swipeX.value) > 0.5f || pullY > 0f) delay(150)
-                    delay(900)
-                }
-                try {
-                    backLeaveId = ev.id
-                    backLeave.snapTo(0f)
-                    backLeave.animateTo(1f, tween(190, easing = FastOutSlowInEasing))
-                    IslandBus.removePending(ev.id)
-                } finally {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-                        backLeaveId = null
-                        backLeave.snapTo(0f)
-                    }
-                }
-            }
-        }
-    }
+    // Karten hinter der obersten haben keinen eigenen Countdown: ihre Anzeigezeit läuft erst ab, wenn sie vorne liegen.
     val dens = androidx.compose.ui.platform.LocalDensity.current
     var suppressLinger by remember { mutableStateOf(false) }
 
@@ -342,7 +318,7 @@ internal fun IslandHostBody() {
         }
         try {
             // Jede Karte hat ihre eigene Zeit: nach Ablauf verschwindet nur die oberste, die nächste ist dann dran.
-            delay((a.postedAt + s.alertSeconds * 1000L - System.currentTimeMillis()).coerceAtLeast(1500L))
+            delay((s.alertSeconds * 1000L).coerceAtLeast(1500L))
             // nicht wegklappen, solange gezogen wird (Wischen oder Herunterziehen); danach noch kurz Zeit zum Lesen
             if (abs(swipeX.value) > 0.5f || pullY > 0f) {
                 while (abs(swipeX.value) > 0.5f || pullY > 0f) delay(150)
@@ -1874,18 +1850,44 @@ private fun TopAlertBubble(
     val p = remember { Animatable(0f) }
     val drop = remember { Animatable(0f) }
     val shift = remember { Animatable(0f) }
+    val pop = remember { Animatable(1f) }
+    val front = remember { Animatable(0f) } // 1 = Karte lag eben noch hinten und rückt nach vorn
+    val ghostP = remember { Animatable(0f) }
+    var ghost by remember { mutableStateOf<IslandEvent?>(null) }
     var lastId by remember { mutableStateOf<Long?>(null) }
     val dens = androidx.compose.ui.platform.LocalDensity.current
+    val hold = remember { object { var prevIds = emptyList<Long>(); var curIds = emptyList<Long>(); var prevFront: IslandEvent? = null; var curFront: IslandEvent? = null; var skipGhost = false } }
+    val idsNow = (listOfNotNull(alert) + behind).map { it.id }
+    SideEffect {
+        if (hold.curIds != idsNow) { hold.prevIds = hold.curIds; hold.curIds = idsNow }
+        if (hold.curFront?.id != alert?.id && alert != null) { hold.prevFront = hold.curFront; hold.curFront = alert }
+    }
     LaunchedEffect(visible, alert?.id) {
         if (visible) {
-            val replace = lastId != null && lastId != alert?.id && p.value > 0.5f
+            val changed = lastId != null && lastId != alert?.id && p.value > 0.5f
+            val promoted = changed && alert != null && hold.prevIds.contains(alert.id)
+            val replace = changed && !promoted
             lastId = alert?.id
-            if (replace) {
+            if (promoted) {
+                // Vordere Karte weg (gelesen, weggewischt, geöffnet): die nächste rückt von hinten nach vorn, der Rest folgt.
+                val old = hold.prevFront
+                if (old != null && !hold.skipGhost) {
+                    ghost = old
+                    launch { ghostP.snapTo(0f); ghostP.animateTo(1f, tween(170, easing = FastOutSlowInEasing)); ghost = null }
+                }
+                hold.skipGhost = false
+                launch { front.snapTo(1f); front.animateTo(0f, spring(dampingRatio = 0.78f, stiffness = 420f)) }
+                launch { shift.snapTo(1f); shift.animateTo(0f, spring(dampingRatio = 0.78f, stiffness = 420f)) }
+            } else if (replace) {
                 // Neue Meldung fällt von oben auf den Stapel, die bisherige rutscht dahinter.
                 launch { drop.snapTo(with(dens) { -46.dp.toPx() }); drop.animateTo(0f, spring(dampingRatio = 0.58f, stiffness = 380f)) }
                 launch { shift.snapTo(-1f); shift.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = 300f)) }
                 p.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 520f))
-            } else p.animateTo(1f, spring(dampingRatio = 0.78f, stiffness = 520f))
+            } else {
+                // Erscheint erst kleiner und federt dann auf die volle Größe.
+                launch { pop.snapTo(0.62f); pop.animateTo(1f, spring(dampingRatio = 0.42f, stiffness = 460f)) }
+                p.animateTo(1f, spring(dampingRatio = 0.85f, stiffness = 560f))
+            }
         } else {
             lastId = null
             p.animateTo(0f, tween(130, easing = FastOutSlowInEasing))
@@ -1944,9 +1946,11 @@ private fun TopAlertBubble(
                     translationY = -(1f - k) * (h + 24f) * density * 0.5f + pull.value + drop.value
                     translationX = swipe.value
                     val landing = 1f - 0.07f * (abs(drop.value) / (46f * density)).coerceIn(0f, 1f)
-                    val sk = (0.86f + 0.14f * k.coerceAtMost(1.04f)) * landing
+                    val fi = front.value
+                    translationY += fi * 8f * density
+                    val sk = pop.value * (0.9f + 0.1f * k.coerceAtMost(1f)) * landing * (1f - 0.05f * fi)
                     scaleX = sk; scaleY = sk
-                    alpha = (k * 2.2f).coerceIn(0f, 1f) * (1f - abs(swipe.value) / (w * density * 0.9f)).coerceIn(0f, 1f)
+                    alpha = (k * 2.2f).coerceIn(0f, 1f) * (1f - abs(swipe.value) / (w * density * 0.9f)).coerceIn(0f, 1f) * (1f - 0.28f * fi)
                 }
                 .clip(shape)
                 .background(Bg)
@@ -1963,6 +1967,7 @@ private fun TopAlertBubble(
                             scope.launch {
                                 if (abs(x) > away || flung) {
                                     swipe.animateTo(sign(x) * size.width * 0.8f, tween(130, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
+                                    hold.skipGhost = true
                                     onAway()
                                     swipe.snapTo(0f)
                                 } else swipe.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f))
@@ -2010,7 +2015,25 @@ private fun TopAlertBubble(
                 }
                 .clickable(indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }) { onOpen(ev) },
         ) {
-            AlertContent(ev, sc, Modifier.requiredSize(w.dp, h.dp), more, onMarkRead = { onMarkRead(ev) }, onCopyCode = { onCopy(ev) }) { onReply(ev) }
+            AlertContent(ev, sc, Modifier.requiredSize(w.dp, h.dp).graphicsLayer { alpha = (1f - front.value * 1.4f).coerceIn(0f, 1f) }, more, onMarkRead = { onMarkRead(ev) }, onCopyCode = { onCopy(ev) }) { onReply(ev) }
+        }
+        // Eben entfernte vordere Karte: schrumpft kurz nach oben und blendet aus.
+        ghost?.let { g ->
+            Box(
+                Modifier
+                    .offset(left.dp, top.dp)
+                    .size(w.dp, h.dp)
+                    .graphicsLayer {
+                        val k = ghostP.value
+                        transformOrigin = TransformOrigin(0.5f, 0f)
+                        translationY = -k * 18f * density
+                        scaleX = 1f - 0.1f * k; scaleY = 1f - 0.1f * k
+                        alpha = 1f - k
+                    }
+                    .clip(shape)
+                    .background(Bg)
+                    .border(1.dp, Hairline, shape),
+            ) { AlertContent(g, sc, Modifier.requiredSize(w.dp, h.dp), 0, onMarkRead = {}, onCopyCode = {}) {} }
         }
     }
 }
