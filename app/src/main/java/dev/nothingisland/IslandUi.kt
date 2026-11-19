@@ -419,7 +419,11 @@ internal fun IslandHostBody() {
     }
     val sc = s.scale
     val gap = s.cameraGap.toFloat()
-    val screenW = LocalConfiguration.current.screenWidthDp
+    // Breite in Hochformat-Richtung (kurze Seite): im Querformat wird die ganze Island gedreht, ihre Breite bleibt gleich.
+    val dmNow = androidx.compose.ui.platform.LocalContext.current.resources.displayMetrics
+    val screenW = (minOf(dmNow.widthPixels, dmNow.heightPixels) / dmNow.density).toInt()
+    val rot by IslandBus.rotation.collectAsState()
+    val land = rot == 1 || rot == 3
     val limit = minOf(s.maxWidth.toFloat(), screenW - 8f)
     val bsc = sc * s.expandedScale // Skalierung von Text und Symbolen der aufgeklappten Pille
     val fsc = sc * minOf(s.expandedScale, s.expandedFrameMax) // Rahmen wächst nur bis zum Limit
@@ -671,8 +675,16 @@ internal fun IslandHostBody() {
     }
     val shape = RoundedCornerShape(corner)
 
-    Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (noteReplyHidden) 0f else 1f }
-    .wrapContentSize(Alignment.TopStart, unbounded = true)) {
+    // Querformat: Die Island hängt an der Kamera-Seite (links oder rechts) und ist mit dem Gerät gedreht.
+    val ghDp = maxOf(winH, reported.second)
+    Box(
+        Modifier.fillMaxSize().graphicsLayer { alpha = if (noteReplyHidden) 0f else 1f }
+            .then(if (land) Modifier else Modifier.wrapContentSize(Alignment.TopStart, unbounded = true)),
+        contentAlignment = if (land) Alignment.Center else Alignment.TopStart,
+    ) {
+    Box(
+        if (land) Modifier.requiredSize(span.dp, ghDp.dp).graphicsLayer { rotationZ = if (rot == 1) -90f else 90f } else Modifier,
+    ) {
     Box(
         Modifier.width(span.dp),
         contentAlignment = Alignment.TopCenter,
@@ -1176,6 +1188,7 @@ internal fun IslandHostBody() {
                 }
             }
         }
+    }
     }
     }
     }

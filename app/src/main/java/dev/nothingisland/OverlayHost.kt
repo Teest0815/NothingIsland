@@ -75,6 +75,7 @@ class OverlayHost(
     private var replyScrim: View? = null
     private var replyJob: Job? = null
     private var lockReceiver: BroadcastReceiver? = null
+    private var displayListener: android.hardware.display.DisplayManager.DisplayListener? = null
     private var touchParams: WindowManager.LayoutParams? = null
     private var lastAx = Int.MIN_VALUE
     private var lastAy = Int.MIN_VALUE
@@ -276,9 +277,26 @@ class OverlayHost(
         probeJob = scope.launch {
             IslandBus.settings.map { it.hideFullscreen }.distinctUntilChanged().collect { updateProbeLoop() }
         }
+        // Drehung beobachten: im Querformat hängt die Island an der Kamera-Seite.
+        val dmgr = context.getSystemService(Context.DISPLAY_SERVICE) as android.hardware.display.DisplayManager
+        fun readRotation() = runCatching {
+            @Suppress("DEPRECATION")
+            (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay.rotation
+        }.getOrDefault(0)
+        IslandBus.setRotation(readRotation())
+        val dl = object : android.hardware.display.DisplayManager.DisplayListener {
+            override fun onDisplayAdded(id: Int) {}
+            override fun onDisplayRemoved(id: Int) {}
+            override fun onDisplayChanged(id: Int) { IslandBus.setRotation(readRotation()) }
+        }
+        dmgr.registerDisplayListener(dl, android.os.Handler(android.os.Looper.getMainLooper()))
+        displayListener = dl
         layoutJob = scope.launch {
-            combine(IslandBus.settings, IslandBus.windowSize, IslandBus.touchRect) { st, size, r -> Triple(st, size, r) }
-                .collect { (st, size, r) -> applyLayout(st, size, r) }
+            combine(IslandBus.settings, IslandBus.windowSize, IslandBus.touchRect, IslandBus.rotation) { st, size, r, rot -> arrayOf(st, size, r, rot) }
+                .collect { a ->
+                    @Suppress("UNCHECKED_CAST")
+                    applyLayout(a[0] as IslandSettings, a[1] as Triple<Float, Float, Float>, a[2] as FloatArray, a[3] as Int)
+                }
         }
         return true
     }
@@ -297,6 +315,8 @@ class OverlayHost(
         removeReply()
         layoutJob?.cancel()
         layoutJob = null
+        displayListener?.let { l -> runCatching { (context.getSystemService(Context.DISPLAY_SERVICE) as android.hardware.display.DisplayManager).unregisterDisplayListener(l) } }
+        displayListener = null
         lockReceiver?.let { r -> runCatching { context.unregisterReceiver(r) } }
         lockReceiver = null
         touchView?.let { v -> runCatching { windowManager?.removeView(v) } }
@@ -444,14 +464,33 @@ class OverlayHost(
         runCatching { windowManager?.updateViewLayout(tv, tp) }
     }
 
-    private fun applyLayout(s: IslandSettings, size: Triple<Float, Float, Float>, r: FloatArray) {
+    private fun applyLayout(s: IslandSettings, size: Triple<Float, Float, Float>, r: FloatArray, rot: Int) {
         val p = params ?: return
         val v = overlay ?: return
         val d = context.resources.displayMetrics.density
-        p.x = (size.third * d).toInt()
-        p.y = (s.windowTop * d).toInt()
-        val nw = (size.first * d).toInt().coerceAtLeast(1)
-        val nh = (size.second * d).toInt().coerceAtLeast(1)
+        val dm = context.resources.displayMetrics
+        val land = rot == 1 || rot == 3
+        val nw: Int
+        val nh: Int
+        if (!land) {
+            p.x = (size.third * d).toInt()
+            p.y = (s.windowTop * d).toInt()
+            nw = (size.first * d).toInt().coerceAtLeast(1)
+            nh = (size.second * d).toInt().coerceAtLeast(1)
+        } else {
+            // Gedreht: die Island hängt mit ihrer Oberkante an der Kamera-Seite; Breite und Höhe tauschen die Achsen.
+            val shortDp = minOf(dm.widthPixels, dm.heightPixels) / d
+            val longDp = maxOf(dm.widthPixels, dm.heightPixels) / d
+            nw = (size.second * d).toInt().coerceAtLeast(1)
+            nh = (size.first * d).toInt().coerceAtLeast(1)
+            if (rot == 1) {
+                p.x = (s.windowTop * d).toInt()
+                p.y = ((shortDp - size.third - size.first) * d).toInt()
+            } else {
+                p.x = ((longDp - s.windowTop - size.second) * d).toInt()
+                p.y = (size.third * d).toInt()
+            }
+        }
         val changed = p.width != nw || p.height != nh || p.x != lastAx || p.y != lastAy
         p.width = nw
         p.height = nh
@@ -464,10 +503,23 @@ class OverlayHost(
         val tp = touchParams
         val tv = touchView
         if (tp != null && tv != null) {
-            tp.x = p.x + (r[0] * d).toInt()
-            tp.y = p.y + (r[1] * d).toInt()
-            tp.width = (r[2] * d).toInt().coerceAtLeast(1)
-            tp.height = (r[3] * d).toInt().coerceAtLeast(1)
+            if (!land) {
+                tp.x = p.x + (r[0] * d).toInt()
+                tp.y = p.y + (r[1] * d).toInt()
+                tp.width = (r[2] * d).toInt().coerceAtLeast(1)
+                tp.height = (r[3] * d).toInt().coerceAtLeast(1)
+            } else {
+                // Rechteck der Island (Hochformat-Koordinaten) in Bildschirmkoordinaten umrechnen.
+                if (rot == 1) {
+                    tp.x = p.x + (r[1] * d).toInt()
+                    tp.y = p.y + ((size.first - (r[0] + r[2])) * d).toInt()
+                } else {
+                    tp.x = p.x + ((size.second - (r[1] + r[3])) * d).toInt()
+                    tp.y = p.y + (r[0] * d).toInt()
+                }
+                tp.width = (r[3] * d).toInt().coerceAtLeast(1)
+                tp.height = (r[2] * d).toInt().coerceAtLeast(1)
+            }
             runCatching { windowManager?.updateViewLayout(tv, tp) }
         }
     }

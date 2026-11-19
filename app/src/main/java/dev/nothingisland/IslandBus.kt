@@ -246,6 +246,11 @@ object IslandBus {
     /** Breite, Höhe und "span" (feste Gesamtbreite um die Bildschirmmitte, an der die linke Kante hängt). */
     val windowSize: StateFlow<Triple<Float, Float, Float>> = _windowSize.asStateFlow()
 
+    /** Bildschirmdrehung (Surface.ROTATION_*): 1 = Kamera links, 3 = Kamera rechts, sonst Hochformat. */
+    private val _rotation = MutableStateFlow(0)
+    val rotation: StateFlow<Int> = _rotation.asStateFlow()
+    fun setRotation(r: Int) { _rotation.value = r }
+
     fun setWindowSize(width: Float, height: Float, span: Float) {
         _windowSize.value = Triple(width, height, span)
     }
