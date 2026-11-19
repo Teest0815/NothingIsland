@@ -54,6 +54,15 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+/** Querformat: Höhe des senkrechten Antwort-/Notiz-Rahmens (Fenster und Inhalt müssen übereinstimmen). */
+internal fun landReplyH(s: IslandSettings, note: Boolean, shortDp: Float): Float {
+    val fsc = s.scale * minOf(s.expandedScale, s.expandedFrameMax) * s.landBigScale
+    val sc = s.scale * s.expandedScale * s.landBigScale
+    val cap = shortDp - 12f
+    return if (note) minOf(320f * fsc * s.landBigH, cap)
+    else minOf(minOf(BASE_ALERT_TALL_H * fsc * s.landBigH, cap) + 96f * sc, cap)
+}
+
 /** Antwort-Leiste direkt in der Island: Texteingabe an der Stelle der aufgeklappten Pille. */
 @Composable
 fun ReplyBar() {
@@ -85,8 +94,13 @@ fun ReplyBar() {
     val sink = e.noteSink
     if (reply == null && sink == null) return
     val ctx = LocalContext.current
-    val sc = st.scale * st.expandedScale
-    val fsc = st.scale * minOf(st.expandedScale, st.expandedFrameMax)
+    val rotNow by IslandBus.rotation.collectAsState()
+    val land = rotNow == 1 || rotNow == 3
+    val landK = if (land) st.landBigScale else 1f
+    val sc = st.scale * st.expandedScale * landK
+    val fsc = st.scale * minOf(st.expandedScale, st.expandedFrameMax) * landK
+    val dmR = ctx.resources.displayMetrics
+    val shortDpR = minOf(dmR.widthPixels, dmR.heightPixels) / dmR.density
     var text by remember(e.id) { mutableStateOf("") }
     val focus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -136,13 +150,63 @@ fun ReplyBar() {
         // Schreiben-Bubble sieht aus wie die Notiz-Bubble, nur mit Eingabefeld statt Knopf.
         Box(Modifier.fillMaxWidth().then(closeFx).padding(12.dp)) {
             Box(
-                Modifier.fillMaxWidth().height((250f * fsc).dp).clip(shape)
+                Modifier.fillMaxWidth().height((if (land) landReplyH(st, true, shortDpR) else 250f * fsc).dp).clip(shape)
                     .background(IslandTheme.bg).border(1.dp, IslandTheme.hairline, shape),
             ) {
                 NotePanel(st.notes, sc, Modifier.fillMaxSize(), onUsed = {}, middle = if (picking) ({
                     RemindPicker(sc, remindAt) { remindAt = it; picking = false }
                 }) else null, bottom = {
                     // Der rote Knopf "+ NEUE NOTIZ" zieht sich zu "SPEICHERN" zusammen, das Feld wächst daneben auf.
+                    if (land) {
+                        val kc = morph.value.coerceIn(0f, 1f)
+                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy((6f * sc * kc).dp)) {
+                            if (kc > 0.02f) Box(
+                                Modifier.fillMaxWidth().height((38f * sc * kc).dp).clip(RoundedCornerShape(50))
+                                    .background(IslandTheme.buttonBg).padding(horizontal = (14f * sc).dp)
+                                    .graphicsLayer { alpha = ((kc - 0.35f) / 0.65f).coerceIn(0f, 1f) },
+                                contentAlignment = Alignment.CenterStart,
+                            ) {
+                                if (text.isEmpty()) Text("Notiz schreiben …", color = IslandTheme.textGray, fontSize = (13f * sc).sp, maxLines = 1)
+                                BasicTextField(
+                                    value = text, onValueChange = { text = it }, singleLine = true,
+                                    textStyle = TextStyle(color = IslandTheme.fg, fontSize = (13f * sc).sp),
+                                    cursorBrush = SolidColor(IslandTheme.accent),
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                    keyboardActions = KeyboardActions(onDone = { send() }),
+                                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                                )
+                            }
+                            Row(Modifier.fillMaxWidth().height((40f * sc).dp), horizontalArrangement = Arrangement.spacedBy((8f * sc * kc).dp), verticalAlignment = Alignment.CenterVertically) {
+                                if (kc > 0.02f) Box(
+                                    Modifier.width((44f * sc * kc).dp).fillMaxHeight().clip(RoundedCornerShape(50))
+                                        .background(if (remindAt != null) IslandTheme.accent else IslandTheme.buttonBg)
+                                        .clickable { picking = !picking }.graphicsLayer { alpha = kc },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    val at = remindAt
+                                    if (at != null) Text(
+                                        java.text.SimpleDateFormat("HH:mm", java.util.Locale.GERMANY).format(java.util.Date(at)),
+                                        color = IslandTheme.onAccent, fontFamily = IslandTheme.font,
+                                        fontWeight = FontWeight.Bold, fontSize = (9f * sc).sp, maxLines = 1, softWrap = false,
+                                    ) else androidx.compose.foundation.Image(
+                                        bitmap = QuickActions.icon("bell"), contentDescription = "Erinnerung",
+                                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(IslandTheme.fg),
+                                        modifier = Modifier.size((16f * sc).dp),
+                                    )
+                                }
+                                Box(
+                                    Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(50))
+                                        .background(IslandTheme.accent).clickable { send() },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        if (kc < 0.5f) "+  NEUE NOTIZ" else "SPEICHERN", color = IslandTheme.onAccent, fontFamily = IslandTheme.font,
+                                        fontWeight = FontWeight.Bold, fontSize = (10f * sc).sp, letterSpacing = 1.sp, maxLines = 1,
+                                    )
+                                }
+                            }
+                        }
+                    } else
                     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().height((40f * sc).dp)) {
                         val total = maxWidth
                         val btnW = (96f * sc).dp
@@ -225,8 +289,8 @@ fun ReplyBar() {
         return
     }
     var expanded by remember(e.id) { mutableStateOf(false) }
-    val alertH = 84f * fsc
-    val fullH = alertH + 62f * sc
+    val alertH = if (land) minOf(BASE_ALERT_TALL_H * fsc * st.landBigH, shortDpR - 12f) else 84f * fsc
+    val fullH = if (land) landReplyH(st, false, shortDpR) else alertH + 62f * sc
     val h by animateDpAsState(
         targetValue = (if (expanded) fullH else alertH).dp,
         animationSpec = spring(dampingRatio = 0.85f, stiffness = 520f),
@@ -250,19 +314,19 @@ fun ReplyBar() {
                 .border(1.dp, IslandTheme.hairline, shape),
         ) {
             // Oben dieselbe Meldung wie in der Island, darunter wächst das Eingabefeld heraus.
-            AlertContent(e.copy(reply = null, markRead = null), sc, Modifier.fillMaxWidth().height(alertH.dp)) {}
-            Row(
+            AlertContent(e.copy(reply = null, markRead = null), sc, Modifier.fillMaxWidth().height(alertH.dp), tall = land) {}
+            ReplyRow(
+                land = land,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .graphicsLayer { alpha = progress }
                     .padding(start = (16f * sc).dp, end = (16f * sc).dp, bottom = (14f * sc).dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy((8f * sc).dp),
+                gap = (8f * sc).dp,
             ) {
                 Box(
                     Modifier
-                        .weight(1f)
+                        .grow()
                         .clip(RoundedCornerShape(50))
                         .background(IslandTheme.buttonBg)
                         .padding(horizontal = (14f * sc).dp, vertical = (10f * sc).dp),
@@ -365,5 +429,19 @@ private fun RemindPicker(sc: Float, current: Long?, onPick: (Long?) -> Unit) {
             Spacer(Modifier.weight(1f))
             Pill(if (tomorrow) "MORGEN OK" else "OK", strong = true) { onPick(target().timeInMillis) }
         }
+    }
+}
+
+
+/** Eingabezeile: waagerecht (Feld + Senden) oder im senkrechten Rahmen untereinander. */
+@Composable
+private fun ReplyRow(land: Boolean, modifier: Modifier, gap: androidx.compose.ui.unit.Dp, content: @Composable FlexScope.() -> Unit) {
+    if (land) androidx.compose.foundation.layout.Column(modifier, verticalArrangement = Arrangement.spacedBy(gap)) {
+        val fs = object : FlexScope { override fun Modifier.grow(): Modifier = this.fillMaxWidth() }
+        fs.content()
+    } else Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(gap)) {
+        val rs = this
+        val fs = object : FlexScope { override fun Modifier.grow(): Modifier = with(rs) { this@grow.weight(1f) } }
+        fs.content()
     }
 }

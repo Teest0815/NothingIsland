@@ -338,7 +338,9 @@ class OverlayHost(
         val dm = context.resources.displayMetrics
         val d = dm.density
         val s = IslandBus.settings.value
-        val bigW = minOf(s.expandedWidth.toFloat(), dm.widthPixels / d - 8f)
+        val rotNow = IslandBus.rotation.value
+        val landR = rotNow == 1 || rotNow == 3
+        val bigW = minOf((if (landR) s.landBigW else s.expandedWidth).toFloat(), maxOf(dm.widthPixels, dm.heightPixels) / d - 8f)
         val view = ComposeView(context).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setViewTreeLifecycleOwner(lo)
@@ -398,9 +400,13 @@ class OverlayHost(
         // Feste Fenstergröße (Endhöhe): Das Aufklappen passiert nur im Inneren, das Fenster wird nie umgebaut.
         val sc = s.scale * s.expandedScale
         val fsc = s.scale * minOf(s.expandedScale, s.expandedFrameMax)
+        val isNote = IslandBus.replyTarget.value?.noteSink != null
+        val shortDpR = minOf(dm.widthPixels, dm.heightPixels) / d
+        val longDpR = maxOf(dm.widthPixels, dm.heightPixels) / d
+        val frameH = if (landR) landReplyH(s, isNote, shortDpR) else (if (isNote) 250f * fsc else 84f * fsc + 62f * sc)
         val lp = WindowManager.LayoutParams(
             ((bigW + 24f) * d).toInt(),
-            (((if (IslandBus.replyTarget.value?.noteSink != null) 250f * fsc else 84f * fsc + 62f * sc) + 24f) * d).toInt(),
+            ((frameH + 24f) * d).toInt(),
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
@@ -408,7 +414,11 @@ class OverlayHost(
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            if (s.expandDir != 0 && s.bigFromCamera) {
+            if (landR) {
+                // Querformat: senkrechter Rahmen am Kamera-Rand, mittig zur Kamera (wie die Island selbst).
+                gravity = Gravity.TOP or Gravity.START
+                x = (((if (rotNow == 1) 8f else longDpR - 8f - bigW) - 12f) * d).toInt()
+            } else if (s.expandDir != 0 && s.bigFromCamera) {
                 gravity = Gravity.TOP or Gravity.START
                 val swd = context.resources.displayMetrics.widthPixels / d
                 x = ((s.bubbleLeftDp(swd, bigW) - 12f) * d).toInt()
@@ -416,7 +426,10 @@ class OverlayHost(
                 gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
                 x = if (s.expandDir == 0) (s.offsetX * d).toInt() else 0
             }
-            y = ((s.expandedTop - 12) * d).toInt()
+            y = if (landR) {
+                val cy = shortDpR / 2f + s.landShift
+                (((cy - frameH / 2f).coerceIn(6f, maxOf(6f, shortDpR - frameH - 6f)) - 12f) * d).toInt()
+            } else ((s.expandedTop - 12) * d).toInt()
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
