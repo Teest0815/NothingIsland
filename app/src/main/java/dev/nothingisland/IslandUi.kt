@@ -937,7 +937,7 @@ internal fun IslandHostBody() {
                                     // die nächste bleibt vorn.
                                     stackHold = true
                                     launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(190, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
-                                    leaveId[0] = (alert ?: lastAlert)?.id ?: 0L
+                                    leaveId[0] = (alertNow ?: lastAlert)?.id ?: 0L
                                     leave.animateTo(1f, tween(210, easing = FastOutSlowInEasing))
                                     frontPromo.snapTo(1f)
                                     pullY = 0f
@@ -1038,7 +1038,7 @@ internal fun IslandHostBody() {
                         swipeScope.launch {
                             if (abs(x2) > away && (stackBehind > 0 || fromStack[0])) {
                                 // Karte fliegt weg, gleichzeitig rücken die Karten dahinter federnd nach vorn; erst danach wird getauscht.
-                                leaveId[0] = (alert ?: lastAlert)?.id ?: 0L
+                                leaveId[0] = (alertNow ?: lastAlert)?.id ?: 0L
                                 val adv = launch { leave.animateTo(1f, tween(210, easing = FastOutSlowInEasing)) }
                                 swipeX.animateTo(sign(x) * ext() * 0.7f, tween(150))
                                 adv.join()
