@@ -266,6 +266,8 @@ internal fun IslandHostBody() {
     val dropY = remember { Animatable(0f) }
     val leave = remember { Animatable(0f) }
     val stackShift = remember { Animatable(0f) }
+    // Nachrücken: die neue vordere Karte kommt aus ihrer Stapelposition (kleiner, tiefer) federnd nach vorn.
+    val frontPromo = remember { Animatable(0f) }
     var stackHold by remember { mutableStateOf(false) }
     val swipeX = remember { Animatable(0f) }
     // Eigener Scope für Stapel-Animationen: sie laufen immer bis zum Ende, auch wenn der Effekt neu startet (Spam).
@@ -294,6 +296,7 @@ internal fun IslandHostBody() {
                 dropY.snapTo(0f)
                 stackShift.snapTo(0f)
                 leave.snapTo(0f)
+                frontPromo.snapTo(0f)
             }
             return@LaunchedEffect
         }
@@ -318,6 +321,13 @@ internal fun IslandHostBody() {
                 stackShift.animateTo(0f, spring(dampingRatio = 0.8f, stiffness = 260f))
             }
         }
+        if (!topOn && s.multiNotif && prev != null && prev.id != a.id && a.id < prev.id && pendingList.none { it.id == prev.id }) {
+            // Die vordere Karte ist weg, die nächste rückt aus dem Stapel nach vorn (federnd, mit Überschwingen).
+            arriveScope.launch {
+                frontPromo.snapTo(1f)
+                frontPromo.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 300f))
+            }
+        }
         try {
             // Jede Karte hat ihre eigene Zeit: nach Ablauf verschwindet nur die oberste, die nächste ist dann dran.
             delay((s.alertSeconds * 1000L).coerceAtLeast(1500L))
@@ -333,7 +343,7 @@ internal fun IslandHostBody() {
         if (pendingList.isNotEmpty() && !topOn) {
             // Nur diese Karte geht weg (schrumpft nach oben), die nächste rückt nach vorn.
             try {
-                leave.animateTo(1f, spring<Float>(dampingRatio = 0.55f, stiffness = 240f))
+                leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f))
                 IslandBus.dismiss()
             } finally {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { leave.snapTo(0f) }
@@ -651,7 +661,7 @@ internal fun IslandHostBody() {
     // Fortschritt 0..1: je weiter die oberste Karte weggezogen wird, desto mehr rückt die nächste nach vorn.
     val stackP: () -> Float = {
         // Die Karten dahinter rücken erst nach dem Loslassen vor (nicht schon beim Ziehen).
-        maxOf(leave.value, if (stackHold) 1f else 0f).coerceIn(0f, 1.3f)
+        0f
     }
     val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || (mode == Mode.QUICK && quickPages.size <= 1)
     LaunchedEffect(mode) { swipeX.snapTo(0f) }
@@ -809,7 +819,7 @@ internal fun IslandHostBody() {
                 ) {
                     // Sobald die vordere Karte losgelassen wird und die nächste zu rücken beginnt, blendet deren Inhalt ein
                     // (Text rutscht ein, Sticker poppt); nach dem Tausch bleibt er unverändert stehen.
-                    if (i == 1 && (stackHold || leave.value > 0.01f || pullY > 0f || abs(swipeX.value) > 0f)) {
+                    if (i == 1 && (pullY > 0f || abs(swipeX.value) > 0f)) {
                         // Schon beim Herunterziehen/Wischen sichtbar, nicht erst nach dem Loslassen.
                         Box(Modifier.graphicsLayer { alpha = maxOf(stackP() * 1.6f, pullY / (14f * density), abs(swipeX.value) / (40f * density)).coerceIn(0f, 1f) }) {
                             AlertContent(ev, bsc / landK.coerceAtLeast(0.01f).let { if (topAlert) it else 1f }, Modifier.requiredSize(alertW.dp, alertH.dp), tall = landTall) { }
@@ -845,17 +855,24 @@ internal fun IslandHostBody() {
                             (dropY.value / 30.dp.toPx()) * 5f
                         // Gelesen: kurz anwachsen, dann nach oben zur Pille zusammenschrumpfen.
                         // Die Karten dahinter laufen mit der langsamen Feder; die vordere Karte ist dafür schneller weg.
-                        val lv = (leave.value * 2.5f).coerceIn(0f, 1f)
+                        val lv = leave.value.coerceIn(0f, 1f)
                         scaleX *= 1f - 0.45f * lv
                         scaleY *= 1f - 0.28f * lv
                         translationY -= lv * 28.dp.toPx()
+                        val fp = frontPromo.value
+                        if (fp != 0f) {
+                            val st = (2f * stackInsetDp.dp.toPx() / size.width.coerceAtLeast(1f)).coerceAtMost(0.3f)
+                            val k = 1f - st * fp
+                            scaleX *= k; scaleY *= k
+                            translationY += stackOffDp.dp.toPx() * fp
+                        }
                         transformOrigin = TransformOrigin(0.5f, 0f)
                     }
                     // Zieht sich beim Ziehen leicht in die Länge.
                     if (pullY > 0f && vert) scaleX *= 1f + (pullY / size.width.coerceAtLeast(1f)) * 0.35f
                     else if (pullY > 0f && !land) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
                     alpha = (1f - abs(swipeX.value) / ((if (vert) size.height else size.width) * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f).let { if (stackBehind > 0) it * it else it } * wakeFade.value * rotFade.value *
-                        (if (stackBehind > 0) (1f - (leave.value * 2.5f).coerceIn(0f, 1f).let { it * it }) else 1f)
+                        (if (stackBehind > 0) (1f - leave.value.coerceIn(0f, 1f).let { it * it }) * (1f - 0.28f * frontPromo.value.coerceIn(0f, 1f)) else 1f)
                 }
                 .layout { m, _ ->
                     // Beim schnellen Auf- und Zuklappen darf die Feder nicht weit über das Ziel schießen.
@@ -910,7 +927,7 @@ internal fun IslandHostBody() {
                                     // die nächste bleibt vorn.
                                     stackHold = true
                                     launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(190, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
-                                    leave.animateTo(1f, spring<Float>(dampingRatio = 0.55f, stiffness = 240f))
+                                    leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f))
                                     IslandBus.dismiss()
                                     pullY = 0f
                                     leave.snapTo(0f)
@@ -1009,7 +1026,7 @@ internal fun IslandHostBody() {
                         swipeScope.launch {
                             if (abs(x2) > away && stackBehind > 0) {
                                 // Karte fliegt weg, gleichzeitig rücken die Karten dahinter federnd nach vorn; erst danach wird getauscht.
-                                val adv = launch { leave.animateTo(1f, spring<Float>(dampingRatio = 0.55f, stiffness = 240f)) }
+                                val adv = launch { leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f)) }
                                 swipeX.animateTo(sign(x) * ext() * 0.7f, tween(150))
                                 adv.join()
                                 suppressLinger = true
@@ -1236,13 +1253,13 @@ internal fun IslandHostBody() {
                         else MessageContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(messageW.dp, smallH.dp), s.expandDir)
                     }
                     Mode.ALERT -> (alert ?: lastAlert)?.let {
-                        AlertContent(it, bsc / landK.coerceAtLeast(0.01f).let { if (topAlert) it else 1f }, Modifier.requiredSize(alertW.dp, alertH.dp), if (s.multiNotif) pendingList.size else 0, tall = landTall, onMarkRead = {
+                        Box(Modifier.graphicsLayer { alpha = (1f - frontPromo.value * 1.4f).coerceIn(0f, 1f) }) { AlertContent(it, bsc / landK.coerceAtLeast(0.01f).let { if (topAlert) it else 1f }, Modifier.requiredSize(alertW.dp, alertH.dp), if (s.multiNotif) pendingList.size else 0, tall = landTall, onMarkRead = {
                             // Als gelesen markieren: Aktion der App auslösen, Meldung verschwindet (nächste kommt nach).
                             it.markRead?.let { pi -> swipeScope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { pi.send() } } }
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                             suppressLinger = true
                             if (pendingList.isNotEmpty()) swipeScope.launch {
-                                leave.animateTo(1f, spring<Float>(dampingRatio = 0.55f, stiffness = 240f))
+                                leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f))
                                 IslandBus.dismiss()
                                 leave.snapTo(0f)
                             } else IslandBus.dismiss()
@@ -1257,7 +1274,7 @@ internal fun IslandHostBody() {
                             // Antworten: Eingabe direkt in der Island, die Meldung verschwindet.
                             IslandBus.startReply(it)
                             suppressLinger = true
-                        }
+                        } }
                     }
                     Mode.EXPANDED -> shownCurrent?.let { cur ->
                         if (cur.kind == Kind.MEDIA && cur.media != null) MediaExpanded(
