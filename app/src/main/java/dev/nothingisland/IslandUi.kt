@@ -311,6 +311,8 @@ internal fun IslandHostBody() {
         lastAlert = a
         // Querformat mit Meldung oben: die Stapel-Animation läuft dort in der eigenen Meldung, die Pille am Rand bleibt ruhig.
         val topOn = IslandBus.rotation.value.let { it == 1 || it == 3 } && s.landTopAlert
+        // Die Meldung oben in der Mitte ersetzt die Text-Pille am Rand: dort bleibt kein durchscheinender Text stehen.
+        if (topOn) lingering = null
         if (!topOn && prev != null && prev.id != a.id && pendingList.any { it.id == prev.id }) {
             // Neue Meldung landet oben auf dem Stapel, die bisherige rutscht dahinter.
             val fromY = with(dens) { -30.dp.toPx() }
@@ -346,7 +348,7 @@ internal fun IslandHostBody() {
             }
         } finally {
             // Bleibt noch eine Weile als Text in der kleinen Pille stehen, außer sie wurde weggewischt.
-            if (suppressLinger) suppressLinger = false else if (pendingList.isEmpty()) lingering = a
+            if (suppressLinger) suppressLinger = false else if (pendingList.isEmpty() && !topOn) lingering = a
         }
         if ((pendingList.isNotEmpty() || fromStack[0]) && !topOn) {
             // Nur diese Karte geht weg (schrumpft nach oben), die nächste rückt nach vorn.
@@ -1993,7 +1995,7 @@ private fun TopAlertBubble(
                                     hold.skipGhost = true
                                     // Original sofort unsichtbar halten, der Geist übernimmt an derselben Stelle.
                                     swipe.snapTo(sign(x) * size.width * 3f)
-                                    scope.launch { ghostP.snapTo(0f); ghostP.animateTo(1f, tween(340, easing = androidx.compose.animation.core.LinearEasing)); ghost = null }
+                                    scope.launch { ghostP.snapTo(0f); ghostP.animateTo(1f, tween(210, easing = androidx.compose.animation.core.LinearEasing)); ghost = null }
                                     onAway()
                                     onBusy(false)
                                 } else { swipe.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f)); onBusy(false) }
