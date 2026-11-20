@@ -272,15 +272,9 @@ internal fun IslandHostBody() {
     val leaveId = remember { longArrayOf(0L) }
     // Meldung oben in der Mitte (Querformat) wird gerade gewischt/gezogen: Ablauf-Timer pausiert.
     var topBusy by remember { mutableStateOf(false) }
-    // Die Karte kam aus einem Stapel (auch die letzte): sie geht mit derselben Animation weg.
-    val fromStack = remember { booleanArrayOf(false) }
-    var stackHold by remember { mutableStateOf(false) }
     val swipeX = remember { Animatable(0f) }
     // Eigener Scope für Stapel-Animationen: sie laufen immer bis zum Ende, auch wenn der Effekt neu startet (Spam).
     val arriveScope = rememberCoroutineScope()
-    // Karte hinter der obersten, deren Zeit abläuft: schrumpft und blendet aus, bevor sie entfernt wird.
-    val backLeave = remember { Animatable(0f) }
-    var backLeaveId by remember { mutableStateOf<Long?>(null) }
     // Karten hinter der obersten haben keinen eigenen Countdown: ihre Anzeigezeit läuft erst ab, wenn sie vorne liegen.
     val dens = androidx.compose.ui.platform.LocalDensity.current
     var suppressLinger by remember { mutableStateOf(false) }
@@ -303,7 +297,6 @@ internal fun IslandHostBody() {
                 stackShift.snapTo(0f)
                 leave.snapTo(0f)
                 frontPromo.snapTo(0f)
-                fromStack[0] = false
             }
             return@LaunchedEffect
         }
@@ -350,7 +343,7 @@ internal fun IslandHostBody() {
             // Bleibt noch eine Weile als Text in der kleinen Pille stehen, außer sie wurde weggewischt.
             if (suppressLinger) suppressLinger = false else if (pendingList.isEmpty() && !topOn) lingering = a
         }
-        if ((pendingList.isNotEmpty() || fromStack[0]) && !topOn) {
+        if (pendingList.isNotEmpty() && !topOn) {
             // Nur diese Karte geht weg (schrumpft nach oben), die nächste rückt nach vorn.
             try {
                 leaveId[0] = a.id
@@ -671,11 +664,6 @@ internal fun IslandHostBody() {
     val stackBehind = if (mode == Mode.ALERT && s.multiNotif) minOf(pendingList.size, 3) else 0
     val stackOffDp = 9f - 7f * s.stackCompact
     val stackInsetDp = 12f - 9f * s.stackCompact
-    // Fortschritt 0..1: je weiter die oberste Karte weggezogen wird, desto mehr rückt die nächste nach vorn.
-    val stackP: () -> Float = {
-        // Die Karten dahinter rücken erst nach dem Loslassen vor (nicht schon beim Ziehen).
-        0f
-    }
     val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || (mode == Mode.QUICK && quickPages.size <= 1)
     LaunchedEffect(mode) { swipeX.snapTo(0f) }
     val onSwipeAway: () -> Unit = {
@@ -809,22 +797,19 @@ internal fun IslandHostBody() {
                     modifier = Modifier
                         .matchParentSize()
                         .graphicsLayer {
-                            val d = (i - stackP() + stackShift.value).coerceAtLeast(-0.35f)
+                            val d = (i + stackShift.value).coerceAtLeast(-0.35f)
                             val inset = stackInsetDp.dp.toPx()
                             val step = (2f * inset / size.width.coerceAtLeast(1f)).coerceAtMost(0.3f)
-                            val bl = if (ev.id == backLeaveId) backLeave.value else 0f
-                            // Nächste Karte macht beim Vorrücken einen kleinen Satz nach vorn (hebt kurz ab und setzt sich).
-                            val hop = if (i == 1) kotlin.math.sin(Math.PI.toFloat() * stackP().coerceIn(0f, 1f)) else 0f
-                            val k = (1f - step * d).coerceIn(0.4f, 1.1f) * (1f - 0.1f * bl) * (1f + 0.05f * hop)
+                            val k = (1f - step * d).coerceIn(0.4f, 1.1f)
                             scaleX = k
                             scaleY = k
                             transformOrigin = TransformOrigin(0.5f, 0f)
-                            translationY = stackOffDp.dp.toPx() * d + bl * 6.dp.toPx() - hop * 16.dp.toPx()
-                            alpha = ((1f - 0.3f * (d - 1f).coerceAtLeast(0f)) * (3.4f - d).coerceIn(0f, 1f)).coerceIn(0f, 1f) * (1f - bl)
+                            translationY = stackOffDp.dp.toPx() * d
+                            alpha = ((1f - 0.3f * (d - 1f).coerceAtLeast(0f)) * (3.4f - d).coerceIn(0f, 1f)).coerceIn(0f, 1f)
                         }
                         .clip(shape)
                         .drawBehind {
-                            val d = (i - stackP() + stackShift.value).coerceIn(0f, 1f)
+                            val d = (i + stackShift.value).coerceIn(0f, 1f)
                             drawRect(Bg.copy(alpha = 1f - (1f - s.stackAlpha) * d))
                         }
                         .border(1.dp, Hairline, shape),
@@ -937,10 +922,9 @@ internal fun IslandHostBody() {
                                 if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                                 armed = false
                                 suppressLinger = true
-                                if (pendingList.isNotEmpty() || fromStack[0]) {
+                                if (pendingList.isNotEmpty()) {
                                     // Gelesene Karte schrumpft aus der gezogenen Position heraus (kein Zurückspringen),
                                     // die nächste bleibt vorn.
-                                    stackHold = true
                                     launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(190, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
                                     leaveId[0] = (alertNow ?: lastAlert)?.id ?: 0L
                                     leave.animateTo(1f, tween(170, easing = FastOutSlowInEasing))
@@ -948,7 +932,6 @@ internal fun IslandHostBody() {
                                     pullY = 0f
                                     IslandBus.dismiss()
                                     leave.snapTo(0f)
-                                    stackHold = false
                                 } else {
                                     // Der Zug klingt weich aus, während die Meldung schon in die kleine Pille schrumpft
                                     // (kein Sprung der Dehnung, kein Aufblitzen).
@@ -1041,7 +1024,7 @@ internal fun IslandHostBody() {
                         val flung = abs(vel) > flingV && abs(x) > 8.dp.toPx() && sign(vel) == sign(x)
                         val x2 = if (flung && abs(x) <= away) sign(x) * (away + 1f) else x
                         swipeScope.launch {
-                            if (abs(x2) > away && (stackBehind > 0 || fromStack[0])) {
+                            if (abs(x2) > away && stackBehind > 0) {
                                 // Karte fliegt weg, gleichzeitig rücken die Karten dahinter federnd nach vorn; erst danach wird getauscht.
                                 leaveId[0] = (alertNow ?: lastAlert)?.id ?: 0L
                                 val adv = launch { leave.animateTo(1f, tween(150, easing = FastOutSlowInEasing)) }
@@ -1241,7 +1224,7 @@ internal fun IslandHostBody() {
                             it.markRead?.let { pi -> swipeScope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { pi.send() } } }
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                             suppressLinger = true
-                            if (pendingList.isNotEmpty() || fromStack[0]) swipeScope.launch {
+                            if (pendingList.isNotEmpty()) swipeScope.launch {
                                 leaveId[0] = it.id
                                 leave.animateTo(1f, tween(170, easing = FastOutSlowInEasing))
                                 frontPromo.snapTo(1f)
@@ -1870,7 +1853,6 @@ private fun TopAlertBubble(
     var ghost by remember { mutableStateOf<IslandEvent?>(null) }
     var ghostX by remember { mutableStateOf(0f) }
     var ghostDir by remember { mutableStateOf(0f) }
-    var ghostDur by remember { mutableStateOf(170) }
     val ghostScope = rememberCoroutineScope()
     var lastId by remember { mutableStateOf<Long?>(null) }
     val dens = androidx.compose.ui.platform.LocalDensity.current
@@ -1890,7 +1872,7 @@ private fun TopAlertBubble(
                 // Vordere Karte weg (gelesen, weggewischt, geöffnet): die nächste rückt von hinten nach vorn, der Rest folgt.
                 val old = hold.prevFront
                 if (old != null && !hold.skipGhost) {
-                    ghostX = 0f; ghostDir = 0f; ghostDur = 170
+                    ghostX = 0f; ghostDir = 0f
                     ghost = old
                     // Eigener Scope: wird die Animation vom nächsten Wechsel abgebrochen, bliebe sonst ein halbtransparenter Geist stehen.
                     ghostScope.launch { ghostP.snapTo(0f); ghostP.animateTo(1f, tween(170, easing = FastOutSlowInEasing)); ghost = null }
@@ -2062,7 +2044,7 @@ private fun TopAlertBubble(
                         translationY = if (ghostDir == 0f) -k * 18f * density else 0f
                         translationX = ghostX + ghostDir * (1f - (1f - k) * (1f - k)) * 0.45f * size.width
                         scaleX = 1f - 0.1f * k; scaleY = 1f - 0.1f * k
-                        alpha = if (ghostDir == 0f) 1f - k else (1f - k).let { it * (0.4f + 0.6f * it) }
+                        alpha = if (ghostDir == 0f) 1f - k else (1f - 1.8f * k).coerceAtLeast(0f)
                     }
                     .clip(shape)
                     .background(Bg)
