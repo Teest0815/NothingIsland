@@ -809,8 +809,9 @@ internal fun IslandHostBody() {
                 ) {
                     // Sobald die vordere Karte losgelassen wird und die nächste zu rücken beginnt, blendet deren Inhalt ein
                     // (Text rutscht ein, Sticker poppt); nach dem Tausch bleibt er unverändert stehen.
-                    if (i == 1 && (stackHold || leave.value > 0.01f)) {
-                        Box(Modifier.graphicsLayer { alpha = (stackP() * 1.6f).coerceIn(0f, 1f) }) {
+                    if (i == 1 && (stackHold || leave.value > 0.01f || pullY > 0f || abs(swipeX.value) > 0f)) {
+                        // Schon beim Herunterziehen/Wischen sichtbar, nicht erst nach dem Loslassen.
+                        Box(Modifier.graphicsLayer { alpha = maxOf(stackP() * 1.6f, pullY / (14f * density), abs(swipeX.value) / (40f * density)).coerceIn(0f, 1f) }) {
                             AlertContent(ev, bsc / landK.coerceAtLeast(0.01f).let { if (topAlert) it else 1f }, Modifier.requiredSize(alertW.dp, alertH.dp), tall = landTall) { }
                         }
                     }
