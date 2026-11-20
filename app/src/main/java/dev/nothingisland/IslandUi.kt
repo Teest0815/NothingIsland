@@ -333,7 +333,7 @@ internal fun IslandHostBody() {
         if (pendingList.isNotEmpty() && !topOn) {
             // Nur diese Karte geht weg (schrumpft nach oben), die nächste rückt nach vorn.
             try {
-                leave.animateTo(1f, spring<Float>(dampingRatio = 0.66f, stiffness = 480f))
+                leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f))
                 IslandBus.dismiss()
             } finally {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { leave.snapTo(0f) }
@@ -790,11 +790,13 @@ internal fun IslandHostBody() {
                             val inset = stackInsetDp.dp.toPx()
                             val step = (2f * inset / size.width.coerceAtLeast(1f)).coerceAtMost(0.3f)
                             val bl = if (ev.id == backLeaveId) backLeave.value else 0f
-                            val k = (1f - step * d).coerceIn(0.4f, 1f) * (1f - 0.1f * bl)
+                            // Nächste Karte macht beim Vorrücken einen kleinen Satz nach vorn (hebt kurz ab und setzt sich).
+                            val hop = if (i == 1) kotlin.math.sin(Math.PI.toFloat() * stackP().coerceIn(0f, 1f)) else 0f
+                            val k = (1f - step * d).coerceIn(0.4f, 1.1f) * (1f - 0.1f * bl) * (1f + 0.035f * hop)
                             scaleX = k
                             scaleY = k
                             transformOrigin = TransformOrigin(0.5f, 0f)
-                            translationY = stackOffDp.dp.toPx() * d + bl * 6.dp.toPx()
+                            translationY = stackOffDp.dp.toPx() * d + bl * 6.dp.toPx() - hop * 12.dp.toPx()
                             alpha = ((1f - 0.3f * (d - 1f).coerceAtLeast(0f)) * (3.4f - d).coerceIn(0f, 1f)).coerceIn(0f, 1f) * (1f - bl)
                         }
                         .clip(shape)
@@ -838,19 +840,18 @@ internal fun IslandHostBody() {
                     if (stackBehind > 0) {
                         rotationZ = (swipeX.value / size.width.coerceAtLeast(1f)) * 9f +
                             (dropY.value / 52.dp.toPx()) * 5f
-                        // Vordere Karte geht weg: sinkt leicht ab und blendet aus, die nächste rückt von hinten nach vorn
-                        // (kein Hochfahren über die nachrückende Karte).
-                        val lv = leave.value.coerceIn(0f, 1f)
-                        scaleX *= 1f - 0.05f * lv
-                        scaleY *= 1f - 0.05f * lv
-                        translationY += lv * 22.dp.toPx()
+                        // Gelesen: kurz anwachsen, dann nach oben zur Pille zusammenschrumpfen.
+                        val lv = leave.value
+                        scaleX *= 1f - 0.45f * lv
+                        scaleY *= 1f - 0.28f * lv
+                        translationY -= lv * 28.dp.toPx()
                         transformOrigin = TransformOrigin(0.5f, 0f)
                     }
                     // Zieht sich beim Ziehen leicht in die Länge.
                     if (pullY > 0f && vert) scaleX *= 1f + (pullY / size.width.coerceAtLeast(1f)) * 0.35f
                     else if (pullY > 0f && !land) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
                     alpha = (1f - abs(swipeX.value) / ((if (vert) size.height else size.width) * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f) * wakeFade.value * rotFade.value *
-                        (if (stackBehind > 0) 1f - leave.value.coerceIn(0f, 1f) else 1f)
+                        (if (stackBehind > 0) (1f - leave.value.coerceAtLeast(0f).let { it * it }).coerceIn(0f, 1f) else 1f)
                 }
                 .layout { m, _ ->
                     // Beim schnellen Auf- und Zuklappen darf die Feder nicht weit über das Ziel schießen.
@@ -905,7 +906,7 @@ internal fun IslandHostBody() {
                                     // die nächste bleibt vorn.
                                     stackHold = true
                                     launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(190, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
-                                    leave.animateTo(1f, spring<Float>(dampingRatio = 0.66f, stiffness = 480f))
+                                    leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f))
                                     IslandBus.dismiss()
                                     pullY = 0f
                                     leave.snapTo(0f)
@@ -1004,7 +1005,7 @@ internal fun IslandHostBody() {
                         swipeScope.launch {
                             if (abs(x2) > away && stackBehind > 0) {
                                 // Karte fliegt weg, gleichzeitig rücken die Karten dahinter federnd nach vorn; erst danach wird getauscht.
-                                val adv = launch { leave.animateTo(1f, spring<Float>(dampingRatio = 0.66f, stiffness = 480f)) }
+                                val adv = launch { leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f)) }
                                 swipeX.animateTo(sign(x) * ext() * 0.7f, tween(150))
                                 adv.join()
                                 suppressLinger = true
@@ -1237,7 +1238,7 @@ internal fun IslandHostBody() {
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                             suppressLinger = true
                             if (pendingList.isNotEmpty()) swipeScope.launch {
-                                leave.animateTo(1f, spring<Float>(dampingRatio = 0.66f, stiffness = 480f))
+                                leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f))
                                 IslandBus.dismiss()
                                 leave.snapTo(0f)
                             } else IslandBus.dismiss()
