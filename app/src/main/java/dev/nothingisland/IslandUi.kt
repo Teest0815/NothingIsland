@@ -331,7 +331,7 @@ internal fun IslandHostBody() {
             // Letzte Karte verhält sich danach wie eine normale Meldung (normaler Abgang in die Pille).
             arriveScope.launch {
                 frontPromo.snapTo(1f)
-                frontPromo.animateTo(0f, spring(dampingRatio = 0.62f, stiffness = 340f))
+                frontPromo.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 300f))
             }
         }
         try {
@@ -858,7 +858,7 @@ internal fun IslandHostBody() {
                         }
                     }
                     // Gestapelte Karten kippen beim Wischen leicht, fallen mit leichter Schräglage ein.
-                    if (stackBehind > 0 || fromStack[0]) {
+                    if (stackBehind > 0 || alert?.id == leaveId[0]) {
                         rotationZ = (swipeX.value / size.width.coerceAtLeast(1f)) * 9f +
                             (dropY.value / 30.dp.toPx()) * 5f
                         // Gelesen: kurz anwachsen, dann nach oben zur Pille zusammenschrumpfen.
@@ -882,7 +882,7 @@ internal fun IslandHostBody() {
                     if (pullY > 0f && vert) scaleX *= 1f + (pullY / size.width.coerceAtLeast(1f)) * 0.35f
                     else if (pullY > 0f && !land) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
                     alpha = (1f - abs(swipeX.value) / ((if (vert) size.height else size.width) * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f).let { if (stackBehind > 0) it * it else it } * wakeFade.value * rotFade.value *
-                        (if (stackBehind > 0 || fromStack[0]) (1f - (if (alert?.id == leaveId[0]) leave.value.coerceIn(0f, 1f) else 0f).let { it * it }) else 1f)
+                        (if (stackBehind > 0 || alert?.id == leaveId[0]) (1f - (if (alert?.id == leaveId[0]) leave.value.coerceIn(0f, 1f) else 0f).let { it * it }) else 1f) * (1f - 0.28f * frontPromo.value.coerceIn(0f, 1f))
                 }
                 .layout { m, _ ->
                     // Beim schnellen Auf- und Zuklappen darf die Feder nicht weit über das Ziel schießen.
