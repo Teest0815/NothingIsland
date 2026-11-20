@@ -328,7 +328,7 @@ internal fun IslandHostBody() {
         }
         if (!topOn && s.multiNotif && prev != null && prev.id != a.id && a.id < prev.id && pendingList.none { it.id == prev.id }) {
             // Die vordere Karte ist weg, die nächste rückt aus dem Stapel nach vorn (federnd, mit Überschwingen).
-            fromStack[0] = true
+            // Letzte Karte verhält sich danach wie eine normale Meldung (normaler Abgang in die Pille).
             arriveScope.launch {
                 frontPromo.snapTo(1f)
                 frontPromo.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 300f))
@@ -1039,7 +1039,7 @@ internal fun IslandHostBody() {
                             if (abs(x2) > away && (stackBehind > 0 || fromStack[0])) {
                                 // Karte fliegt weg, gleichzeitig rücken die Karten dahinter federnd nach vorn; erst danach wird getauscht.
                                 leaveId[0] = (alertNow ?: lastAlert)?.id ?: 0L
-                                val adv = launch { leave.animateTo(1f, tween(210, easing = FastOutSlowInEasing)) }
+                                val adv = launch { leave.animateTo(1f, tween(150, easing = FastOutSlowInEasing)) }
                                 swipeX.animateTo(sign(x) * ext() * 0.7f, tween(150))
                                 adv.join()
                                 suppressLinger = true
