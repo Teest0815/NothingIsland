@@ -333,7 +333,7 @@ internal fun IslandHostBody() {
         if (pendingList.isNotEmpty() && !topOn) {
             // Nur diese Karte geht weg (schrumpft nach oben), die nächste rückt nach vorn.
             try {
-                leave.animateTo(1f, spring<Float>(dampingRatio = 0.5f, stiffness = 520f))
+                leave.animateTo(1f, spring<Float>(dampingRatio = 0.55f, stiffness = 240f))
                 IslandBus.dismiss()
             } finally {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { leave.snapTo(0f) }
@@ -844,7 +844,8 @@ internal fun IslandHostBody() {
                         rotationZ = (swipeX.value / size.width.coerceAtLeast(1f)) * 9f +
                             (dropY.value / 30.dp.toPx()) * 5f
                         // Gelesen: kurz anwachsen, dann nach oben zur Pille zusammenschrumpfen.
-                        val lv = leave.value
+                        // Die Karten dahinter laufen mit der langsamen Feder; die vordere Karte ist dafür schneller weg.
+                        val lv = (leave.value * 2.5f).coerceIn(0f, 1f)
                         scaleX *= 1f - 0.45f * lv
                         scaleY *= 1f - 0.28f * lv
                         translationY -= lv * 28.dp.toPx()
@@ -854,7 +855,7 @@ internal fun IslandHostBody() {
                     if (pullY > 0f && vert) scaleX *= 1f + (pullY / size.width.coerceAtLeast(1f)) * 0.35f
                     else if (pullY > 0f && !land) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
                     alpha = (1f - abs(swipeX.value) / ((if (vert) size.height else size.width) * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f).let { if (stackBehind > 0) it * it else it } * wakeFade.value * rotFade.value *
-                        (if (stackBehind > 0) (1f - leave.value.coerceAtLeast(0f).let { it * it }).coerceIn(0f, 1f) else 1f)
+                        (if (stackBehind > 0) (1f - (leave.value * 2.5f).coerceIn(0f, 1f).let { it * it }) else 1f)
                 }
                 .layout { m, _ ->
                     // Beim schnellen Auf- und Zuklappen darf die Feder nicht weit über das Ziel schießen.
@@ -909,7 +910,7 @@ internal fun IslandHostBody() {
                                     // die nächste bleibt vorn.
                                     stackHold = true
                                     launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(190, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
-                                    leave.animateTo(1f, spring<Float>(dampingRatio = 0.5f, stiffness = 520f))
+                                    leave.animateTo(1f, spring<Float>(dampingRatio = 0.55f, stiffness = 240f))
                                     IslandBus.dismiss()
                                     pullY = 0f
                                     leave.snapTo(0f)
@@ -1008,7 +1009,7 @@ internal fun IslandHostBody() {
                         swipeScope.launch {
                             if (abs(x2) > away && stackBehind > 0) {
                                 // Karte fliegt weg, gleichzeitig rücken die Karten dahinter federnd nach vorn; erst danach wird getauscht.
-                                val adv = launch { leave.animateTo(1f, spring<Float>(dampingRatio = 0.5f, stiffness = 520f)) }
+                                val adv = launch { leave.animateTo(1f, spring<Float>(dampingRatio = 0.55f, stiffness = 240f)) }
                                 swipeX.animateTo(sign(x) * ext() * 0.7f, tween(150))
                                 adv.join()
                                 suppressLinger = true
@@ -1241,7 +1242,7 @@ internal fun IslandHostBody() {
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                             suppressLinger = true
                             if (pendingList.isNotEmpty()) swipeScope.launch {
-                                leave.animateTo(1f, spring<Float>(dampingRatio = 0.5f, stiffness = 520f))
+                                leave.animateTo(1f, spring<Float>(dampingRatio = 0.55f, stiffness = 240f))
                                 IslandBus.dismiss()
                                 leave.snapTo(0f)
                             } else IslandBus.dismiss()
