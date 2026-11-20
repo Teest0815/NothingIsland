@@ -86,12 +86,17 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
         }
         Spacer(Modifier.width((14f * sc).dp))
         // Nur beim ersten Erscheinen einblenden, nicht bei jedem Kartenwechsel im Stapel (sonst blitzt der Text auf).
-        val reveal = remember { Animatable(if (instant || revealedIds.contains(event.id)) 1f else 0f) }
-        if (instant) revealedIds.add(event.id)
-        LaunchedEffect(Unit) {
-            if (reveal.value < 1f) reveal.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = 260f))
-            if (revealedIds.size > 300) revealedIds.clear()
-            revealedIds.add(event.id)
+        val reveal = remember { Animatable(if (instant) 1f else 0f) }
+        var shownId by remember { mutableStateOf(event.id) }
+        LaunchedEffect(event.id) {
+            if (!instant) {
+                // Erstes Erscheinen und jedes Vorrücken im Stapel: Text rutscht weich ein.
+                if (shownId != event.id) {
+                    shownId = event.id
+                    reveal.snapTo(0f)
+                }
+                if (reveal.value < 1f) reveal.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 300f))
+            }
         }
         Column(modifier = Modifier.weight(1f).graphicsLayer {
             alpha = reveal.value.coerceIn(0f, 1f)
@@ -121,8 +126,7 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
         event.picture?.let { pic ->
             Spacer(Modifier.width((10f * sc).dp))
             // Bild/Sticker poppt federnd auf.
-            val seenBefore = instant || revealedIds.contains(event.id)
-            val pop = remember(pic) { androidx.compose.animation.core.Animatable(if (seenBefore) 1f else 0f) }
+            val pop = remember(pic) { androidx.compose.animation.core.Animatable(if (instant) 1f else 0f) }
             LaunchedEffect(pic) { if (pop.value < 1f) pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.4f, stiffness = 300f)) }
             Image(
                 bitmap = pic,

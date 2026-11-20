@@ -807,11 +807,7 @@ internal fun IslandHostBody() {
                         .border(1.dp, Hairline, shape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (i == 1) {
-                        Box(Modifier.graphicsLayer { val d = (1f - stackP() + stackShift.value).coerceIn(0f, 1f); alpha = (1f - d) }) {
-                            AlertContent(ev, bsc / landK.coerceAtLeast(0.01f).let { if (topAlert) it else 1f }, Modifier.requiredSize(alertW.dp, alertH.dp), tall = landTall, instant = true) { }
-                        }
-                    }
+                    // Karten dahinter bleiben leer; ihr Inhalt blendet erst ein, wenn sie vorn liegen (Text rutscht ein, Sticker poppt).
                 }
             }
         }
