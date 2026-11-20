@@ -270,6 +270,8 @@ internal fun IslandHostBody() {
     val frontPromo = remember { Animatable(0f) }
     // Welche Karte gerade weggeht: der Weggeh-Wert gilt nur für sie, nicht für die nachrückende.
     val leaveId = remember { longArrayOf(0L) }
+    // Meldung oben in der Mitte (Querformat) wird gerade gewischt/gezogen: Ablauf-Timer pausiert.
+    var topBusy by remember { mutableStateOf(false) }
     // Die Karte kam aus einem Stapel (auch die letzte): sie geht mit derselben Animation weg.
     val fromStack = remember { booleanArrayOf(false) }
     var stackHold by remember { mutableStateOf(false) }
@@ -338,8 +340,8 @@ internal fun IslandHostBody() {
             // Jede Karte hat ihre eigene Zeit: nach Ablauf verschwindet nur die oberste, die nächste ist dann dran.
             delay((s.alertSeconds * 1000L).coerceAtLeast(1500L))
             // nicht wegklappen, solange gezogen wird (Wischen oder Herunterziehen); danach noch kurz Zeit zum Lesen
-            if (abs(swipeX.value) > 0.5f || pullY > 0f) {
-                while (abs(swipeX.value) > 0.5f || pullY > 0f) delay(150)
+            if (abs(swipeX.value) > 0.5f || pullY > 0f || topBusy) {
+                while (abs(swipeX.value) > 0.5f || pullY > 0f || topBusy) delay(150)
                 delay(900)
             }
         } finally {
@@ -397,6 +399,7 @@ internal fun IslandHostBody() {
         s = s,
         alert = if (topAlertOn) alert else null,
         hidden = replying,
+        onBusy = { topBusy = it },
         more = 0,
         behind = if (s.multiNotif) pendingList.take(2) else emptyList(),
         onMute = { a ->
@@ -1843,6 +1846,7 @@ private fun TopAlertBubble(
     s: IslandSettings,
     alert: IslandEvent?,
     hidden: Boolean,
+    onBusy: (Boolean) -> Unit,
     more: Int,
     behind: List<IslandEvent>,
     onOpen: (IslandEvent) -> Unit,
@@ -1920,6 +1924,9 @@ private fun TopAlertBubble(
     if (!show || ev == null) return
     val swipe = remember { Animatable(0f) }
     val pull = remember { Animatable(0f) }
+    // Die Wisch-Verschiebung gilt nur für die Karte, die gewischt wurde (die nachrückende startet sofort an ihrem Platz).
+    val swipeOwner = remember { longArrayOf(0L) }
+    val evNow by androidx.compose.runtime.rememberUpdatedState(ev)
     val scope = rememberCoroutineScope()
     val shape = RoundedCornerShape((minOf(s.expandedCorner * fsc, 42f * fsc)).dp)
     val ctxForHaptic = androidx.compose.ui.platform.LocalContext.current
@@ -1954,13 +1961,14 @@ private fun TopAlertBubble(
                     val k = p.value
                     transformOrigin = TransformOrigin(0.5f, 0f)
                     translationY = -(1f - k) * (h + 24f) * density * 0.5f + pull.value + drop.value
-                    translationX = swipe.value
+                    val sw = if (swipeOwner[0] == ev.id) swipe.value else 0f
+                    translationX = sw
                     val landing = 1f - 0.07f * (abs(drop.value) / (40f * density)).coerceIn(0f, 1f)
                     val fi = front.value
                     translationY += fi * 8f * density
                     val sk = pop.value * (0.9f + 0.1f * k.coerceAtMost(1f)) * landing * (1f - 0.05f * fi)
                     scaleX = sk; scaleY = sk
-                    alpha = (k * 2.2f).coerceIn(0f, 1f) * (1f - abs(swipe.value) / (w * density * 0.9f)).coerceIn(0f, 1f) * (1f - 0.28f * fi)
+                    alpha = (k * 2.2f).coerceIn(0f, 1f) * (1f - abs(sw) / (w * density * 0.9f)).coerceIn(0f, 1f) * (1f - 0.28f * fi)
                 }
                 .clip(shape)
                 .background(Bg)
@@ -1969,7 +1977,7 @@ private fun TopAlertBubble(
                     var vel = 0f
                     var last = 0L
                     detectHorizontalDragGestures(
-                        onDragStart = { vel = 0f; last = 0L },
+                        onDragStart = { vel = 0f; last = 0L; swipeOwner[0] = evNow.id; onBusy(true); scope.launch { swipe.snapTo(0f) } },
                         onDragEnd = {
                             val x = swipe.value
                             val away = 70.dp.toPx()
@@ -1979,15 +1987,15 @@ private fun TopAlertBubble(
                                     swipe.animateTo(sign(x) * size.width * 0.8f, tween(130, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
                                     // Weggewischte Karte bleibt als Geist an ihrer Position und blendet dort aus (nicht zurückspringen).
                                     ghostX = swipe.value
-                                    ghost = ev
+                                    ghost = evNow
                                     hold.skipGhost = true
                                     scope.launch { ghostP.snapTo(0f); ghostP.animateTo(1f, tween(140)); ghost = null }
                                     onAway()
-                                    swipe.snapTo(0f)
-                                } else swipe.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f))
+                                    onBusy(false)
+                                } else { swipe.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f)); onBusy(false) }
                             }
                         },
-                        onDragCancel = { scope.launch { swipe.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f)) } },
+                        onDragCancel = { scope.launch { swipe.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f)); onBusy(false) } },
                         onHorizontalDrag = { change, amount ->
                             change.consume()
                             val dt = change.uptimeMillis - last
@@ -2005,17 +2013,19 @@ private fun TopAlertBubble(
                     val trigger = 18.dp.toPx()
                     fun band(r: Float) = maxPull * kotlin.math.tanh(r / (maxPull * 1.7f))
                     detectVerticalDragGestures(
+                        onDragStart = { onBusy(true) },
                         onDragEnd = {
                             val y = pull.value
                             raw = 0f
                             armed = false
                             scope.launch {
-                                if (y < -trigger && canMute) onMute(ev)
-                                else if (y > trigger && canRead) onMarkRead(ev)
+                                if (y < -trigger && canMute) onMute(evNow)
+                                else if (y > trigger && canRead) onMarkRead(evNow)
                                 pull.animateTo(0f, tween(200, easing = FastOutSlowInEasing))
+                                onBusy(false)
                             }
                         },
-                        onDragCancel = { raw = 0f; armed = false; scope.launch { pull.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 420f)) } },
+                        onDragCancel = { raw = 0f; armed = false; scope.launch { pull.animateTo(0f, spring(dampingRatio = 0.6f, stiffness = 420f)); onBusy(false) } },
                         onVerticalDrag = { change, amount ->
                             change.consume()
                             raw = (raw + amount).coerceIn(if (canMute) -1000f else 0f, if (canRead) 1000f else 0f)
