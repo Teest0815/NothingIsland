@@ -299,7 +299,9 @@ internal fun IslandHostBody() {
         }
         val prev = lastAlert
         lastAlert = a
-        if (prev != null && prev.id != a.id && pendingList.any { it.id == prev.id }) {
+        // Querformat mit Meldung oben: die Stapel-Animation läuft dort in der eigenen Meldung, die Pille am Rand bleibt ruhig.
+        val topOn = IslandBus.rotation.value.let { it == 1 || it == 3 } && s.landTopAlert
+        if (!topOn && prev != null && prev.id != a.id && pendingList.any { it.id == prev.id }) {
             // Neue Meldung landet oben auf dem Stapel, die bisherige rutscht dahinter.
             val fromY = with(dens) { -52.dp.toPx() }
             arriveScope.launch {
@@ -328,7 +330,7 @@ internal fun IslandHostBody() {
             // Bleibt noch eine Weile als Text in der kleinen Pille stehen, außer sie wurde weggewischt.
             if (suppressLinger) suppressLinger = false else if (pendingList.isEmpty()) lingering = a
         }
-        if (pendingList.isNotEmpty()) {
+        if (pendingList.isNotEmpty() && !topOn) {
             // Nur diese Karte geht weg (schrumpft nach oben), die nächste rückt nach vorn.
             try {
                 leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f))
@@ -648,9 +650,8 @@ internal fun IslandHostBody() {
     val stackInsetDp = 12f - 9f * s.stackCompact
     // Fortschritt 0..1: je weiter die oberste Karte weggezogen wird, desto mehr rückt die nächste nach vorn.
     val stackP: () -> Float = {
-        val sw = abs(swipeX.value) / with(dens) { 110.dp.toPx() }
-        val pl = pullY / with(dens) { 18.dp.toPx() }
-        maxOf(sw, pl, leave.value, if (stackHold) 1f else 0f).coerceIn(0f, 1f)
+        // Die Karten dahinter rücken erst nach dem Loslassen vor (nicht schon beim Ziehen).
+        maxOf(leave.value, if (stackHold) 1f else 0f).coerceIn(0f, 1f)
     }
     val swipeable = mode == Mode.ALERT || mode == Mode.EXPANDED || mode == Mode.MESSAGE || (mode == Mode.QUICK && quickPages.size <= 1)
     LaunchedEffect(mode) { swipeX.snapTo(0f) }
@@ -1001,10 +1002,12 @@ internal fun IslandHostBody() {
                         val x2 = if (flung && abs(x) <= away) sign(x) * (away + 1f) else x
                         swipeScope.launch {
                             if (abs(x2) > away && stackBehind > 0) {
+                                launch { leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f)) }
                                 swipeX.animateTo(sign(x) * ext() * 0.7f, tween(150))
                                 suppressLinger = true
                                 IslandBus.dismiss()
                                 swipeX.snapTo(0f)
+                                leave.snapTo(0f)
                                 if (s.haptics) QuickActions.haptic(ctx, 1)
                             } else if (abs(x2) > away) {
                                 swipeX.animateTo(sign(x2) * ext() * 0.8f, tween(if (flung) 110 else 160, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
