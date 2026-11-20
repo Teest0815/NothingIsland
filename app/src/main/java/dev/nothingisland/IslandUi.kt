@@ -1071,45 +1071,9 @@ internal fun IslandHostBody() {
                         onVerticalDrag = { change, a -> onSwipeDrag(change, a) },
                     ) else detectHorizontalDragGestures(
                         onDragStart = { vel = 0f; lastT = 0L },
-                        onDragEnd = {
-                            val x = swipeX.value
-                            val flung = abs(vel) > flingV && abs(x) > 8.dp.toPx() && sign(vel) == sign(x)
-                            val x2 = if (flung && abs(x) <= away) sign(x) * (away + 1f) else x
-                            swipeScope.launch {
-                                if (abs(x2) > away && stackBehind > 0) {
-                                    // Oberste Karte fliegt zur Seite und ist weg, die nächste rückt nach vorn.
-                                    swipeX.animateTo(sign(x) * size.width * 0.7f, tween(150))
-                                    suppressLinger = true
-                                    // Die nächste Karte ist durch das Wegziehen schon groß und deckend: nahtlos übernehmen.
-                                    IslandBus.dismiss()
-                                    swipeX.snapTo(0f)
-                                    if (s.haptics) QuickActions.haptic(ctx, 1)
-                                } else if (abs(x2) > away) {
-                                    swipeX.animateTo(sign(x2) * size.width * 0.8f, tween(if (flung) 110 else 160, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
-                                    // Die kleine Pille erscheint direkt an ihrem Platz und wächst nicht aus der Mitte.
-                                    snapNext = true
-                                    appear.snapTo(0f)
-                                    onSwipeAway()
-                                    swipeX.snapTo(0f)
-                                    launch { delay(60); snapNext = false }
-                                    // Kleine Pille poppt federnd wieder auf.
-                                    appear.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 360f))
-                                    snapNext = false
-                                } else {
-                                    swipeX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f))
-                                }
-                            }
-                        },
-                        onDragCancel = {
-                            swipeScope.launch { swipeX.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f)) }
-                        },
-                        onHorizontalDrag = { change, dragAmount ->
-                            change.consume()
-                            val dt = change.uptimeMillis - lastT
-                            if (lastT != 0L && dt > 0) vel = vel * 0.5f + (dragAmount / dt * 1000f) * 0.5f
-                            lastT = change.uptimeMillis
-                            swipeScope.launch { swipeX.snapTo(swipeX.value + dragAmount) }
-                        },
+                        onDragEnd = { dragEnd() },
+                        onDragCancel = { dragCancel() },
+                        onHorizontalDrag = { change, a -> onSwipeDrag(change, a) },
                     )
                 }
                 .pointerInput(mode, s.swipeUpAction, s.swipeDownPause, vert, rot) {
