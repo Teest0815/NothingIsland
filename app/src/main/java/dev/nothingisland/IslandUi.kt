@@ -827,9 +827,9 @@ internal fun IslandHostBody() {
                 ) {
                     // Sobald die vordere Karte losgelassen wird und die nächste zu rücken beginnt, blendet deren Inhalt ein
                     // (Text rutscht ein, Sticker poppt); nach dem Tausch bleibt er unverändert stehen.
-                    if (i == 1 && (pullY > 0f || abs(swipeX.value) > 0f)) {
+                    if (i == 1 && (leave.value > 0.01f || pullY > 0f || abs(swipeX.value) > 0f)) {
                         // Schon beim Herunterziehen/Wischen sichtbar, nicht erst nach dem Loslassen.
-                        Box(Modifier.graphicsLayer { alpha = maxOf(stackP() * 1.6f, pullY / (14f * density), abs(swipeX.value) / (40f * density)).coerceIn(0f, 1f) }) {
+                        Box(Modifier.graphicsLayer { alpha = maxOf(leave.value * 2f, pullY / (14f * density), abs(swipeX.value) / (40f * density)).coerceIn(0f, 1f) }) {
                             AlertContent(ev, bsc / landK.coerceAtLeast(0.01f).let { if (topAlert) it else 1f }, Modifier.requiredSize(alertW.dp, alertH.dp), tall = landTall) { }
                         }
                     }
@@ -1267,7 +1267,7 @@ internal fun IslandHostBody() {
                         else MessageContent(it, sc, gap, s.iconTextGap.toFloat(), Modifier.requiredSize(messageW.dp, smallH.dp), s.expandDir)
                     }
                     Mode.ALERT -> (alert ?: lastAlert)?.let {
-                        Box(Modifier.graphicsLayer { alpha = (1f - frontPromo.value * 1.4f).coerceIn(0f, 1f) }) { AlertContent(it, bsc / landK.coerceAtLeast(0.01f).let { if (topAlert) it else 1f }, Modifier.requiredSize(alertW.dp, alertH.dp), if (s.multiNotif) pendingList.size else 0, tall = landTall, onMarkRead = {
+                        Box { AlertContent(it, bsc / landK.coerceAtLeast(0.01f).let { if (topAlert) it else 1f }, Modifier.requiredSize(alertW.dp, alertH.dp), if (s.multiNotif) pendingList.size else 0, tall = landTall, onMarkRead = {
                             // Als gelesen markieren: Aktion der App auslösen, Meldung verschwindet (nächste kommt nach).
                             it.markRead?.let { pi -> swipeScope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { pi.send() } } }
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
