@@ -1002,8 +1002,10 @@ internal fun IslandHostBody() {
                         val x2 = if (flung && abs(x) <= away) sign(x) * (away + 1f) else x
                         swipeScope.launch {
                             if (abs(x2) > away && stackBehind > 0) {
-                                launch { leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f)) }
+                                // Karte fliegt weg, gleichzeitig rücken die Karten dahinter federnd nach vorn; erst danach wird getauscht.
+                                val adv = launch { leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f)) }
                                 swipeX.animateTo(sign(x) * ext() * 0.7f, tween(150))
+                                adv.join()
                                 suppressLinger = true
                                 IslandBus.dismiss()
                                 swipeX.snapTo(0f)
@@ -1857,6 +1859,7 @@ private fun TopAlertBubble(
     val front = remember { Animatable(0f) } // 1 = Karte lag eben noch hinten und rückt nach vorn
     val ghostP = remember { Animatable(0f) }
     var ghost by remember { mutableStateOf<IslandEvent?>(null) }
+    var ghostX by remember { mutableStateOf(0f) }
     var lastId by remember { mutableStateOf<Long?>(null) }
     val dens = androidx.compose.ui.platform.LocalDensity.current
     val hold = remember { object { var prevIds = emptyList<Long>(); var curIds = emptyList<Long>(); var prevFront: IslandEvent? = null; var curFront: IslandEvent? = null; var skipGhost = false } }
@@ -1875,6 +1878,7 @@ private fun TopAlertBubble(
                 // Vordere Karte weg (gelesen, weggewischt, geöffnet): die nächste rückt von hinten nach vorn, der Rest folgt.
                 val old = hold.prevFront
                 if (old != null && !hold.skipGhost) {
+                    ghostX = 0f
                     ghost = old
                     launch { ghostP.snapTo(0f); ghostP.animateTo(1f, tween(170, easing = FastOutSlowInEasing)); ghost = null }
                 }
@@ -1970,7 +1974,11 @@ private fun TopAlertBubble(
                             scope.launch {
                                 if (abs(x) > away || flung) {
                                     swipe.animateTo(sign(x) * size.width * 0.8f, tween(130, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
+                                    // Weggewischte Karte bleibt als Geist an ihrer Position und blendet dort aus (nicht zurückspringen).
+                                    ghostX = swipe.value
+                                    ghost = ev
                                     hold.skipGhost = true
+                                    scope.launch { ghostP.snapTo(0f); ghostP.animateTo(1f, tween(140)); ghost = null }
                                     onAway()
                                     swipe.snapTo(0f)
                                 } else swipe.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f))
@@ -2030,6 +2038,7 @@ private fun TopAlertBubble(
                         val k = ghostP.value
                         transformOrigin = TransformOrigin(0.5f, 0f)
                         translationY = -k * 18f * density
+                        translationX = ghostX
                         scaleX = 1f - 0.1f * k; scaleY = 1f - 0.1f * k
                         alpha = 1f - k
                     }
