@@ -1867,6 +1867,8 @@ private fun TopAlertBubble(
     val ghostP = remember { Animatable(0f) }
     var ghost by remember { mutableStateOf<IslandEvent?>(null) }
     var ghostX by remember { mutableStateOf(0f) }
+    var ghostDir by remember { mutableStateOf(0f) }
+    var ghostDur by remember { mutableStateOf(170) }
     var lastId by remember { mutableStateOf<Long?>(null) }
     val dens = androidx.compose.ui.platform.LocalDensity.current
     val hold = remember { object { var prevIds = emptyList<Long>(); var curIds = emptyList<Long>(); var prevFront: IslandEvent? = null; var curFront: IslandEvent? = null; var skipGhost = false } }
@@ -1885,7 +1887,7 @@ private fun TopAlertBubble(
                 // Vordere Karte weg (gelesen, weggewischt, geöffnet): die nächste rückt von hinten nach vorn, der Rest folgt.
                 val old = hold.prevFront
                 if (old != null && !hold.skipGhost) {
-                    ghostX = 0f
+                    ghostX = 0f; ghostDir = 0f; ghostDur = 170
                     ghost = old
                     launch { ghostP.snapTo(0f); ghostP.animateTo(1f, tween(170, easing = FastOutSlowInEasing)); ghost = null }
                 }
@@ -1984,12 +1986,14 @@ private fun TopAlertBubble(
                             val flung = abs(vel) > 650.dp.toPx() && abs(x) > 8.dp.toPx() && sign(vel) == sign(x)
                             scope.launch {
                                 if (abs(x) > away || flung) {
-                                    swipe.animateTo(sign(x) * size.width * 0.8f, tween(130, easing = androidx.compose.animation.core.LinearOutSlowInEasing))
-                                    // Weggewischte Karte bleibt als Geist an ihrer Position und blendet dort aus (nicht zurückspringen).
+                                    // Die Karte fliegt in Wischrichtung weiter und blendet dabei langsam aus; die nächste rückt sofort nach.
                                     ghostX = swipe.value
+                                    ghostDir = sign(x)
                                     ghost = evNow
                                     hold.skipGhost = true
-                                    scope.launch { ghostP.snapTo(0f); ghostP.animateTo(1f, tween(140)); ghost = null }
+                                    // Original sofort unsichtbar halten, der Geist übernimmt an derselben Stelle.
+                                    swipe.snapTo(sign(x) * size.width * 3f)
+                                    scope.launch { ghostP.snapTo(0f); ghostP.animateTo(1f, tween(340, easing = androidx.compose.animation.core.LinearEasing)); ghost = null }
                                     onAway()
                                     onBusy(false)
                                 } else { swipe.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 500f)); onBusy(false) }
@@ -2050,10 +2054,10 @@ private fun TopAlertBubble(
                     .graphicsLayer {
                         val k = ghostP.value
                         transformOrigin = TransformOrigin(0.5f, 0f)
-                        translationY = -k * 18f * density
-                        translationX = ghostX
+                        translationY = if (ghostDir == 0f) -k * 18f * density else 0f
+                        translationX = ghostX + ghostDir * (1f - (1f - k) * (1f - k)) * 0.45f * size.width
                         scaleX = 1f - 0.1f * k; scaleY = 1f - 0.1f * k
-                        alpha = 1f - k
+                        alpha = if (ghostDir == 0f) 1f - k else (1f - k).let { it * (0.4f + 0.6f * it) }
                     }
                     .clip(shape)
                     .background(Bg)
