@@ -807,7 +807,7 @@ internal fun IslandHostBody() {
                 ) {
                     if (i == 1) {
                         Box(Modifier.graphicsLayer { val d = (1f - stackP() + stackShift.value).coerceIn(0f, 1f); alpha = (1f - d) * (1f - d) }) {
-                            AlertContent(ev, bsc / landK.coerceAtLeast(0.01f).let { if (topAlert) it else 1f }, Modifier.requiredSize(alertW.dp, alertH.dp), tall = landTall) { }
+                            AlertContent(ev, bsc / landK.coerceAtLeast(0.01f).let { if (topAlert) it else 1f }, Modifier.requiredSize(alertW.dp, alertH.dp), tall = landTall, instant = true) { }
                         }
                     }
                 }
@@ -2036,7 +2036,7 @@ private fun TopAlertBubble(
                     .clip(shape)
                     .background(Bg)
                     .border(1.dp, Hairline, shape),
-            ) { AlertContent(g, sc, Modifier.requiredSize(w.dp, h.dp), 0, onMarkRead = {}, onCopyCode = {}) {} }
+            ) { AlertContent(g, sc, Modifier.requiredSize(w.dp, h.dp), 0, instant = true, onMarkRead = {}, onCopyCode = {}) {} }
         }
     }
 }
