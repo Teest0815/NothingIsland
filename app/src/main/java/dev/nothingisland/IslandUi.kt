@@ -331,7 +331,7 @@ internal fun IslandHostBody() {
             // Letzte Karte verhält sich danach wie eine normale Meldung (normaler Abgang in die Pille).
             arriveScope.launch {
                 frontPromo.snapTo(1f)
-                frontPromo.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 300f))
+                frontPromo.animateTo(0f, spring(dampingRatio = 0.42f, stiffness = 520f))
             }
         }
         try {
@@ -350,7 +350,7 @@ internal fun IslandHostBody() {
             // Nur diese Karte geht weg (schrumpft nach oben), die nächste rückt nach vorn.
             try {
                 leaveId[0] = a.id
-                leave.animateTo(1f, tween(210, easing = FastOutSlowInEasing))
+                leave.animateTo(1f, tween(170, easing = FastOutSlowInEasing))
                 frontPromo.snapTo(1f)
                 IslandBus.dismiss()
             } finally {
@@ -938,7 +938,7 @@ internal fun IslandHostBody() {
                                     stackHold = true
                                     launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(190, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
                                     leaveId[0] = (alertNow ?: lastAlert)?.id ?: 0L
-                                    leave.animateTo(1f, tween(210, easing = FastOutSlowInEasing))
+                                    leave.animateTo(1f, tween(170, easing = FastOutSlowInEasing))
                                     frontPromo.snapTo(1f)
                                     pullY = 0f
                                     IslandBus.dismiss()
@@ -1238,7 +1238,7 @@ internal fun IslandHostBody() {
                             suppressLinger = true
                             if (pendingList.isNotEmpty() || fromStack[0]) swipeScope.launch {
                                 leaveId[0] = it.id
-                                leave.animateTo(1f, tween(210, easing = FastOutSlowInEasing))
+                                leave.animateTo(1f, tween(170, easing = FastOutSlowInEasing))
                                 frontPromo.snapTo(1f)
                                 IslandBus.dismiss()
                                 leave.snapTo(0f)
