@@ -346,7 +346,7 @@ internal fun IslandHostBody() {
             // Nur diese Karte geht weg (schrumpft nach oben), die nächste rückt nach vorn.
             try {
                 leaveId[0] = a.id
-                leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f))
+                leave.animateTo(1f, tween(210, easing = FastOutSlowInEasing))
                 frontPromo.snapTo(1f)
                 IslandBus.dismiss()
             } finally {
@@ -863,20 +863,22 @@ internal fun IslandHostBody() {
                         scaleX *= 1f - 0.45f * lv
                         scaleY *= 1f - 0.28f * lv
                         translationY -= lv * 28.dp.toPx()
-                        val fp = frontPromo.value
-                        if (fp != 0f) {
-                            val st = (2f * stackInsetDp.dp.toPx() / size.width.coerceAtLeast(1f)).coerceAtMost(0.3f)
-                            val k = 1f - st * fp
-                            scaleX *= k; scaleY *= k
-                            translationY += stackOffDp.dp.toPx() * fp
-                        }
                         transformOrigin = TransformOrigin(0.5f, 0f)
                     }
+                    // Nachrückende Karte (auch die letzte im Stapel): kommt aus der Stapelposition nach vorn.
+                    val fp = frontPromo.value
+                    if (fp != 0f) {
+                        val st = (2f * stackInsetDp.dp.toPx() / size.width.coerceAtLeast(1f)).coerceAtMost(0.3f)
+                        val k = 1f - st * fp
+                        scaleX *= k; scaleY *= k
+                        translationY += stackOffDp.dp.toPx() * fp
+                    }
+                    if (frontPromo.value != 0f) transformOrigin = TransformOrigin(0.5f, 0f)
                     // Zieht sich beim Ziehen leicht in die Länge.
                     if (pullY > 0f && vert) scaleX *= 1f + (pullY / size.width.coerceAtLeast(1f)) * 0.35f
                     else if (pullY > 0f && !land) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
                     alpha = (1f - abs(swipeX.value) / ((if (vert) size.height else size.width) * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f).let { if (stackBehind > 0) it * it else it } * wakeFade.value * rotFade.value *
-                        (if (stackBehind > 0) (1f - (if (alert?.id == leaveId[0]) leave.value.coerceIn(0f, 1f) else 0f).let { it * it }) * (1f - 0.28f * frontPromo.value.coerceIn(0f, 1f)) else 1f)
+                        (if (stackBehind > 0) (1f - (if (alert?.id == leaveId[0]) leave.value.coerceIn(0f, 1f) else 0f).let { it * it }) else 1f) * (1f - 0.28f * frontPromo.value.coerceIn(0f, 1f))
                 }
                 .layout { m, _ ->
                     // Beim schnellen Auf- und Zuklappen darf die Feder nicht weit über das Ziel schießen.
@@ -932,7 +934,7 @@ internal fun IslandHostBody() {
                                     stackHold = true
                                     launch { androidx.compose.animation.core.animate(y, 0f, animationSpec = tween(190, easing = FastOutSlowInEasing)) { v, _ -> pullY = v } }
                                     leaveId[0] = (alert ?: lastAlert)?.id ?: 0L
-                                    leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f))
+                                    leave.animateTo(1f, tween(210, easing = FastOutSlowInEasing))
                                     frontPromo.snapTo(1f)
                                     pullY = 0f
                                     IslandBus.dismiss()
@@ -1033,7 +1035,7 @@ internal fun IslandHostBody() {
                             if (abs(x2) > away && stackBehind > 0) {
                                 // Karte fliegt weg, gleichzeitig rücken die Karten dahinter federnd nach vorn; erst danach wird getauscht.
                                 leaveId[0] = (alert ?: lastAlert)?.id ?: 0L
-                                val adv = launch { leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f)) }
+                                val adv = launch { leave.animateTo(1f, tween(210, easing = FastOutSlowInEasing)) }
                                 swipeX.animateTo(sign(x) * ext() * 0.7f, tween(150))
                                 adv.join()
                                 suppressLinger = true
@@ -1268,7 +1270,7 @@ internal fun IslandHostBody() {
                             suppressLinger = true
                             if (pendingList.isNotEmpty()) swipeScope.launch {
                                 leaveId[0] = it.id
-                                leave.animateTo(1f, spring<Float>(dampingRatio = 0.8f, stiffness = 620f))
+                                leave.animateTo(1f, tween(210, easing = FastOutSlowInEasing))
                                 frontPromo.snapTo(1f)
                                 IslandBus.dismiss()
                                 leave.snapTo(0f)
