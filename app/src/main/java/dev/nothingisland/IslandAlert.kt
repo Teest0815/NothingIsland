@@ -86,17 +86,13 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
         }
         Spacer(Modifier.width((14f * sc).dp))
         // Nur beim ersten Erscheinen einblenden, nicht bei jedem Kartenwechsel im Stapel (sonst blitzt der Text auf).
-        val reveal = remember { Animatable(if (instant) 1f else 0f) }
-        var shownId by remember { mutableStateOf(event.id) }
+        // Text rutscht ein, sobald die Karte erscheint oder (im Stapel) zu rücken beginnt. Schon gezeigte Karten bleiben stehen.
+        val seen = remember(event.id) { instant || revealedIds.contains(event.id) }
+        val reveal = remember(event.id) { Animatable(if (seen) 1f else 0f) }
         LaunchedEffect(event.id) {
-            if (!instant) {
-                // Erstes Erscheinen und jedes Vorrücken im Stapel: Text rutscht weich ein.
-                if (shownId != event.id) {
-                    shownId = event.id
-                    reveal.snapTo(0f)
-                }
-                if (reveal.value < 1f) reveal.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 300f))
-            }
+            if (revealedIds.size > 300) revealedIds.clear()
+            revealedIds.add(event.id)
+            if (!seen) reveal.animateTo(1f, spring(dampingRatio = 0.72f, stiffness = 300f))
         }
         Column(modifier = Modifier.weight(1f).graphicsLayer {
             alpha = reveal.value.coerceIn(0f, 1f)
@@ -126,7 +122,7 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
         event.picture?.let { pic ->
             Spacer(Modifier.width((10f * sc).dp))
             // Bild/Sticker poppt federnd auf.
-            val pop = remember(pic) { androidx.compose.animation.core.Animatable(if (instant) 1f else 0f) }
+            val pop = remember(pic) { androidx.compose.animation.core.Animatable(if (seen) 1f else 0f) }
             LaunchedEffect(pic) { if (pop.value < 1f) pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.4f, stiffness = 300f)) }
             Image(
                 bitmap = pic,
