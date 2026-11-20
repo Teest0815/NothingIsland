@@ -1871,6 +1871,7 @@ private fun TopAlertBubble(
     var ghostX by remember { mutableStateOf(0f) }
     var ghostDir by remember { mutableStateOf(0f) }
     var ghostDur by remember { mutableStateOf(170) }
+    val ghostScope = rememberCoroutineScope()
     var lastId by remember { mutableStateOf<Long?>(null) }
     val dens = androidx.compose.ui.platform.LocalDensity.current
     val hold = remember { object { var prevIds = emptyList<Long>(); var curIds = emptyList<Long>(); var prevFront: IslandEvent? = null; var curFront: IslandEvent? = null; var skipGhost = false } }
@@ -1891,7 +1892,8 @@ private fun TopAlertBubble(
                 if (old != null && !hold.skipGhost) {
                     ghostX = 0f; ghostDir = 0f; ghostDur = 170
                     ghost = old
-                    launch { ghostP.snapTo(0f); ghostP.animateTo(1f, tween(170, easing = FastOutSlowInEasing)); ghost = null }
+                    // Eigener Scope: wird die Animation vom nächsten Wechsel abgebrochen, bliebe sonst ein halbtransparenter Geist stehen.
+                    ghostScope.launch { ghostP.snapTo(0f); ghostP.animateTo(1f, tween(170, easing = FastOutSlowInEasing)); ghost = null }
                 }
                 hold.skipGhost = false
                 launch { front.snapTo(1f); front.animateTo(0f, spring(dampingRatio = 0.78f, stiffness = 420f)) }
@@ -1908,6 +1910,7 @@ private fun TopAlertBubble(
             }
         } else {
             lastId = null
+            ghost = null
             p.animateTo(0f, tween(130, easing = FastOutSlowInEasing))
         }
     }
