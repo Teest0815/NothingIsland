@@ -270,6 +270,8 @@ internal fun IslandHostBody() {
     val frontPromo = remember { Animatable(0f) }
     // Welche Karte gerade weggeht: der Weggeh-Wert gilt nur für sie, nicht für die nachrückende.
     val leaveId = remember { longArrayOf(0L) }
+    // Die Karte kam aus einem Stapel (auch die letzte): sie geht mit derselben Animation weg.
+    val fromStack = remember { booleanArrayOf(false) }
     var stackHold by remember { mutableStateOf(false) }
     val swipeX = remember { Animatable(0f) }
     // Eigener Scope für Stapel-Animationen: sie laufen immer bis zum Ende, auch wenn der Effekt neu startet (Spam).
@@ -299,6 +301,7 @@ internal fun IslandHostBody() {
                 stackShift.snapTo(0f)
                 leave.snapTo(0f)
                 frontPromo.snapTo(0f)
+                fromStack[0] = false
             }
             return@LaunchedEffect
         }
@@ -325,6 +328,7 @@ internal fun IslandHostBody() {
         }
         if (!topOn && s.multiNotif && prev != null && prev.id != a.id && a.id < prev.id && pendingList.none { it.id == prev.id }) {
             // Die vordere Karte ist weg, die nächste rückt aus dem Stapel nach vorn (federnd, mit Überschwingen).
+            fromStack[0] = true
             arriveScope.launch {
                 frontPromo.snapTo(1f)
                 frontPromo.animateTo(0f, spring(dampingRatio = 0.5f, stiffness = 300f))
@@ -342,7 +346,7 @@ internal fun IslandHostBody() {
             // Bleibt noch eine Weile als Text in der kleinen Pille stehen, außer sie wurde weggewischt.
             if (suppressLinger) suppressLinger = false else if (pendingList.isEmpty()) lingering = a
         }
-        if (pendingList.isNotEmpty() && !topOn) {
+        if ((pendingList.isNotEmpty() || fromStack[0]) && !topOn) {
             // Nur diese Karte geht weg (schrumpft nach oben), die nächste rückt nach vorn.
             try {
                 leaveId[0] = a.id
@@ -854,7 +858,7 @@ internal fun IslandHostBody() {
                         }
                     }
                     // Gestapelte Karten kippen beim Wischen leicht, fallen mit leichter Schräglage ein.
-                    if (stackBehind > 0) {
+                    if (stackBehind > 0 || fromStack[0]) {
                         rotationZ = (swipeX.value / size.width.coerceAtLeast(1f)) * 9f +
                             (dropY.value / 30.dp.toPx()) * 5f
                         // Gelesen: kurz anwachsen, dann nach oben zur Pille zusammenschrumpfen.
@@ -878,7 +882,7 @@ internal fun IslandHostBody() {
                     if (pullY > 0f && vert) scaleX *= 1f + (pullY / size.width.coerceAtLeast(1f)) * 0.35f
                     else if (pullY > 0f && !land) scaleY *= 1f + (pullY / size.height.coerceAtLeast(1f)) * 0.35f
                     alpha = (1f - abs(swipeX.value) / ((if (vert) size.height else size.width) * 0.9f)).coerceIn(0f, 1f) * appear.value.coerceIn(0f, 1f).let { if (stackBehind > 0) it * it else it } * wakeFade.value * rotFade.value *
-                        (if (stackBehind > 0) (1f - (if (alert?.id == leaveId[0]) leave.value.coerceIn(0f, 1f) else 0f).let { it * it }) else 1f) * (1f - 0.28f * frontPromo.value.coerceIn(0f, 1f))
+                        (if (stackBehind > 0 || fromStack[0]) (1f - (if (alert?.id == leaveId[0]) leave.value.coerceIn(0f, 1f) else 0f).let { it * it }) else 1f) * (1f - 0.28f * frontPromo.value.coerceIn(0f, 1f))
                 }
                 .layout { m, _ ->
                     // Beim schnellen Auf- und Zuklappen darf die Feder nicht weit über das Ziel schießen.
@@ -928,7 +932,7 @@ internal fun IslandHostBody() {
                                 if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                                 armed = false
                                 suppressLinger = true
-                                if (pendingList.isNotEmpty()) {
+                                if (pendingList.isNotEmpty() || fromStack[0]) {
                                     // Gelesene Karte schrumpft aus der gezogenen Position heraus (kein Zurückspringen),
                                     // die nächste bleibt vorn.
                                     stackHold = true
@@ -1032,7 +1036,7 @@ internal fun IslandHostBody() {
                         val flung = abs(vel) > flingV && abs(x) > 8.dp.toPx() && sign(vel) == sign(x)
                         val x2 = if (flung && abs(x) <= away) sign(x) * (away + 1f) else x
                         swipeScope.launch {
-                            if (abs(x2) > away && stackBehind > 0) {
+                            if (abs(x2) > away && (stackBehind > 0 || fromStack[0])) {
                                 // Karte fliegt weg, gleichzeitig rücken die Karten dahinter federnd nach vorn; erst danach wird getauscht.
                                 leaveId[0] = (alert ?: lastAlert)?.id ?: 0L
                                 val adv = launch { leave.animateTo(1f, tween(210, easing = FastOutSlowInEasing)) }
@@ -1268,7 +1272,7 @@ internal fun IslandHostBody() {
                             it.markRead?.let { pi -> swipeScope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { pi.send() } } }
                             if (s.haptics) QuickActions.haptic(ctx, s.hapticLevel)
                             suppressLinger = true
-                            if (pendingList.isNotEmpty()) swipeScope.launch {
+                            if (pendingList.isNotEmpty() || fromStack[0]) swipeScope.launch {
                                 leaveId[0] = it.id
                                 leave.animateTo(1f, tween(210, easing = FastOutSlowInEasing))
                                 frontPromo.snapTo(1f)
