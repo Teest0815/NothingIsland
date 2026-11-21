@@ -95,23 +95,40 @@ class IslandListenerService : NotificationListenerService() {
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         trailing.remove(sbn.key)?.let { throttleHandler.removeCallbacks(it) }
         lastHandled.remove(sbn.key)
-        IslandBus.removeOngoing(sbn.key)
+        handleRemoved(sbn.key)
     }
 
     // ---------------------------------------------------------------- Auswertung
 
+    // Die Auswertung (Texte, Bilder, Symbole dekodieren) läuft auf einem eigenen Faden, damit die Animationen nicht ruckeln,
+    // wenn Meldungen eintreffen. Nur das Ergebnis wird danach auf dem Hauptfaden in die Island geschrieben. Reihenfolge bleibt erhalten.
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "island-notif").also { it.isDaemon = true } }
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+
     private fun handle(sbn: StatusBarNotification, allowAlert: Boolean) {
+        runCatching {
+            worker.execute {
+                val commit = runCatching { compute(sbn, allowAlert) }.getOrNull()
+                if (commit != null) mainHandler.post { runCatching { commit() } }
+            }
+        }
+    }
+
+    /** Entfernen läuft durch dieselbe Reihe, damit es nie vor einer noch laufenden Auswertung derselben Meldung greift. */
+    private fun handleRemoved(key: String) {
+        runCatching { worker.execute { mainHandler.post { IslandBus.removeOngoing(key) } } }
+    }
+
+    /** Wertet eine Meldung aus (Hintergrundfaden). Liefert, was danach auf dem Hauptfaden zu tun ist, oder null. */
+    private fun compute(sbn: StatusBarNotification, allowAlert: Boolean): (() -> Unit)? {
         // Eigene Meldungen ignorieren, außer den Notiz-Erinnerungen.
-        if (sbn.packageName == packageName && sbn.notification.channelId != NoteReminders.CH) return
+        if (sbn.packageName == packageName && sbn.notification.channelId != NoteReminders.CH) return null
         val n = sbn.notification
-        if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
+        if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return null
 
         // App-Regeln: STUMM = ganz ignorieren, LEISE = ohne Aufklappen, LIVE = laufende Meldung als Live-Aktivität.
         val rule = IslandBus.settings.value.ruleFor(sbn.packageName)
-        if (rule == "MUTE") {
-            IslandBus.removeOngoing(sbn.key)
-            return
-        }
+        if (rule == "MUTE") return { IslandBus.removeOngoing(sbn.key) }
 
         // Ohrhörer-Akku ("Links 100% Lade-Case 60% Rechts 100%"): kurz in der Pille zeigen statt als Meldung.
         run {
@@ -124,17 +141,16 @@ class IslandListenerService : NotificationListenerService() {
             if (!IslandBus.settings.value.statusEnabled("bluetooth")) return@run
             val name = ex.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
                 .replace(Regex("""\s+von\s+.+$""", RegexOption.IGNORE_CASE), "")
-            if (lastEarbuds[sbn.key] == parsed.first) return
+            if (lastEarbuds[sbn.key] == parsed.first) return null
             lastEarbuds[sbn.key] = parsed.first
             if (allowAlert) {
-                IslandBus.post(
-                    buildEvent(sbn, Kind.OTHER).copy(
-                        title = name.uppercase(), text = parsed.first, textShort = parsed.second,
-                        quiet = true, kind = Kind.STATUS,
-                    ),
+                val ev = buildEvent(sbn, Kind.OTHER).copy(
+                    title = name.uppercase(), text = parsed.first, textShort = parsed.second,
+                    quiet = true, kind = Kind.STATUS,
                 )
+                return { IslandBus.post(ev) }
             }
-            return
+            return null
         }
 
         var kind = classify(n, sbn.isOngoing, sbn.packageName)
@@ -142,18 +158,21 @@ class IslandListenerService : NotificationListenerService() {
         if (kind != null) {
             val event = buildEvent(sbn, kind)
             if (event.title.isNotBlank() || event.text.isNotBlank() || event.chronoBase != null) {
-                val isNew = IslandBus.upsertOngoing(event)
-                // Eingehender Anruf (klingelt noch): Pille sofort aufklappen, damit Annehmen/Ablehnen erreichbar ist.
-                if (isNew && allowAlert && kind == Kind.CALL && event.chronoBase == null) IslandBus.setExpanded(true)
+                val isCall = kind == Kind.CALL
+                return {
+                    val isNew = IslandBus.upsertOngoing(event)
+                    // Eingehender Anruf (klingelt noch): Pille sofort aufklappen, damit Annehmen/Ablehnen erreichbar ist.
+                    if (isNew && allowAlert && isCall && event.chronoBase == null) IslandBus.setExpanded(true)
+                }
             }
-            return
+            return null
         }
-        if (sbn.isOngoing || !allowAlert) return
-        if (IslandBus.isMuted(sbn.packageName)) return
+        if (sbn.isOngoing || !allowAlert) return null
+        if (IslandBus.isMuted(sbn.packageName)) return null
 
         val event = buildEvent(sbn, Kind.OTHER).copy(quiet = rule == "QUIET")
-        if (event.title.isBlank() && event.text.isBlank()) return
-        IslandBus.post(event)
+        if (event.title.isBlank() && event.text.isBlank()) return null
+        return { IslandBus.post(event) }
     }
 
     /** Liefert die Art einer laufenden Aktivität oder null, wenn es eine normale Meldung ist. */
