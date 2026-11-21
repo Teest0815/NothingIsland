@@ -1950,7 +1950,9 @@ private fun TopAlertBubble(
                     val k = p.value
                     transformOrigin = TransformOrigin(0.5f, 0f)
                     translationY = -(1f - k) * (h + 24f) * density * 0.5f + pull.value + drop.value
-                    val sw = if (swipeOwner[0] == ev.id) swipe.value else 0f
+                    // swipe.value immer lesen, damit die Ebene bei jedem Zug neu gezeichnet wird (auch vor der Zuordnung).
+                    val sv = swipe.value
+                    val sw = if (swipeOwner[0] == ev.id) sv else 0f
                     translationX = sw
                     val landing = 1f - 0.07f * (abs(drop.value) / (40f * density)).coerceIn(0f, 1f)
                     val fi = front.value
