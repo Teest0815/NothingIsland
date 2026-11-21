@@ -798,7 +798,7 @@ internal fun IslandSettings.landEdgeFor(rot: Int): Int = if (rot == 3) landEdge3
  */
 internal fun realScreenPx(ctx: android.content.Context): Pair<Int, Int> {
     val wm = ctx.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
-    val (w, h) = if (android.os.Build.SDK_INT >= 30) {
+    val (w, h) = if (android.os.Build.VERSION.SDK_INT >= 30) {
         val b = wm.maximumWindowMetrics.bounds
         b.width() to b.height()
     } else {
