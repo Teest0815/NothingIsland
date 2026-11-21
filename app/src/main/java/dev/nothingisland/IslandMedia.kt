@@ -285,7 +285,7 @@ internal fun MediaExpanded(
                 fontFamily = Mono,
                 fontSize = (10f * sc).sp,
                 modifier = Modifier
-                    .bounceClick { Lyrics.enabled = !Lyrics.enabled; onAction() }
+                    .bounceClick(onClick = { Lyrics.enabled = !Lyrics.enabled; onAction() })
                     .clip(RoundedCornerShape(50))
                     .background(if (lyricsOn) NothingRed else ButtonBg)
                     .padding(horizontal = (8f * sc).dp, vertical = (5f * sc).dp),
