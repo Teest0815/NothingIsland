@@ -6,6 +6,7 @@ import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.ui.draw.clipToBounds
@@ -252,7 +253,20 @@ internal fun MediaExpanded(
             }
             Spacer(Modifier.width((12f * sc).dp))
             Box(modifier = Modifier.grow().clipToBounds()) {
-                if (lyricsOn) LyricsView(lyricsState, pos, sc) else AnimatedContent(
+                // Wechsel zwischen Titel und Liedtext: gefedert ein- und ausblenden.
+                AnimatedContent(
+                    targetState = lyricsOn,
+                    transitionSpec = {
+                        ContentTransform(
+                            targetContentEnter = fadeIn(tween(220, delayMillis = 60)) +
+                                scaleIn(spring<Float>(dampingRatio = 0.6f, stiffness = 500f), initialScale = 0.85f) +
+                                slideInVertically(spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = 0.65f, stiffness = 500f)) { it / 2 },
+                            initialContentExit = fadeOut(tween(120)) + scaleOut(tween(160), targetScale = 0.9f),
+                            sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
+                        )
+                    },
+                    label = "lyricsSwitch",
+                ) { showLyrics -> if (showLyrics) LyricsView(lyricsState, pos, sc) else AnimatedContent(
                     targetState = track.first to track.second,
                     transitionSpec = {
                         ContentTransform(
@@ -276,7 +290,7 @@ internal fun MediaExpanded(
                             )
                         }
                     }
-                }
+                } }
             }
             if (eq) Equalizer(e.playing, sc)
             Text(
@@ -433,8 +447,11 @@ private fun LyricsView(state: LyricsState, posMs: Long, sc: Float) {
                 targetState = idx,
                 transitionSpec = {
                     ContentTransform(
-                        targetContentEnter = slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it / 2 } + fadeIn(tween(220)),
-                        initialContentExit = slideOutVertically(tween(220, easing = FastOutSlowInEasing)) { -it / 2 } + fadeOut(tween(140)),
+                        // Nächste Zeile kommt von unten, schwingt über und setzt sich (Bounce).
+                        targetContentEnter = slideInVertically(spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = 0.45f, stiffness = 420f)) { (it * 0.9f).toInt() } +
+                            scaleIn(spring<Float>(dampingRatio = 0.45f, stiffness = 420f), initialScale = 0.9f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)) +
+                            fadeIn(tween(160)),
+                        initialContentExit = slideOutVertically(tween(200, easing = FastOutSlowInEasing)) { -it / 2 } + fadeOut(tween(130)),
                         sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
                     )
                 },
