@@ -71,6 +71,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.TransformOrigin
@@ -629,7 +630,8 @@ internal fun IslandHostBody() {
         label = "top",
     )
     // Querformat: immer aus der aktuellen (animierten) Höhe mittig zur Kamera, damit beim Wachsen/Schließen nichts verrutscht.
-    val topPad = if (land && !topAlert) (centerYLand - height.value / 2f).coerceIn(6f, maxOf(6f, shortDp - height.value - 6f)).dp else topPadAnim
+    // Als Lambda: der animierte Wert wird erst beim Layout gelesen, nicht bei jedem Bild in der Komposition.
+    val topPad: () -> Dp = { if (land && !topAlert) (centerYLand - height.value / 2f).coerceIn(6f, maxOf(6f, shortDp - height.value - 6f)).dp else topPadAnim }
     // Wischen nach links oder rechts schließt Meldung, aufgeklappte Pille und Nachricht.
     // Neue Inhalte in der kleinen Pille (Taschenlampe, Flugmodus ...) poppen mit Nachfedern auf.
     val bump = remember { Animatable(1f) }
@@ -760,7 +762,13 @@ internal fun IslandHostBody() {
             topTarget - 4f, rowW + 8f, targetH + 8f,
         )
     }
-    val shape = RoundedCornerShape(corner)
+    // Eckenradius wird erst beim Zeichnen gelesen (Animation löst keine neue Komposition aus).
+    val circleOn by remember { derivedStateOf { circleScale > 0.01f } }
+    val plateLive by remember { derivedStateOf { leave.value > 0.01f || abs(swipeX.value) > 0f } }
+    val shape = remember { object : androidx.compose.ui.graphics.Shape {
+        override fun createOutline(size: androidx.compose.ui.geometry.Size, layoutDirection: androidx.compose.ui.unit.LayoutDirection, density: androidx.compose.ui.unit.Density) =
+            RoundedCornerShape(corner).createOutline(size, layoutDirection, density)
+    } }
 
     Box(Modifier.fillMaxSize().graphicsLayer { alpha = if (noteReplyHidden) 0f else 1f }
     .wrapContentSize(Alignment.TopStart, unbounded = true)) {
@@ -781,8 +789,12 @@ internal fun IslandHostBody() {
             val left = anchored + (centered - anchored) * bigMix
             layout(maxOf(c.maxWidth, 0), p.height) { p.place((left - winLeft * d).roundToInt(), 0) }
         })
-        .padding(top = maxOf(topPad, 0.dp)), verticalAlignment = Alignment.CenterVertically) {
-        Spacer(Modifier.width(slot))
+        .layout { m, c ->
+            val pt = maxOf(topPad(), 0.dp).roundToPx()
+            val pl = m.measure(c.copy(minHeight = 0, maxHeight = if (c.hasBoundedHeight) maxOf(0, c.maxHeight - pt) else c.maxHeight))
+            layout(pl.width, pl.height + pt) { pl.place(0, pt) }
+        }, verticalAlignment = Alignment.CenterVertically) {
+        Spacer(Modifier.lazySize({ slot }, null))
 
         Box(
             Modifier,
@@ -818,7 +830,7 @@ internal fun IslandHostBody() {
                 ) {
                     // Sobald die vordere Karte losgelassen wird und die nächste zu rücken beginnt, blendet deren Inhalt ein
                     // (Text rutscht ein, Sticker poppt); nach dem Tausch bleibt er unverändert stehen.
-                    if (i == 1 && (leave.value > 0.01f || pullY > 0f || abs(swipeX.value) > 0f)) {
+                    if (i == 1 && (plateLive || pullY > 0f)) {
                         // Schon beim Herunterziehen/Wischen sichtbar, nicht erst nach dem Loslassen.
                         Box(Modifier.graphicsLayer { alpha = maxOf(leave.value * 2f, pullY / (14f * density), abs(swipeX.value) / (40f * density)).coerceIn(0f, 1f) }) {
                             AlertContent(ev, bsc / landK.coerceAtLeast(0.01f).let { if (topAlert) it else 1f }, Modifier.requiredSize(alertW.dp, alertH.dp), tall = landTall) { }
@@ -1282,10 +1294,10 @@ internal fun IslandHostBody() {
         }
 
         Box(
-            modifier = Modifier.width(slot).height(height),
+            modifier = Modifier.lazySize({ slot }, { height }),
             contentAlignment = Alignment.CenterEnd,
         ) {
-            if (circleScale > 0.01f) {
+            if (circleOn) {
                 (circleItem ?: lastCircle)?.let { c ->
                     Box(
                         Modifier.graphicsLayer {
@@ -1324,4 +1336,17 @@ internal fun IslandHostBody() {
     }
     }
     }
+}
+
+/** Feste Breite/Höhe wie Modifier.width/height, aber die Werte werden erst beim Layout gelesen (keine Neukomposition pro Bild). */
+internal fun Modifier.lazySize(w: (() -> Dp)?, h: (() -> Dp)?): Modifier = this.layout { m, c ->
+    val pw = w?.let { it().roundToPx().coerceIn(c.minWidth, c.maxWidth) }
+    val ph = h?.let { it().roundToPx().coerceIn(c.minHeight, c.maxHeight) }
+    val p = m.measure(
+        Constraints(
+            minWidth = pw ?: c.minWidth, maxWidth = pw ?: c.maxWidth,
+            minHeight = ph ?: c.minHeight, maxHeight = ph ?: c.maxHeight,
+        ),
+    )
+    layout(p.width, p.height) { p.place(0, 0) }
 }
