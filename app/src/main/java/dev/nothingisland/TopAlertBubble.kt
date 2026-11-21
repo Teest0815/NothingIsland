@@ -166,7 +166,6 @@ internal fun TopAlertBubble(
             }
         } else {
             lastId = null
-            ghost = null
             p.animateTo(0f, tween(130, easing = FastOutSlowInEasing))
         }
     }
@@ -179,7 +178,7 @@ internal fun TopAlertBubble(
     val h = BASE_ALERT_H * fsc
     val left = (screenW - w) / 2f
     val top = 8f
-    val show = ev != null && p.value > 0.002f
+    val show = ev != null && (p.value > 0.002f || ghost != null)
     SideEffect {
         if (visible && ev != null) IslandBus.setTouchRect2(left - 4f, top - 4f, w + 8f, h + 8f + behind.size * 8f)
         else IslandBus.setTouchRect2(0f, 0f, 1f, 1f)
