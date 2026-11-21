@@ -39,7 +39,10 @@ android {
         }
         release {
             // Release-Build: nicht debuggbar, vom System optimiert (AOT) und ohne Debug-Prüfungen von Compose: deutlich flüssiger als Debug.
-            isMinifyEnabled = false
+            // R8: verkleinert und optimiert den Code (schnellerer Start, kleinere APK). Schutzregeln in proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Gleicher Schlüssel wie bisher, damit sich die neue APK über die alte installieren lässt (Fallback: Debug-Schlüssel).
             signingConfig = signingConfigs.findByName("shared") ?: signingConfigs.getByName("debug")
         }
