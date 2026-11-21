@@ -618,7 +618,7 @@ internal fun IslandHostBody() {
     )
     // Große Pille kann auf anderer Höhe sitzen als die kleine: Abstand im Layout, weich animiert.
     // Querformat: Höhe der Kamera am Rand (Horizontal-Wert verschiebt entlang der Kante), große Blasen mittig dazu.
-    val centerYLand = shortDp / 2f + s.landShift
+    val centerYLand = shortDp / 2f + s.landShiftFor(rotE)
     val bigTopLand = (centerYLand - targetH / 2f).coerceIn(6f, maxOf(6f, shortDp - targetH - 6f))
     val topBaseTarget = if (topAlert) 8f else if (land) (if (growing) bigTopLand else (centerYLand - targetH / 2f).coerceIn(6f, maxOf(6f, shortDp - targetH - 6f)))
         else ((if (growing) s.expandedTop else s.offsetY) - s.windowTop).toFloat()
@@ -714,7 +714,7 @@ internal fun IslandHostBody() {
     val span = if (dir != 0) screenW.toFloat() else minOf(rowBig + 2f * WINDOW_MARGIN, screenW.toFloat())
     val sw = screenW.toFloat()
     // Querformat: Abstand der kleinen Pille zum Rand = der Vertikal-Wert (wie oben am Rand im Hochformat), weich animiert.
-    val edgeTarget = if (land) (if (vert) s.landEdge.toFloat() else 8f) else 0f
+    val edgeTarget = if (land) (if (vert) s.landEdgeFor(rotE).toFloat() else 8f) else 0f
     val edge by animateFloatAsState(edgeTarget, if (rotSnap) snap() else spring(dampingRatio = 0.85f, stiffness = 380f), label = "edge")
     val anchor = if (topAlert) (sw - alertW) / 2f else if (land) (if (rot == 1) edge else sw - edge) else s.anchorDp(sw)
     // Linke Fensterkante in dp: bei einseitigem Aufgehen hängt die Pille an der festen Kante (Kamera-Seite).

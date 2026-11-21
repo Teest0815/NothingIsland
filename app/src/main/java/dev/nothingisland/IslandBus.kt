@@ -179,6 +179,9 @@ data class IslandSettings(
     /** Bei einseitigem Aufgehen: auch große Blasen wachsen aus der Kamera-Kante statt mittig. */
     val bigFromCamera: Boolean = false,
     val landShift: Int = 0,
+    /** Wie landShift/landEdge, aber für die andere Ausrichtung (Kamera rechts, Drehung 3). */
+    val landShift3: Int = 0,
+    val landEdge3: Int = 4,
     val landTopAlert: Boolean = false,
     val landEdge: Int = 4,
     val landBigW: Int = 200,
@@ -650,6 +653,8 @@ object IslandBus {
             showPictures = p.getBoolean("showPictures", d.showPictures),
             bigFromCamera = p.getBoolean("bigFromCamera", d.bigFromCamera),
             landShift = p.getInt("landShift", d.landShift),
+            landShift3 = p.getInt("landShift3", p.getInt("landShift", d.landShift3)),
+            landEdge3 = p.getInt("landEdge3", p.getInt("landEdge", d.landEdge3)),
             landTopAlert = p.getBoolean("landTopAlert", d.landTopAlert),
             landEdge = p.getInt("landEdge", d.landEdge),
             landBigW = p.getInt("landBigW3", d.landBigW),
@@ -737,6 +742,8 @@ object IslandBus {
             .putBoolean("showPictures", s.showPictures)
             .putBoolean("bigFromCamera", s.bigFromCamera)
             .putInt("landShift", s.landShift)
+            .putInt("landShift3", s.landShift3)
+            .putInt("landEdge3", s.landEdge3)
             .putBoolean("landTopAlert", s.landTopAlert)
             .putInt("landEdge", s.landEdge)
             .putInt("landBigW3", s.landBigW)
@@ -780,3 +787,7 @@ internal fun IslandSettings.bubbleLeftDp(screenW: Float, w: Float): Float {
     val l = if (expandDir == 1) a - w else a
     return l.coerceIn(4f, maxOf(4f, screenW - 4f - w))
 }
+
+/** Position entlang der Kante und Randabstand der kleinen Pille: getrennt für Kamera links (Drehung 1) und rechts (Drehung 3). */
+internal fun IslandSettings.landShiftFor(rot: Int): Int = if (rot == 3) landShift3 else landShift
+internal fun IslandSettings.landEdgeFor(rot: Int): Int = if (rot == 3) landEdge3 else landEdge

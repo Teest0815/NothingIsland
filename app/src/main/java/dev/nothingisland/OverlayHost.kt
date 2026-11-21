@@ -473,7 +473,7 @@ class OverlayHost(
             y = if (landTop) {
                 ((8f - 12f) * d).toInt()
             } else if (landR) {
-                val cy = shortDpR / 2f + s.landShift
+                val cy = shortDpR / 2f + s.landShiftFor(rotNow)
                 (((cy - frameH / 2f).coerceIn(6f, maxOf(6f, shortDpR - frameH - 6f)) - 12f) * d).toInt()
             } else ((s.expandedTop - 12) * d).toInt()
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING or

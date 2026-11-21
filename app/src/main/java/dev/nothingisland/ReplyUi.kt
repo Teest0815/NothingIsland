@@ -64,7 +64,7 @@ internal fun landReplyH(s: IslandSettings, note: Boolean, shortDp: Float): Float
 
 /** Höchste Höhe, die noch symmetrisch um die (verschobene) Kamera-Mitte passt: so bleibt die Bubble immer mittig. */
 internal fun landCapH(s: IslandSettings, shortDp: Float, h: Float): Float {
-    val cy = shortDp / 2f + s.landShift
+    val cy = shortDp / 2f + s.landShiftFor(IslandBus.rotation.value)
     val half = minOf(cy, shortDp - cy) - 6f
     return minOf(h, 2f * half).coerceAtLeast(60f)
 }
