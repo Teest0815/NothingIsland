@@ -443,25 +443,44 @@ private fun LyricsView(state: LyricsState, posMs: Long, sc: Float) {
             val look = posMs + 250 // etwas vorausschauen, damit die Zeile zum Gesang passt
             var idx = -1
             for (i in state.lines.indices) { if (state.lines[i].first <= look) idx = i else break }
-            AnimatedContent(
-                targetState = idx,
-                transitionSpec = {
-                    ContentTransform(
-                        // Nächste Zeile kommt von unten, schwingt über und setzt sich (Bounce).
-                        targetContentEnter = slideInVertically(spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = 0.45f, stiffness = 420f)) { (it * 0.9f).toInt() } +
-                            scaleIn(spring<Float>(dampingRatio = 0.45f, stiffness = 420f), initialScale = 0.9f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)) +
-                            fadeIn(tween(160)),
-                        initialContentExit = slideOutVertically(tween(200, easing = FastOutSlowInEasing)) { -it / 2 } + fadeOut(tween(130)),
-                        sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
+            Column(Modifier.fillMaxWidth()) {
+                // Aktuelle Zeile: wächst aus der Position der kleinen "nächsten" Zeile hoch, mit nur leichtem Nachfedern.
+                AnimatedContent(
+                    targetState = idx,
+                    transitionSpec = {
+                        ContentTransform(
+                            targetContentEnter = slideInVertically(spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = 0.78f, stiffness = 460f)) { it / 2 } +
+                                scaleIn(spring<Float>(dampingRatio = 0.78f, stiffness = 460f), initialScale = 0.88f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)) +
+                                fadeIn(tween(180)),
+                            initialContentExit = slideOutVertically(tween(200, easing = FastOutSlowInEasing)) { -it / 2 } + fadeOut(tween(140)),
+                            sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
+                        )
+                    },
+                    label = "lyricNow",
+                ) { i ->
+                    Text(
+                        state.lines.getOrNull(i)?.second.orEmpty().ifBlank { "♪" },
+                        color = Fg, fontSize = (14f * sc).sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     )
-                },
-                label = "lyric",
-            ) { i ->
-                val cur = state.lines.getOrNull(i)?.second.orEmpty().ifBlank { "♪" }
-                val next = state.lines.getOrNull(i + 1)?.second.orEmpty()
-                Column(Modifier.fillMaxWidth()) {
-                    Text(cur, color = Fg, fontSize = (14f * sc).sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    if (next.isNotBlank()) Text(next, color = TextGray, fontSize = (12f * sc).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                // Nächste Zeile: eigene, ruhige Animation (weich einblenden, kein Federn), damit sie sich vom Wechsel oben abhebt.
+                AnimatedContent(
+                    targetState = idx + 1,
+                    transitionSpec = {
+                        ContentTransform(
+                            targetContentEnter = fadeIn(tween(280, delayMillis = 140)) +
+                                slideInVertically(tween(280, delayMillis = 140, easing = FastOutSlowInEasing)) { it / 3 },
+                            initialContentExit = fadeOut(tween(110)),
+                            sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
+                        )
+                    },
+                    label = "lyricNext",
+                ) { n ->
+                    val next = state.lines.getOrNull(n)?.second.orEmpty()
+                    Text(
+                        if (next.isBlank()) " " else next,
+                        color = TextGray, fontSize = (12f * sc).sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
         }
