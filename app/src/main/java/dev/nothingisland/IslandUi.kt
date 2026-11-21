@@ -485,8 +485,9 @@ internal fun IslandHostBody() {
             rotFade.animateTo(1f, tween(260))
         }
     }
-    val longDp = maxOf(dmNow.widthPixels, dmNow.heightPixels) / dmNow.density
-    val shortDp = minOf(dmNow.widthPixels, dmNow.heightPixels) / dmNow.density
+    val realPx = remember(rot) { realScreenPx(ctx) }
+    val longDp = realPx.first / dmNow.density
+    val shortDp = realPx.second / dmNow.density
     val screenW = (if (land) longDp else shortDp).toInt()
     val capH: (Float) -> Float = { h -> if (land) landCapH(s, shortDp, h * s.landBigH) else h }
     val limit = minOf(s.maxWidth.toFloat(), screenW - 8f)

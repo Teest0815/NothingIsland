@@ -791,3 +791,20 @@ internal fun IslandSettings.bubbleLeftDp(screenW: Float, w: Float): Float {
 /** Position entlang der Kante und Randabstand der kleinen Pille: getrennt für Kamera links (Drehung 1) und rechts (Drehung 3). */
 internal fun IslandSettings.landShiftFor(rot: Int): Int = if (rot == 3) landShift3 else landShift
 internal fun IslandSettings.landEdgeFor(rot: Int): Int = if (rot == 3) landEdge3 else landEdge
+
+/**
+ * Echte Bildschirmgröße in Pixel (lang, kurz), unabhängig von Aussparung und Systemleisten.
+ * Die normalen Display-Maße können am Kamera-Rand einen Streifen abziehen: dann säße alles dort zu weit innen.
+ */
+internal fun realScreenPx(ctx: android.content.Context): Pair<Int, Int> {
+    val wm = ctx.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
+    val (w, h) = if (android.os.Build.SDK_INT >= 30) {
+        val b = wm.maximumWindowMetrics.bounds
+        b.width() to b.height()
+    } else {
+        val p = android.graphics.Point()
+        @Suppress("DEPRECATION") wm.defaultDisplay.getRealSize(p)
+        p.x to p.y
+    }
+    return maxOf(w, h) to minOf(w, h)
+}

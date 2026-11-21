@@ -171,7 +171,7 @@ internal fun TopAlertBubble(
     }
     val ev = shown
     val dm = androidx.compose.ui.platform.LocalContext.current.resources.displayMetrics
-    val screenW = maxOf(dm.widthPixels, dm.heightPixels) / dm.density
+    val screenW = realScreenPx(androidx.compose.ui.platform.LocalContext.current).first / dm.density
     val sc = s.scale * s.expandedScale
     val fsc = s.scale * minOf(s.expandedScale, s.expandedFrameMax)
     val w = minOf(s.expandedWidth.toFloat(), screenW - 8f)

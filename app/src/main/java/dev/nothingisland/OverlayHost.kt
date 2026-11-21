@@ -379,7 +379,7 @@ class OverlayHost(
         // Meldungen oben in der Mitte (Einstellung): Antwortfenster wie im Hochformat, Notizen bleiben senkrecht.
         val landTop = landAny && s.landTopAlert && !isNote0
         val landR = landAny && !landTop
-        val bigW = minOf((if (landR) s.landBigW else s.expandedWidth).toFloat(), maxOf(dm.widthPixels, dm.heightPixels) / d - 8f)
+        val bigW = minOf((if (landR) s.landBigW else s.expandedWidth).toFloat(), realScreenPx(context).first / d - 8f)
         val view = ComposeView(context).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setViewTreeLifecycleOwner(lo)
@@ -442,8 +442,9 @@ class OverlayHost(
         val sc = s.scale * s.expandedScale
         val fsc = s.scale * minOf(s.expandedScale, s.expandedFrameMax)
         val isNote = IslandBus.replyTarget.value?.noteSink != null
-        val shortDpR = minOf(dm.widthPixels, dm.heightPixels) / d
-        val longDpR = maxOf(dm.widthPixels, dm.heightPixels) / d
+        val realPxR = realScreenPx(context)
+        val shortDpR = realPxR.second / d
+        val longDpR = realPxR.first / d
         val frameH = if (landR) landReplyH(s, isNote, shortDpR) else (if (isNote) 250f * fsc else 84f * fsc + 62f * sc)
         val lp = WindowManager.LayoutParams(
             ((bigW + 24f) * d).toInt(),
@@ -557,8 +558,9 @@ class OverlayHost(
             // Querformat: festes Fenster über dem ganzen Bildschirm (kein Umbauen, kein Hin- und Herspringen).
             p.x = 0
             p.y = 0
-            nw = maxOf(dm.widthPixels, dm.heightPixels)
-            nh = minOf(dm.widthPixels, dm.heightPixels)
+            val realPx = realScreenPx(context)
+            nw = realPx.first
+            nh = realPx.second
         }
         val changed = p.width != nw || p.height != nh || p.x != lastAx || p.y != lastAy
         p.width = nw
