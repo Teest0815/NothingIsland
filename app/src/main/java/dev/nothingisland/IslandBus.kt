@@ -38,6 +38,8 @@ data class IslandEvent(
     val avatar: ImageBitmap? = null,
     /** Bild oder Sticker der Meldung (BigPicture oder Bild der letzten Chat-Nachricht). */
     val picture: ImageBitmap? = null,
+    /** Lädt das Bild in hoher Auflösung für die Vollbild-Vorschau (läuft im Hintergrund). */
+    val pictureFull: (() -> ImageBitmap?)? = null,
     /** Notiz-Eingabe: statt einer Antwort wird der Text hier abgegeben. */
     val noteSink: ((String) -> Unit)? = null,
     val action: PendingIntent? = null,

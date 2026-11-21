@@ -32,6 +32,13 @@
         android:theme="@style/Theme.NothingIsland">
 
         <activity
+            android:name=".PicturePreviewActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>

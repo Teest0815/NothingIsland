@@ -110,16 +110,11 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
                 )
             }
             if (event.text.isNotBlank()) {
-                Text(
-                    text = event.text,
-                    color = TextGray,
-                    fontSize = (12f * sc).sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                LinkText(text = event.text, color = TextGray, fontSize = (12f * sc).sp, maxLines = 2)
             }
         }
         event.picture?.let { pic ->
+            val pctx = androidx.compose.ui.platform.LocalContext.current
             Spacer(Modifier.width((10f * sc).dp))
             // Bild/Sticker poppt federnd auf.
             val pop = remember(pic) { androidx.compose.animation.core.Animatable(if (seen) 1f else 0f) }
@@ -136,7 +131,8 @@ internal fun AlertContent(event: IslandEvent, sc: Float, modifier: Modifier, mor
                         scaleY = k
                         alpha = (k * 2f).coerceIn(0f, 1f)
                     }
-                    .clip(RoundedCornerShape((10f * sc).dp)),
+                    .clip(RoundedCornerShape((10f * sc).dp))
+                    .clickable { PicturePreview.show(pctx, pic, event.pictureFull) },
             )
         }
         if (more > 0) {
@@ -492,15 +488,17 @@ internal fun AlertColumn(event: IslandEvent, sc: Float, modifier: Modifier, more
             event.title, color = Fg, fontSize = (14f * sc).sp, fontWeight = FontWeight.Medium,
             maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
-        if (event.text.isNotBlank()) Text(
+        if (event.text.isNotBlank()) LinkText(
             event.text, color = TextGray, fontSize = (12f * sc).sp,
-            maxLines = 3, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            maxLines = 3, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
         event.picture?.let { pic ->
+            val pctx = androidx.compose.ui.platform.LocalContext.current
             Image(
                 bitmap = pic, contentDescription = null,
                 contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                modifier = Modifier.size((40f * sc).dp).clip(RoundedCornerShape((8f * sc).dp)),
+                modifier = Modifier.size((40f * sc).dp).clip(RoundedCornerShape((8f * sc).dp))
+                    .clickable { PicturePreview.show(pctx, pic, event.pictureFull) },
             )
         }
         if (more > 0 || event.code != null || event.markRead != null || event.reply != null) {

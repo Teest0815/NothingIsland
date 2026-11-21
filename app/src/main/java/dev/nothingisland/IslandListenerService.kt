@@ -345,6 +345,7 @@ class IslandListenerService : NotificationListenerService() {
             icon = loadIcon(n.smallIcon),
             avatar = if (kind == Kind.OTHER) loadAvatar(n, ex) else null,
             picture = if (kind == Kind.OTHER && IslandBus.settings.value.showPictures) loadPicture(n, ex) else null,
+            pictureFull = if (kind == Kind.OTHER && IslandBus.settings.value.showPictures) ({ loadPicture(n, ex, 1600) }) else null,
             action = n.contentIntent,
             actions = actions,
             chronoBase = chronoBase,
@@ -491,15 +492,15 @@ class IslandListenerService : NotificationListenerService() {
     }.getOrNull()
 
     /** Bild oder Sticker: BigPicture der Meldung, sonst das Bild der letzten Chat-Nachricht (Messenger). */
-    private fun loadPicture(n: Notification, ex: android.os.Bundle): ImageBitmap? = runCatching {
+    private fun loadPicture(n: Notification, ex: android.os.Bundle, maxSide: Int = 360): ImageBitmap? = runCatching {
         fun scaled(b: Bitmap): ImageBitmap {
             val m = maxOf(b.width, b.height)
-            return (if (m > 360) Bitmap.createScaledBitmap(b, b.width * 360 / m, b.height * 360 / m, true) else b).asImageBitmap()
+            return (if (m > maxSide) Bitmap.createScaledBitmap(b, b.width * maxSide / m, b.height * maxSide / m, true) else b).asImageBitmap()
         }
         @Suppress("DEPRECATION")
         (ex.get(Notification.EXTRA_PICTURE) as? Bitmap)?.let { return@runCatching scaled(it) }
         if (Build.VERSION.SDK_INT >= 31) {
-            (ex.get("android.pictureIcon") as? Icon)?.loadDrawable(this)?.toBitmap(360, 360)?.let { return@runCatching scaled(it) }
+            (ex.get("android.pictureIcon") as? Icon)?.loadDrawable(this)?.toBitmap(maxSide, maxSide)?.let { return@runCatching scaled(it) }
         }
         @Suppress("DEPRECATION")
         val msgs = ex.getParcelableArray(Notification.EXTRA_MESSAGES)
@@ -510,7 +511,7 @@ class IslandListenerService : NotificationListenerService() {
         if (!type.startsWith("image/")) return@runCatching null
         val bmp = android.graphics.ImageDecoder.decodeBitmap(android.graphics.ImageDecoder.createSource(contentResolver, uri)) { dec, info, _ ->
             val m = maxOf(info.size.width, info.size.height)
-            if (m > 360) dec.setTargetSize(info.size.width * 360 / m, info.size.height * 360 / m)
+            if (m > maxSide) dec.setTargetSize(info.size.width * maxSide / m, info.size.height * maxSide / m)
             dec.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
         }
         bmp.asImageBitmap()
