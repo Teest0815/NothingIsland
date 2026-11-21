@@ -34,6 +34,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.produceState
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -185,13 +188,26 @@ internal fun MediaExpanded(
     LaunchedEffect(e.playing, screenOnM) {
         now = SystemClock.elapsedRealtime()
         while (e.playing && screenOnM) {
-            delay(if (lowM) 1000L else 500L)
+            delay(if (lowM) 1000L else if (Lyrics.enabled) 250L else 500L)
             now = SystemClock.elapsedRealtime()
         }
     }
     val dur = e.durationMs
     val raw = if (base.first < 0) 0L else base.first + (if (e.playing) (now - base.second) else 0L)
     val pos = if (dur > 0) raw.coerceIn(0L, dur) else raw.coerceAtLeast(0L)
+    // Liedtext: erst abrufen, wenn die Taste an ist (sendet Titel/Interpret an lrclib.net).
+    val lyricsOn = Lyrics.enabled
+    val lyricsState by produceState<LyricsState>(LyricsState.Loading, e.title, e.text, lyricsOn) {
+        if (!lyricsOn) return@produceState
+        value = LyricsState.Loading
+        val md = mc.metadata
+        val title = md?.getString(android.media.MediaMetadata.METADATA_KEY_TITLE) ?: e.title
+        val artist = md?.getString(android.media.MediaMetadata.METADATA_KEY_ARTIST)
+            ?: md?.getString(android.media.MediaMetadata.METADATA_KEY_ALBUM_ARTIST) ?: e.text
+        val album = md?.getString(android.media.MediaMetadata.METADATA_KEY_ALBUM).orEmpty()
+        val secs = ((md?.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION) ?: 0L).takeIf { it > 0 } ?: e.durationMs).toInt() / 1000
+        value = Lyrics.fetch(artist, title, album, secs)
+    }
     var dragFrac by remember { mutableStateOf<Float?>(null) }
     val frac = dragFrac ?: if (dur > 0) pos.toFloat() / dur else 0f
 
@@ -236,7 +252,7 @@ internal fun MediaExpanded(
             }
             Spacer(Modifier.width((12f * sc).dp))
             Box(modifier = Modifier.grow().clipToBounds()) {
-                AnimatedContent(
+                if (lyricsOn) LyricsView(lyricsState, pos, sc) else AnimatedContent(
                     targetState = track.first to track.second,
                     transitionSpec = {
                         ContentTransform(
@@ -263,6 +279,17 @@ internal fun MediaExpanded(
                 }
             }
             if (eq) Equalizer(e.playing, sc)
+            Text(
+                text = "TEXT",
+                color = if (lyricsOn) OnAccent else AccentText,
+                fontFamily = Mono,
+                fontSize = (10f * sc).sp,
+                modifier = Modifier
+                    .bounceClick { Lyrics.enabled = !Lyrics.enabled; onAction() }
+                    .clip(RoundedCornerShape(50))
+                    .background(if (lyricsOn) NothingRed else ButtonBg)
+                    .padding(horizontal = (8f * sc).dp, vertical = (5f * sc).dp),
+            )
             if (count > 1) {
                 Text(
                     text = "${index + 1}/$count",
@@ -376,6 +403,49 @@ internal fun MediaExpanded(
                 if (fwdAct != null) fwdAct.intent?.let { runCatching { it.send() } }
                 else runCatching { mc.transportControls.fastForward() }
                 onAction()
+            }
+        }
+    }
+}
+
+/** Aktuelle Textzeile (groß) und die nächste (klein), passend zur Abspielposition. */
+@Composable
+private fun LyricsView(state: LyricsState, posMs: Long, sc: Float) {
+    @Composable
+    fun hint(s: String) = Text(s, color = TextGray, fontSize = (12f * sc).sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    when (state) {
+        LyricsState.Loading -> hint("Liedtext wird geladen …")
+        LyricsState.None -> hint("Kein Liedtext gefunden")
+        LyricsState.Error -> hint("Liedtext nicht erreichbar (Internet?)")
+        is LyricsState.Found -> if (state.lines.isEmpty()) {
+            // Nur ungetakteter Text vorhanden: erste Zeilen zeigen.
+            Column(Modifier.fillMaxWidth()) {
+                Text("Ohne Zeitmarken", color = AccentText, fontFamily = Mono, fontSize = (10f * sc).sp)
+                state.plain.filter { it.isNotBlank() }.take(2).forEach {
+                    Text(it, color = Fg, fontSize = (12f * sc).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        } else {
+            val look = posMs + 250 // etwas vorausschauen, damit die Zeile zum Gesang passt
+            var idx = -1
+            for (i in state.lines.indices) { if (state.lines[i].first <= look) idx = i else break }
+            AnimatedContent(
+                targetState = idx,
+                transitionSpec = {
+                    ContentTransform(
+                        targetContentEnter = slideInVertically(tween(260, easing = FastOutSlowInEasing)) { it / 2 } + fadeIn(tween(220)),
+                        initialContentExit = slideOutVertically(tween(220, easing = FastOutSlowInEasing)) { -it / 2 } + fadeOut(tween(140)),
+                        sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
+                    )
+                },
+                label = "lyric",
+            ) { i ->
+                val cur = state.lines.getOrNull(i)?.second.orEmpty().ifBlank { "♪" }
+                val next = state.lines.getOrNull(i + 1)?.second.orEmpty()
+                Column(Modifier.fillMaxWidth()) {
+                    Text(cur, color = Fg, fontSize = (14f * sc).sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (next.isNotBlank()) Text(next, color = TextGray, fontSize = (12f * sc).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
     }
