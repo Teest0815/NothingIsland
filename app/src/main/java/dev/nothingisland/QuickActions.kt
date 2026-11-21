@@ -117,6 +117,17 @@ object QuickActions {
 
     // ------------------------------------------------------------ Schalter
 
+    /** Führt eine gewählte Funktion aus: "panel", "calc", "note" oder der Schlüssel einer Kachel (Taschenlampe, App, Smart-Home ...). */
+    fun runAction(ctx: Context, key: String) {
+        when (key) {
+            "" -> Unit
+            "panel" -> IslandBus.setQuick(true)
+            "calc" -> IslandBus.setCalc(true)
+            "note" -> IslandBus.setNote(true)
+            else -> runCatching { tile(key)?.click?.invoke(ctx) }
+        }
+    }
+
     fun toggleTorch(ctx: Context) {
         init(ctx)
         val id = torchId ?: return

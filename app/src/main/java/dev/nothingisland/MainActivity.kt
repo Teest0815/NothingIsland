@@ -733,6 +733,10 @@ class MainActivity : ComponentActivity() {
             SwipeUpSettings(s)
         }
 
+        FoldCard("DOPPELT TIPPEN", false, s.doubleTapAction.isNotEmpty()) {
+            DoubleTapSettings(s)
+        }
+
         FoldCard("APP STUMMSCHALTEN", false, s.muteOnSwipeUp) {
             ToggleRow("Meldung nach oben wischen schaltet die App stumm", s.muteOnSwipeUp) { c -> edit { it.copy(muteOnSwipeUp = c) } }
             Text("Dauer", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp, bottom = 6.dp))
@@ -852,6 +856,39 @@ class MainActivity : ComponentActivity() {
         Text("Aktuell: $curName", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
         ToggleRow("Bei Musik pausiert/startet Nach-unten-Ziehen die Wiedergabe (statt der Funktion unten)", s.swipeDownPause) { c -> edit { it.copy(swipeDownPause = c) } }
         fun set(k: String) = edit { it.copy(swipeUpAction = k) }
+        Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip("AUS", cur.isEmpty()) { set("") }
+            Chip("PANEL", cur == "panel") { set("panel") }
+        }
+        AppTilePicker(emptyList()) { set(it) }
+        HaDevicePicker(emptyList()) { set(it) }
+        Spacer(Modifier.height(6.dp))
+        Text("Funktion wählen", color = Muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
+        QuickActions.tiles.forEach { t ->
+            Text(
+                (if (cur == t.key) "●  " else "+  ") + t.name,
+                color = if (cur == t.key) Color.White else AppAccent,
+                fontSize = 14.sp,
+                modifier = Modifier.fillMaxWidth().clickable { set(t.key) }.padding(vertical = 8.dp),
+            )
+        }
+    }
+
+    /** Funktion für Doppeltippen auf die kleine Pille. */
+    @Composable
+    private fun DoubleTapSettings(s: IslandSettings) {
+        val cur = s.doubleTapAction
+        val curName = when {
+            cur.isEmpty() -> "Aus"
+            cur == "panel" -> "Schnellzugriff-Panel öffnen"
+            else -> QuickActions.tile(cur)?.name ?: cur
+        }
+        Text(
+            "Zweimal schnell auf die kleine Pille tippen löst eine Funktion aus. Einfaches Tippen wartet dann einen kurzen Moment, ob ein zweites folgt (nur auf der kleinen Pille).",
+            color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp),
+        )
+        Text("Aktuell: $curName", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
+        fun set(k: String) = edit { it.copy(doubleTapAction = k) }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Chip("AUS", cur.isEmpty()) { set("") }
             Chip("PANEL", cur == "panel") { set("panel") }

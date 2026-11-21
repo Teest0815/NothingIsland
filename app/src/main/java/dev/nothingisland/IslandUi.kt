@@ -1105,11 +1105,7 @@ internal fun IslandHostBody() {
                                         else mc.transportControls.play()
                                     }
                                 } else {
-                                    val k = s.swipeUpAction
-                                    if (k == "panel") IslandBus.setQuick(true)
-                                    else if (k == "calc") IslandBus.setCalc(true)
-                                    else if (k == "note") IslandBus.setNote(true)
-                                    else runCatching { QuickActions.tile(k)?.click?.invoke(ctx) }
+                                    QuickActions.runAction(ctx, s.swipeUpAction)
                                 }
                             }
                     }
@@ -1136,6 +1132,13 @@ internal fun IslandHostBody() {
                 .combinedClickable(
                     interactionSource = press,
                     indication = null,
+                    // Doppeltippen nur auf der kleinen Pille und nur wenn belegt (sonst würde jedes Tippen kurz warten).
+                    onDoubleClick = if (s.doubleTapAction.isNotEmpty() && (mode == Mode.COMPACT || mode == Mode.MESSAGE || mode == Mode.IDLE)) {
+                        {
+                            if (s.haptics) QuickActions.haptic(ctx, 1)
+                            QuickActions.runAction(ctx, s.doubleTapAction)
+                        }
+                    } else null,
                     onLongClick = {
                         if (s.quickPanel && (mode == Mode.COMPACT || mode == Mode.MESSAGE || mode == Mode.IDLE)) IslandBus.setQuick(true)
                     },
