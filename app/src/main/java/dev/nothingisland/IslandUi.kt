@@ -838,6 +838,14 @@ internal fun IslandHostBody() {
                 }
             }
         }
+        // Zeitfenster fürs Doppeltippen ist einstellbar (Standard 300 ms).
+        val baseVc = androidx.compose.ui.platform.LocalViewConfiguration.current
+        val tapVc = remember(baseVc, s.doubleTapMs) {
+            object : androidx.compose.ui.platform.ViewConfiguration by baseVc {
+                override val doubleTapTimeoutMillis: Long get() = s.doubleTapMs.toLong()
+            }
+        }
+        androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalViewConfiguration provides tapVc) {
         Box(
             modifier = Modifier
                 .graphicsLayer {
@@ -1292,6 +1300,7 @@ internal fun IslandHostBody() {
                     }
                 }
             }
+        }
         }
         }
 
