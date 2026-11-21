@@ -38,8 +38,10 @@ android {
             signingConfigs.findByName("shared")?.let { signingConfig = it }
         }
         release {
+            // Release-Build: nicht debuggbar, vom System optimiert (AOT) und ohne Debug-Prüfungen von Compose: deutlich flüssiger als Debug.
             isMinifyEnabled = false
-            signingConfigs.findByName("shared")?.let { signingConfig = it }
+            // Gleicher Schlüssel wie bisher, damit sich die neue APK über die alte installieren lässt (Fallback: Debug-Schlüssel).
+            signingConfig = signingConfigs.findByName("shared") ?: signingConfigs.getByName("debug")
         }
     }
     compileOptions {

@@ -42,13 +42,13 @@ jobs:
             echo "KEYSTORE_PASSWORD=$KS_PW" >> "$GITHUB_ENV"
           fi
 
-      - name: Build debug APK
-        run: gradle assembleDebug
+      - name: Build release APK
+        run: gradle assembleRelease
 
       - uses: actions/upload-artifact@v4
         with:
-          name: NothingIsland-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: NothingIsland-apk
+          path: app/build/outputs/apk/release/app-release.apk
 
       # Direkter Download ohne ZIP: Releases > "latest"
       - name: Publish APK as release
@@ -57,8 +57,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="1.${GITHUB_RUN_NUMBER}"
-          cp app/build/outputs/apk/debug/app-debug.apk NothingIsland.apk
-          cp app/build/outputs/apk/debug/app-debug.apk "NothingIsland-v${VERSION}.apk"
+          cp app/build/outputs/apk/release/app-release.apk NothingIsland.apk
+          cp app/build/outputs/apk/release/app-release.apk "NothingIsland-v${VERSION}.apk"
           REPO="${GITHUB_REPOSITORY}"
           # Änderungen seit dem letzten Release: alle Commits zwischen dem vorherigen und diesem Stand.
           PREV="$(gh api "repos/${REPO}/releases/tags/latest" --jq .target_commitish 2>/dev/null || true)"
