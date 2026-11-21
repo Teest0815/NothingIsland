@@ -449,8 +449,8 @@ private fun LyricsView(state: LyricsState, posMs: Long, sc: Float) {
                     targetState = idx,
                     transitionSpec = {
                         ContentTransform(
-                            targetContentEnter = slideInVertically(spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = 0.78f, stiffness = 460f)) { it / 2 } +
-                                scaleIn(spring<Float>(dampingRatio = 0.78f, stiffness = 460f), initialScale = 0.88f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)) +
+                            targetContentEnter = slideInVertically(spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = 0.6f, stiffness = 440f)) { it / 2 } +
+                                scaleIn(spring<Float>(dampingRatio = 0.6f, stiffness = 440f), initialScale = 0.88f, transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)) +
                                 fadeIn(tween(180)),
                             initialContentExit = slideOutVertically(tween(200, easing = FastOutSlowInEasing)) { -it / 2 } + fadeOut(tween(140)),
                             sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
@@ -468,8 +468,9 @@ private fun LyricsView(state: LyricsState, posMs: Long, sc: Float) {
                     targetState = idx + 1,
                     transitionSpec = {
                         ContentTransform(
-                            targetContentEnter = fadeIn(tween(280, delayMillis = 140)) +
-                                slideInVertically(tween(280, delayMillis = 140, easing = FastOutSlowInEasing)) { it / 3 },
+                            // Kleiner, weicher Bounce: federt nach dem kurzen Warten leicht nach.
+                            targetContentEnter = fadeIn(tween(220, delayMillis = 140)) +
+                                slideInVertically(spring<androidx.compose.ui.unit.IntOffset>(dampingRatio = 0.7f, stiffness = 380f)) { it / 2 },
                             initialContentExit = fadeOut(tween(110)),
                             sizeTransform = SizeTransform(clip = false) { _, _ -> snap<IntSize>() },
                         )
