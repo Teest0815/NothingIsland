@@ -139,7 +139,7 @@ internal fun TopAlertBubble(
     LaunchedEffect(visible, alert?.id) {
         if (visible) {
             val changed = lastId != null && lastId != alert?.id && p.value > 0.5f
-            val promoted = changed && alert != null && hold.prevIds.contains(alert.id)
+            val promoted = changed && hold.prevIds.contains(alert.id)
             val replace = changed && !promoted
             lastId = alert?.id
             if (promoted) {
@@ -183,7 +183,7 @@ internal fun TopAlertBubble(
         if (visible && ev != null) IslandBus.setTouchRect2(left - 4f, top - 4f, w + 8f, h + 8f + behind.size * 8f)
         else IslandBus.setTouchRect2(0f, 0f, 1f, 1f)
     }
-    if (!show || ev == null) return
+    if (!show) return
     val swipe = remember { Animatable(0f) }
     val pull = remember { Animatable(0f) }
     // Die Wisch-Verschiebung gilt nur für die Karte, die gewischt wurde (die nachrückende startet sofort an ihrem Platz).
