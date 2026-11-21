@@ -888,7 +888,7 @@ class MainActivity : ComponentActivity() {
             color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp),
         )
         Text("Aktuell: $curName", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(bottom = 6.dp))
-        SettingSlider("Zeit für das zweite Tippen (nur länger einstellbar, nicht kürzer als 300 ms)", "${s.doubleTapMs} ms", s.doubleTapMs.toFloat().coerceIn(300f, 600f), 300f..600f) { v -> edit { it.copy(doubleTapMs = (v / 10f).roundToInt() * 10) } }
+        SettingSlider("Tempo: Zeit für das zweite Tippen (kleiner = schneller tippen)", "${s.doubleTapMs} ms", s.doubleTapMs.toFloat().coerceIn(60f, 600f), 60f..600f) { v -> edit { it.copy(doubleTapMs = (v / 10f).roundToInt() * 10) } }
         fun set(k: String) = edit { it.copy(doubleTapAction = k) }
         Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Chip("AUS", cur.isEmpty()) { set("") }

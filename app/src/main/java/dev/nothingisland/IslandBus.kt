@@ -653,7 +653,7 @@ object IslandBus {
             pillIconMedia = p.getInt("pillIconMedia", d.pillIconMedia),
             swipeUpAction = p.getString("swipeUpAction", d.swipeUpAction) ?: d.swipeUpAction,
             doubleTapAction = p.getString("doubleTapAction", d.doubleTapAction) ?: d.doubleTapAction,
-            doubleTapMs = p.getInt("doubleTapMs", d.doubleTapMs).coerceIn(300, 600),
+            doubleTapMs = p.getInt("doubleTapMs", d.doubleTapMs).coerceIn(60, 600),
             pillIconNotif = p.getInt("pillIconNotif", d.pillIconNotif),
             swipeDownPause = p.getBoolean("swipeDownPause", d.swipeDownPause),
             muteOnSwipeUp = p.getBoolean("muteOnSwipeUp", d.muteOnSwipeUp),
