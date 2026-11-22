@@ -128,6 +128,25 @@ object QuickActions {
         }
     }
 
+    /**
+     * Startet die Songerkennung einer installierten App: Shazam, sonst die Musiksuche der Google-App.
+     * Eine eigene Erkennung gibt es nicht (dafür bräuchte es einen Dienst mit Zugangsschlüssel).
+     */
+    fun recognizeSong(ctx: Context) {
+        val pm = ctx.packageManager
+        val tries = listOf(
+            Intent("com.shazam.android.intent.actions.START_TAGGING").setPackage("com.shazam.android"),
+            Intent("com.google.android.googlequicksearchbox.MUSIC_SEARCH").setPackage("com.google.android.googlequicksearchbox"),
+            runCatching { pm.getLaunchIntentForPackage("com.shazam.android") }.getOrNull(),
+        )
+        for (i in tries) {
+            if (i != null && runCatching { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess) return
+        }
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            android.widget.Toast.makeText(ctx, "Songerkennung: bitte Shazam oder die Google-App installieren", android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
     fun toggleTorch(ctx: Context) {
         init(ctx)
         val id = torchId ?: return
@@ -319,6 +338,7 @@ object QuickActions {
         ),
         settingsTile("alarm", "Wecker", "WECKER", "alarm", AlarmClock.ACTION_SHOW_ALARMS),
         settingsTile("nfc", "NFC", "NFC", "nfc", Settings.ACTION_NFC_SETTINGS),
+        QuickTile("song", "Song erkennen", { "SONG" }, "music", { false }, { c -> recognizeSong(c); true }),
         QuickTile("note", "Notiz", { "NOTIZ" }, "note", { false }, { _ -> IslandBus.setNote(true); true }),
         QuickTile("calc", "Taschenrechner", { "RECHNER" }, "calc", { false }, { _ -> IslandBus.setCalc(true); true }),
         QuickTile(
