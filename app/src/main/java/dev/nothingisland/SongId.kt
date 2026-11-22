@@ -23,14 +23,26 @@ object SongId {
         IslandBus.settings.value.auddToken.isNotBlank() &&
             ctx.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
-    private fun show(title: String, text: String, quiet: Boolean = false) {
+    /** Fortschritt: bleibt in der Bubble, bis das Ergebnis kommt. */
+    private fun show(title: String, text: String) {
         val ev = IslandEvent(
             key = KEY, app = "SONG", title = title, text = text,
-            icon = QuickActions.icon("music"), quiet = quiet, kind = Kind.STATUS,
+            icon = QuickActions.icon("music"), kind = Kind.STATUS,
         )
         IslandBus.upsertOngoing(ev)
         IslandBus.setPrimary(KEY)
         IslandBus.setExpanded(true)
+    }
+
+    /** Ergebnis: normale Meldung, die man wegwischen kann und die von selbst verschwindet. */
+    private fun result(title: String, text: String) {
+        IslandBus.removeOngoing(KEY)
+        IslandBus.post(
+            IslandEvent(
+                key = KEY, app = "SONG", title = title, text = text,
+                icon = QuickActions.icon("music"), kind = Kind.OTHER,
+            ),
+        )
     }
 
     fun start(ctx: Context) {
@@ -42,15 +54,15 @@ object SongId {
             try {
                 val wav = record()
                 if (wav == null) {
-                    show("FEHLER", "Mikrofon nicht verfügbar oder im Hintergrund blockiert")
+                    result("FEHLER", "Mikrofon nicht verfügbar oder im Hintergrund blockiert")
                 } else {
                     show("ERKENNE …", "Einen Moment")
                     val r = query(token, wav)
-                    if (r == null) show("NICHT ERKANNT", "Es wurde kein Song gefunden")
-                    else show(r.first.uppercase().take(40), r.second)
+                    if (r == null) result("NICHT ERKANNT", "Es wurde kein Song gefunden")
+                    else result(r.first.uppercase().take(40), r.second)
                 }
             } catch (e: Exception) {
-                show("FEHLER", "Keine Verbindung oder ungültiger Token")
+                result("FEHLER", "Keine Verbindung oder ungültiger Token")
             } finally {
                 running = false
             }
