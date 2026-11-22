@@ -121,6 +121,7 @@ class MainActivity : ComponentActivity() {
     private var refresh by mutableIntStateOf(0)
 
     private val btPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
+    private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
     private val calPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
 
     private val backupSave = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -816,6 +817,37 @@ class MainActivity : ComponentActivity() {
         }
 
         FoldCard("SMART HOME (HOME ASSISTANT)", false) { HomeAssistantSettings() }
+
+        FoldCard("SONGERKENNUNG", false) {
+            val micOk = refresh >= 0 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            Text(
+                "Hört ca. 8 Sekunden über das Mikrofon zu und zeigt das Ergebnis in der Bubble. Die Aufnahme wird an audd.io gesendet. " +
+                    "Dafür brauchst du einen eigenen Zugangsschlüssel (Token) von audd.io. Ohne Token wird Shazam bzw. Google geöffnet.",
+                color = Muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 10.dp),
+            )
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+                    .clip(RoundedCornerShape(50))
+                    .border(1.dp, CardBorder, RoundedCornerShape(50))
+                    .padding(horizontal = 18.dp, vertical = 10.dp),
+            ) {
+                if (s.auddToken.isEmpty()) Text("AudD-Token", color = Muted, fontSize = 14.sp)
+                BasicTextField(
+                    value = s.auddToken,
+                    onValueChange = { v -> edit { it.copy(auddToken = v.trim()) } },
+                    singleLine = true,
+                    textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                    cursorBrush = SolidColor(AppAccent),
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            PillButton(if (micOk) "MIKROFON ERLAUBT" else "MIKROFON ERLAUBEN", filled = !micOk, modifier = Modifier.fillMaxWidth()) {
+                if (!micOk) micPermission.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
 
         FoldCard("SCHNELLZUGRIFF", false, s.quickPanel) {
             ToggleRow("Schnellzugriff-Panel aktivieren", s.quickPanel) { c ->

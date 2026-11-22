@@ -133,6 +133,7 @@ object QuickActions {
      * Eine eigene Erkennung gibt es nicht (dafür bräuchte es einen Dienst mit Zugangsschlüssel).
      */
     fun recognizeSong(ctx: Context) {
+        if (SongId.available(ctx)) { SongId.start(ctx); return }
         val pm = ctx.packageManager
         val tries = listOf(
             Intent("com.shazam.android.intent.actions.START_TAGGING").setPackage("com.shazam.android"),

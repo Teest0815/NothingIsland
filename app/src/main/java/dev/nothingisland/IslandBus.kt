@@ -173,6 +173,7 @@ data class IslandSettings(
     val doubleTapAction: String = "",
     /** Zeitfenster in ms, in dem das zweite Tippen folgen muss. */
     val doubleTapMs: Int = 300,
+    val auddToken: String = "",
     /** Symbol der kleinen Pille bei Meldungen: 0 App-Symbol, 1 Profil-/Gruppenbild. */
     val pillIconNotif: Int = 0,
     /** Bei Musik: Nach-unten-Ziehen pausiert/startet die Wiedergabe. */
@@ -654,6 +655,7 @@ object IslandBus {
             swipeUpAction = p.getString("swipeUpAction", d.swipeUpAction) ?: d.swipeUpAction,
             doubleTapAction = p.getString("doubleTapAction", d.doubleTapAction) ?: d.doubleTapAction,
             doubleTapMs = p.getInt("doubleTapMs", d.doubleTapMs).coerceIn(60, 600),
+            auddToken = p.getString("auddToken", d.auddToken) ?: "",
             pillIconNotif = p.getInt("pillIconNotif", d.pillIconNotif),
             swipeDownPause = p.getBoolean("swipeDownPause", d.swipeDownPause),
             muteOnSwipeUp = p.getBoolean("muteOnSwipeUp", d.muteOnSwipeUp),
@@ -745,6 +747,7 @@ object IslandBus {
             .putString("swipeUpAction", s.swipeUpAction)
             .putString("doubleTapAction", s.doubleTapAction)
             .putInt("doubleTapMs", s.doubleTapMs)
+            .putString("auddToken", s.auddToken)
             .putInt("pillIconNotif", s.pillIconNotif)
             .putBoolean("swipeDownPause", s.swipeDownPause)
             .putBoolean("muteOnSwipeUp", s.muteOnSwipeUp)
