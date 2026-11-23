@@ -96,7 +96,7 @@ private val Muted = Color(0xFF9A9A9A)
 /** Akzentfarbe als Schrift auf dem dunklen App-Hintergrund (bei dunklem Akzent aufgehellt). */
 private val AppAccent: Color get() = IslandTheme.accentOn(Color.Black)
 
-private val TABS = listOf("START", "LAYOUT", "FUNKTION", "VERBINDUNGEN", "DESIGN", "APPS")
+private val TABS = listOf("START", "LAYOUT", "FUNKTION", "DESIGN", "APPS")
 
 private val STATUS_TYPES = listOf(
     "torch" to "Taschenlampe",
@@ -218,7 +218,7 @@ class MainActivity : ComponentActivity() {
                     },
                     label = "tab",
                 ) { t ->
-                    if (t == 5) {
+                    if (t == 4) {
                         AppRulesTab(s)
                     } else {
                         Column(
@@ -231,7 +231,6 @@ class MainActivity : ComponentActivity() {
                                 0 -> StartTab()
                                 1 -> LayoutTab(s)
                                 2 -> FunctionTab(s)
-                                3 -> ConnectionsTab(s)
                                 else -> DesignTab(s)
                             }
                             Spacer(Modifier.height(48.dp))
@@ -612,48 +611,6 @@ class MainActivity : ComponentActivity() {
         PillButton("ALLES ZURÜCKSETZEN", filled = false, modifier = Modifier.fillMaxWidth()) { edit { IslandSettings() } }
     }
 
-    // ---------------------------------------------------------------- VERBINDUNGEN
-
-    @Composable
-    private fun ConnectionsTab(s: IslandSettings) {
-        FoldCard("VERBINDUNGEN", false) {
-            FoldCard("SMART HOME (HOME ASSISTANT)", false) { HomeAssistantSettings() }
-
-            FoldCard("3D-DRUCKER", false) { PrinterSettings(s) }
-
-            FoldCard("SONGERKENNUNG", false) {
-                val micOk = refresh >= 0 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                Text(
-                    "Hört ca. 8 Sekunden über das Mikrofon zu und zeigt das Ergebnis in der Bubble. Die Aufnahme wird an audd.io gesendet. " +
-                        "Dafür brauchst du einen eigenen Zugangsschlüssel (Token) von audd.io. Ohne Token wird Shazam bzw. Google geöffnet.",
-                    color = Muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 10.dp),
-                )
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp)
-                        .clip(RoundedCornerShape(50))
-                        .border(1.dp, CardBorder, RoundedCornerShape(50))
-                        .padding(horizontal = 18.dp, vertical = 10.dp),
-                ) {
-                    if (s.auddToken.isEmpty()) Text("AudD-Token", color = Muted, fontSize = 14.sp)
-                    BasicTextField(
-                        value = s.auddToken,
-                        onValueChange = { v -> edit { it.copy(auddToken = v.trim()) } },
-                        singleLine = true,
-                        textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
-                        cursorBrush = SolidColor(AppAccent),
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-                PillButton(if (micOk) "MIKROFON ERLAUBT" else "MIKROFON ERLAUBEN", filled = !micOk, modifier = Modifier.fillMaxWidth()) {
-                    if (!micOk) micPermission.launch(Manifest.permission.RECORD_AUDIO)
-                }
-            }
-        }
-    }
-
     // ---------------------------------------------------------------- FUNKTION
 
     @Composable
@@ -880,6 +837,47 @@ class MainActivity : ComponentActivity() {
                 }
             }
             Spacer(Modifier.height(8.dp))
+        }
+        ConnectionsCard(s)
+    }
+
+    @Composable
+    private fun ConnectionsCard(s: IslandSettings) {
+        FoldCard("VERBINDUNGEN", false) {
+            FoldCard("SMART HOME (HOME ASSISTANT)", false) { HomeAssistantSettings() }
+
+            FoldCard("3D-DRUCKER", false) { PrinterSettings(s) }
+
+            FoldCard("SONGERKENNUNG", false) {
+                val micOk = refresh >= 0 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                Text(
+                    "Hört ca. 8 Sekunden über das Mikrofon zu und zeigt das Ergebnis in der Bubble. Die Aufnahme wird an audd.io gesendet. " +
+                        "Dafür brauchst du einen eigenen Zugangsschlüssel (Token) von audd.io. Ohne Token wird Shazam bzw. Google geöffnet.",
+                    color = Muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 10.dp),
+                )
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                        .clip(RoundedCornerShape(50))
+                        .border(1.dp, CardBorder, RoundedCornerShape(50))
+                        .padding(horizontal = 18.dp, vertical = 10.dp),
+                ) {
+                    if (s.auddToken.isEmpty()) Text("AudD-Token", color = Muted, fontSize = 14.sp)
+                    BasicTextField(
+                        value = s.auddToken,
+                        onValueChange = { v -> edit { it.copy(auddToken = v.trim()) } },
+                        singleLine = true,
+                        textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                        cursorBrush = SolidColor(AppAccent),
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                PillButton(if (micOk) "MIKROFON ERLAUBT" else "MIKROFON ERLAUBEN", filled = !micOk, modifier = Modifier.fillMaxWidth()) {
+                    if (!micOk) micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            }
         }
     }
 
