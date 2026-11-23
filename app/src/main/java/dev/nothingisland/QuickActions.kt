@@ -609,7 +609,7 @@ object QuickActions {
 
     // ------------------------------------------------------------ Zwischenablage
 
-    private fun clipDump(ctx: Context, text: String) {
+    fun clipDump(ctx: Context, text: String) {
         runCatching {
             ctx.getSharedPreferences("island_prefs", Context.MODE_PRIVATE).edit().putString("clipDump", text).apply()
         }
@@ -635,8 +635,10 @@ object QuickActions {
     }
 
     fun onClipboard(ctx: Context) {
-        if (System.currentTimeMillis() < ignoreClipUntil) return
-        if (!IslandBus.settings.value.clipboard) return
+        val st = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.GERMANY).format(java.util.Date())
+        if (System.currentTimeMillis() < ignoreClipUntil) { clipDump(ctx, "$st  Meldung ignoriert (eigene Kopie)"); return }
+        if (!IslandBus.settings.value.clipboard) { clipDump(ctx, "$st  Meldung erhalten, aber Schalter aus"); return }
+        clipDump(ctx, "$st  Meldung erhalten, lese …")
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager ?: return
         val clip = runCatching { cm.primaryClip }.getOrNull()
         val sensitive = clip?.description?.extras?.getBoolean("android.content.extra.IS_SENSITIVE") == true

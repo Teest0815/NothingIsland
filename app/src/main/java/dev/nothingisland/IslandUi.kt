@@ -155,7 +155,10 @@ internal fun IslandHostBody() {
     DisposableEffect(ctx, s.clipboard) {
         val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
         val l = android.content.ClipboardManager.OnPrimaryClipChangedListener { QuickActions.onClipboard(ctx) }
-        if (s.clipboard) runCatching { cm?.addPrimaryClipChangedListener(l) }
+        if (s.clipboard) {
+            val ok = runCatching { cm?.addPrimaryClipChangedListener(l) }.isSuccess
+            QuickActions.clipDump(ctx, "Beobachter " + if (ok) "angemeldet" else "fehlgeschlagen")
+        } else QuickActions.clipDump(ctx, "Beobachter aus (Schalter)")
         onDispose { runCatching { cm?.removePrimaryClipChangedListener(l) } }
     }
     LaunchedEffect(Unit) { QuickActions.init(ctx) }
