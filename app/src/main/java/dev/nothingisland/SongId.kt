@@ -1,7 +1,11 @@
 package dev.nothingisland
 
 import android.Manifest
+import android.app.SearchManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.MediaStore
 import android.content.pm.PackageManager
 import android.media.AudioFormat
 import android.media.AudioRecord
@@ -35,14 +39,42 @@ object SongId {
     }
 
     /** Ergebnis: normale Meldung, die man wegwischen kann und die von selbst verschwindet. */
-    private fun result(title: String, text: String) {
+    private fun result(title: String, text: String, ctx: Context? = null, query: String? = null) {
         IslandBus.removeOngoing(KEY)
         IslandBus.post(
             IslandEvent(
                 key = KEY, app = "SONG", title = title, text = text,
                 icon = QuickActions.icon("music"), kind = Kind.OTHER,
+                actions = if (ctx != null && query != null) listOf(
+                    IslandAction("Öffnen", onClick = { openInMusicApp(ctx, query) }),
+                    IslandAction("Kopieren", onClick = { copy(ctx, query) }),
+                ) else emptyList(),
             ),
         )
+    }
+
+    private fun copy(ctx: Context, text: String) {
+        val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("song", text))
+    }
+
+    /** Erst Spotify, dann andere Musik-Apps (Suche nach "Titel Künstler"), zuletzt die Websuche. */
+    private fun openInMusicApp(ctx: Context, query: String) {
+        fun go(i: Intent) = runCatching { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isSuccess
+        fun search(pkg: String) = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).setPackage(pkg)
+            .putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+            .putExtra(SearchManager.QUERY, query)
+        if (go(Intent(Intent.ACTION_VIEW, Uri.parse("spotify:search:" + Uri.encode(query))).setPackage("com.spotify.music"))) return
+        val apps = listOf(
+            "com.google.android.apps.youtube.music", "com.apple.android.music", "deezer.android.app",
+            "com.amazon.mp3", "com.soundcloud.android", "com.aspiro.tidal", "com.miui.player",
+        )
+        for (p in apps) if (go(search(p))) return
+        val pm = ctx.packageManager
+        val any = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+            .putExtra(SearchManager.QUERY, query)
+        if (any.resolveActivity(pm) != null && go(any)) return
+        go(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query))))
     }
 
     fun start(ctx: Context) {
@@ -59,7 +91,7 @@ object SongId {
                     show("ERKENNE …", "Einen Moment")
                     val r = query(token, wav)
                     if (r == null) result("NICHT ERKANNT", "Es wurde kein Song gefunden")
-                    else result(r.first.uppercase().take(40), r.second)
+                    else result(r.first.uppercase().take(40), r.second, ctx.applicationContext, "${r.first} ${r.second.substringBefore(" · ")}".trim())
                 }
             } catch (e: Exception) {
                 result("FEHLER", "Keine Verbindung oder ungültiger Token")
