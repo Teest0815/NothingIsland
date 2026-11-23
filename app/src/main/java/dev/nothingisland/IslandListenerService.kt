@@ -22,6 +22,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 class IslandListenerService : NotificationListenerService() {
@@ -42,6 +44,13 @@ class IslandListenerService : NotificationListenerService() {
             QuickActions.clipDump(this, "Beobachter im Dienst angemeldet")
         }
         IslandBus.loadPrefs(this)
+        // 3D-Drucker (Bambu Lab, Creality): Verbindungen passend zu den Einstellungen halten.
+        scope.launch {
+            IslandBus.settings
+                .map { listOf(it.bambuIp, it.bambuSerial, it.bambuCode, it.crealityIp) }
+                .distinctUntilChanged()
+                .collect { kotlinx.coroutines.withContext(Dispatchers.Default) { PrinterMonitor.sync(this@IslandListenerService, IslandBus.settings.value) } }
+        }
         // Zeichnet der Barrierefreiheits-Dienst (über der Statusleiste), bleibt dieses Overlay aus.
         scope.launch {
             IslandBus.accessibilityOverlay.collect { active ->

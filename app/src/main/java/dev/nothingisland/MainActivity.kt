@@ -818,6 +818,8 @@ class MainActivity : ComponentActivity() {
 
         FoldCard("SMART HOME (HOME ASSISTANT)", false) { HomeAssistantSettings() }
 
+        FoldCard("3D-DRUCKER", false) { PrinterSettings(s) }
+
         FoldCard("SONGERKENNUNG", false) {
             val micOk = refresh >= 0 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
             Text(
@@ -974,6 +976,46 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    @Composable
+    private fun PrinterField(value: String, hint: String, secret: Boolean = false, onChange: (String) -> Unit) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp)
+                .clip(RoundedCornerShape(50))
+                .border(1.dp, CardBorder, RoundedCornerShape(50))
+                .padding(horizontal = 18.dp, vertical = 10.dp),
+        ) {
+            if (value.isEmpty()) Text(hint, color = Muted, fontSize = 14.sp)
+            BasicTextField(
+                value = value,
+                onValueChange = { onChange(it.trim()) },
+                singleLine = true,
+                textStyle = TextStyle(color = Color.White, fontSize = 14.sp),
+                cursorBrush = SolidColor(AppAccent),
+                visualTransformation = if (secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+
+    @Composable
+    private fun PrinterSettings(s: IslandSettings) {
+        val info by PrinterMonitor.info.collectAsState()
+        Text(
+            "Zeigt den Druckstatus in der Pille: Fortschritt, Restzeit, Temperaturen. Der Drucker muss im selben WLAN sein.",
+            color = Muted, fontSize = 13.sp, modifier = Modifier.padding(bottom = 10.dp),
+        )
+        Text("BAMBU LAB (LAN-MODUS)", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 6.dp))
+        PrinterField(s.bambuIp, "IP-Adresse des Druckers") { v -> edit { it.copy(bambuIp = v) } }
+        PrinterField(s.bambuSerial, "Seriennummer") { v -> edit { it.copy(bambuSerial = v) } }
+        PrinterField(s.bambuCode, "Zugangscode (Access Code)", true) { v -> edit { it.copy(bambuCode = v) } }
+        info["bambu"]?.takeIf { it.isNotEmpty() }?.let { Text(it, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp)) }
+        Text("CREALITY (K1 / K2 / HI)", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp, bottom = 6.dp))
+        PrinterField(s.crealityIp, "IP-Adresse des Druckers") { v -> edit { it.copy(crealityIp = v) } }
+        info["creality"]?.takeIf { it.isNotEmpty() }?.let { Text(it, color = Muted, fontSize = 12.sp) }
     }
 
     /** Verbindung zu Home Assistant: Adresse, Langzeit-Zugriffstoken, Test. */

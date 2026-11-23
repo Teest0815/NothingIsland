@@ -12,3 +12,8 @@
 # Parcelable/Enums, die per Namen gelesen werden könnten
 -keepclassmembers enum * { public static **[] values(); public static ** valueOf(java.lang.String); }
 -keepclassmembers class * implements android.os.Parcelable { public static final ** CREATOR; }
+
+# OkHttp (WebSocket zu Creality): optionale TLS-Anbieter
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**

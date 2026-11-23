@@ -174,6 +174,10 @@ data class IslandSettings(
     /** Zeitfenster in ms, in dem das zweite Tippen folgen muss. */
     val doubleTapMs: Int = 300,
     val auddToken: String = "",
+    val bambuIp: String = "",
+    val bambuSerial: String = "",
+    val bambuCode: String = "",
+    val crealityIp: String = "",
     /** Symbol der kleinen Pille bei Meldungen: 0 App-Symbol, 1 Profil-/Gruppenbild. */
     val pillIconNotif: Int = 0,
     /** Bei Musik: Nach-unten-Ziehen pausiert/startet die Wiedergabe. */
@@ -656,6 +660,10 @@ object IslandBus {
             doubleTapAction = p.getString("doubleTapAction", d.doubleTapAction) ?: d.doubleTapAction,
             doubleTapMs = p.getInt("doubleTapMs", d.doubleTapMs).coerceIn(60, 600),
             auddToken = p.getString("auddToken", d.auddToken) ?: "",
+            bambuIp = p.getString("bambuIp", "") ?: "",
+            bambuSerial = p.getString("bambuSerial", "") ?: "",
+            bambuCode = p.getString("bambuCode", "") ?: "",
+            crealityIp = p.getString("crealityIp", "") ?: "",
             pillIconNotif = p.getInt("pillIconNotif", d.pillIconNotif),
             swipeDownPause = p.getBoolean("swipeDownPause", d.swipeDownPause),
             muteOnSwipeUp = p.getBoolean("muteOnSwipeUp", d.muteOnSwipeUp),
@@ -748,6 +756,10 @@ object IslandBus {
             .putString("doubleTapAction", s.doubleTapAction)
             .putInt("doubleTapMs", s.doubleTapMs)
             .putString("auddToken", s.auddToken)
+            .putString("bambuIp", s.bambuIp)
+            .putString("bambuSerial", s.bambuSerial)
+            .putString("bambuCode", s.bambuCode)
+            .putString("crealityIp", s.crealityIp)
             .putInt("pillIconNotif", s.pillIconNotif)
             .putBoolean("swipeDownPause", s.swipeDownPause)
             .putBoolean("muteOnSwipeUp", s.muteOnSwipeUp)
