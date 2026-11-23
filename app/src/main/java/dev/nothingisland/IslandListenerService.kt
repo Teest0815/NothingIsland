@@ -30,9 +30,17 @@ class IslandListenerService : NotificationListenerService() {
     private val host = OverlayHost(this, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, scope)
     private var connected = false
 
+    private val clipListener = android.content.ClipboardManager.OnPrimaryClipChangedListener { QuickActions.onClipboard(this) }
+
     override fun onCreate() {
         super.onCreate()
         instance = this
+        // Zwischenablage: kopierten Text kurz zeigen (der Dienst lebt dauerhaft, anders als die Oberfläche).
+        runCatching {
+            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.addPrimaryClipChangedListener(clipListener)
+            QuickActions.clipDump(this, "Beobachter im Dienst angemeldet")
+        }
         IslandBus.loadPrefs(this)
         // Zeichnet der Barrierefreiheits-Dienst (über der Statusleiste), bleibt dieses Overlay aus.
         scope.launch {
@@ -59,6 +67,7 @@ class IslandListenerService : NotificationListenerService() {
     }
 
     override fun onDestroy() {
+        runCatching { (getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager).removePrimaryClipChangedListener(clipListener) }
         if (instance === this) instance = null
         removeOverlay()
         scope.cancel()

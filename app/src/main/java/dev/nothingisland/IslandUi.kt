@@ -151,16 +151,6 @@ internal fun IslandHostBody() {
 
     val pendingList by IslandBus.pending.collectAsState()
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    // Zwischenablage: kopierten Text kurz zeigen.
-    DisposableEffect(ctx, s.clipboard) {
-        val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
-        val l = android.content.ClipboardManager.OnPrimaryClipChangedListener { QuickActions.onClipboard(ctx) }
-        if (s.clipboard) {
-            val ok = runCatching { cm?.addPrimaryClipChangedListener(l) }.isSuccess
-            QuickActions.clipDump(ctx, "Beobachter " + if (ok) "angemeldet" else "fehlgeschlagen")
-        } else QuickActions.clipDump(ctx, "Beobachter aus (Schalter)")
-        onDispose { runCatching { cm?.removePrimaryClipChangedListener(l) } }
-    }
     LaunchedEffect(Unit) { QuickActions.init(ctx) }
     LaunchedEffect(s.suppressPopups) { QuickActions.applyHeadsUp(ctx, s.suppressPopups) }
     val torchOn by QuickActions.torch.collectAsState()

@@ -611,7 +611,9 @@ object QuickActions {
 
     fun clipDump(ctx: Context, text: String) {
         runCatching {
-            ctx.getSharedPreferences("island_prefs", Context.MODE_PRIVATE).edit().putString("clipDump", text).apply()
+            val sp = ctx.getSharedPreferences("island_prefs", Context.MODE_PRIVATE)
+            val old = sp.getString("clipDump", null)?.lines()?.take(7).orEmpty()
+            sp.edit().putString("clipDump", (listOf(text.replace("\n", " | ")) + old).joinToString("\n")).apply()
         }
     }
 
