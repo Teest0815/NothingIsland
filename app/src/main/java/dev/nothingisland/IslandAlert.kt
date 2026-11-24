@@ -222,6 +222,10 @@ internal fun OngoingExpanded(
     modifier: Modifier,
     tall: Boolean = false,
 ) {
+    e.printer?.let { pv ->
+        PrinterExpanded(e, pv, count, index, sc, onCycle, modifier, tall)
+        return
+    }
     // Ladeanzeige: Balken füllt sich von 0, Prozent zählen hoch, Glow pulsiert beim Laden.
     val chargeOn = e.key == "charge-detail" && IslandBus.settings.collectAsState().value.chargeAnim
     var go by remember { mutableStateOf(false) }

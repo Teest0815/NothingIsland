@@ -32,7 +32,19 @@ private class PrintState {
     var bed = Double.NaN
     var layer = 0
     var total = 0
+    var nozzleT = 0.0
+    var bedT = 0.0
+    var stage = -1
 }
+
+private val BAMBU_STAGES = mapOf(
+    1 to "Bett wird vermessen", 2 to "Bett heizt auf", 3 to "Mechanik wird geprüft", 4 to "Filamentwechsel",
+    5 to "Pause", 6 to "Filament leer", 7 to "Düse heizt auf", 8 to "Extruder wird kalibriert",
+    9 to "Druckbett wird gescannt", 10 to "Erste Schicht wird geprüft", 11 to "Platte wird erkannt",
+    12 to "Lidar wird kalibriert", 13 to "Referenzfahrt", 14 to "Düse wird gereinigt",
+    15 to "Düsentemperatur wird geprüft", 16 to "Vom Nutzer pausiert", 18 to "Lidar wird kalibriert",
+    19 to "Fluss wird kalibriert",
+)
 
 /** Zeigt laufende Drucke von Bambu Lab (LAN-Modus, MQTT) und Creality (WebSocket) in der Pille. */
 object PrinterMonitor {
@@ -76,6 +88,16 @@ object PrinterMonitor {
 
     private val wasRunning = HashMap<String, Boolean>()
 
+    /** Was der Drucker gerade tut (Name, ob er heizt). */
+    private fun phaseOf(st: PrintState): Pair<String, Boolean> {
+        if (st.state == "PAUSE") return (BAMBU_STAGES[st.stage] ?: "Pausiert") to false
+        BAMBU_STAGES[st.stage]?.let { return it to (st.stage == 2 || st.stage == 7 || st.stage == 15) }
+        if (st.bedT > 0 && !st.bed.isNaN() && st.bed < st.bedT - 3) return "Bett heizt auf" to true
+        if (st.nozzleT > 0 && !st.nozzle.isNaN() && st.nozzle < st.nozzleT - 5) return "Düse heizt auf" to true
+        if (st.layer == 0 && st.percent == 0) return "Wird vorbereitet" to false
+        return "Druckt" to false
+    }
+
     private fun publish(key: String, brand: String, st: PrintState) {
         val busKey = "printer-$key"
         val active = st.state == "RUNNING" || st.state == "PAUSE"
@@ -88,15 +110,20 @@ object PrinterMonitor {
             temp(st.nozzle)?.let { parts += "Düse $it" }
             temp(st.bed)?.let { parts += "Bett $it" }
             if (st.total > 0) parts += "Schicht ${st.layer}/${st.total}"
+            val (phase, heating) = phaseOf(st)
             IslandBus.upsertOngoing(
                 IslandEvent(
                     key = busKey, kind = Kind.PROGRESS, app = "DRUCK",
+                    printer = PrinterView(
+                        brand, phase, heating, st.state == "PAUSE", st.percent, st.leftMin,
+                        st.nozzle, st.nozzleT, st.bed, st.bedT, st.layer, st.total, st.file,
+                    ),
                     title = if (st.state == "PAUSE") "$brand · PAUSE" else brand,
                     text = parts.joinToString("  ·  "),
                     textShort = if (st.leftMin >= 0) "noch ${fmtLeft(st.leftMin)}" else null,
                     icon = QuickActions.icon("printer"),
                     progress = (st.percent / 100f).coerceIn(0f, 1f),
-                    rightText = "${st.percent}%",
+                    rightText = if (heating) "HEIZT" else "${st.percent}%",
                 ),
             )
         } else {
@@ -193,6 +220,9 @@ object PrinterMonitor {
                 if (p.has("mc_remaining_time")) st.leftMin = p.optInt("mc_remaining_time")
                 if (p.has("nozzle_temper")) st.nozzle = p.optDouble("nozzle_temper")
                 if (p.has("bed_temper")) st.bed = p.optDouble("bed_temper")
+                if (p.has("nozzle_target_temper")) st.nozzleT = p.optDouble("nozzle_target_temper")
+                if (p.has("bed_target_temper")) st.bedT = p.optDouble("bed_target_temper")
+                if (p.has("stg_cur")) st.stage = p.optInt("stg_cur", -1)
                 if (p.has("subtask_name")) st.file = p.optString("subtask_name")
                 if (p.has("layer_num")) st.layer = p.optInt("layer_num")
                 if (p.has("total_layer_num")) st.total = p.optInt("total_layer_num")
@@ -244,6 +274,8 @@ object PrinterMonitor {
     private fun crealityApply(j: JSONObject, st: PrintState) {
         num(j, "nozzleTemp")?.let { st.nozzle = it }
         num(j, "bedTemp0")?.let { st.bed = it }
+        num(j, "targetNozzleTemp")?.let { st.nozzleT = it }
+        num(j, "targetBedTemp0")?.let { st.bedT = it }
         num(j, "layer")?.let { st.layer = it.toInt() }
         num(j, "TotalLayer")?.let { st.total = it.toInt() }
         if (j.has("printFileName")) st.file = j.optString("printFileName").substringAfterLast('/')

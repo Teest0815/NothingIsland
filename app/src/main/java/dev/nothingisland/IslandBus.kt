@@ -9,6 +9,23 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 /** Reihenfolge = Priorität in der kleinen Pille. */
+/** Druckzustand für die große Pille (3D-Drucker). */
+data class PrinterView(
+    val brand: String,
+    val phase: String,
+    val heating: Boolean,
+    val paused: Boolean,
+    val percent: Int,
+    val leftMin: Int,
+    val nozzle: Double,
+    val nozzleTarget: Double,
+    val bed: Double,
+    val bedTarget: Double,
+    val layer: Int,
+    val total: Int,
+    val file: String,
+)
+
 enum class Kind { CALL, NAVIGATION, TIMER, WORKOUT, MEDIA, PROGRESS, STATUS, OTHER }
 
 data class IslandAction(
@@ -55,6 +72,8 @@ data class IslandEvent(
     val quiet: Boolean = false,
     /** Training: erkannte Werte (bpm, dist, pace, speed, power, cad, kcal, time). */
     val metrics: Map<String, String> = emptyMap(),
+    /** 3D-Drucker: Zustand für die eigene Darstellung der großen Pille. */
+    val printer: PrinterView? = null,
     /** Kürzere Fassung von [text], falls der Platz nicht reicht. */
     val textShort: String? = null,
     /** Antwort-Möglichkeit (Messenger). */

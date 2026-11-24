@@ -908,11 +908,11 @@ object QuickActions {
                 c.drawLine(42f, 20f, 76f, 14f, line)
             }
             "printer" -> {
-                c.drawRoundRect(RectF(14f, 10f, 82f, 24f), 4f, 4f, fill)
-                c.drawRoundRect(RectF(22f, 24f, 74f, 34f), 3f, 3f, line)
-                c.drawRoundRect(RectF(28f, 40f, 68f, 88f), 6f, 6f, line)
-                c.drawLine(36f, 62f, 60f, 62f, line)
-                c.drawLine(36f, 74f, 52f, 74f, line)
+                c.drawRoundRect(RectF(16f, 10f, 80f, 86f), 8f, 8f, line)
+                c.drawLine(16f, 34f, 80f, 34f, line)
+                c.drawPath(poly(40f, 34f, 56f, 34f, 48f, 48f), fill)
+                c.drawLine(28f, 72f, 68f, 72f, line)
+                c.drawRoundRect(RectF(40f, 56f, 56f, 70f), 2f, 2f, fill)
             }
             "note" -> {
                 c.drawRoundRect(RectF(18f, 12f, 78f, 84f), 8f, 8f, line)
