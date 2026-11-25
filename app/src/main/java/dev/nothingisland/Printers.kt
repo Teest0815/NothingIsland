@@ -80,6 +80,43 @@ object PrinterMonitor {
         }
     }
 
+    // ------------------------------------------------------------ Testanzeige
+
+    @Volatile private var demoGen = 0
+
+    /** Spielt einen kurzen Fake-Druck ab (Bett heizt, Düse heizt, Druck läuft, fertig), um die Anzeige zu prüfen. */
+    fun demo(ctx: Context) {
+        val gen = ++demoGen
+        val id = if (PrinterPhotos.has(ctx, "creality")) "creality" else "bambu"
+        Thread {
+            fun show(phase: String, heating: Boolean, pct: Int, left: Int, nozzle: Double, nT: Double, bed: Double, bT: Double, layer: Int) {
+                IslandBus.upsertOngoing(
+                    IslandEvent(
+                        key = "printer-demo", kind = Kind.PROGRESS, app = "DRUCK", title = "TESTDRUCK",
+                        text = "Testanzeige", icon = QuickActions.icon("printer"),
+                        progress = pct / 100f, rightText = if (heating) "HEIZT" else "$pct%",
+                        printer = PrinterView("TESTDRUCK", phase, heating, false, pct, left, nozzle, nT, bed, bT, layer, 240, "Testmodell.3mf", id),
+                    ),
+                )
+            }
+            IslandBus.setPrimary("printer-demo")
+            IslandBus.setExpanded(true)
+            for (i in 0..8) { if (gen != demoGen) return@Thread; show("Bett heizt auf", true, 0, 95, 30.0, 220.0, 25.0 + i * 4.5, 60.0, 0); Thread.sleep(600) }
+            for (i in 0..8) { if (gen != demoGen) return@Thread; show("Düse heizt auf", true, 0, 95, 30.0 + i * 23.0, 220.0, 60.0, 60.0, 0); Thread.sleep(600) }
+            for (pct in 1..100 step 3) {
+                if (gen != demoGen) return@Thread
+                show("Druckt", false, pct, 95 - pct * 95 / 100, 220.0, 220.0, 60.0, 60.0, pct * 240 / 100)
+                Thread.sleep(500)
+            }
+            if (gen == demoGen) {
+                IslandBus.removeOngoing("printer-demo")
+                IslandBus.post(IslandEvent(key = "printer-demo", app = "DRUCK", kind = Kind.OTHER, title = "DRUCK FERTIG", text = "TESTDRUCK · Testmodell", icon = QuickActions.icon("printer")))
+            }
+        }.start()
+    }
+
+    fun stopDemo() { demoGen++; IslandBus.removeOngoing("printer-demo") }
+
     // ------------------------------------------------------------ Anzeige
 
     private fun fmtLeft(min: Int) = if (min >= 60) "${min / 60}:${"%02d".format(min % 60)} h" else "$min min"

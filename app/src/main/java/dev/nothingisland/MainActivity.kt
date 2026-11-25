@@ -1057,6 +1057,14 @@ class MainActivity : ComponentActivity() {
         PrinterField(s.crealityIp, "IP-Adresse des Druckers") { v -> edit { it.copy(crealityIp = v) } }
         info["creality"]?.takeIf { it.isNotEmpty() }?.let { Text(it, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp)) }
         PrinterPhotoRow("creality", s.crealityCut) { v -> edit { it.copy(crealityCut = v) } }
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PillButton("TEST STARTEN", filled = true, modifier = Modifier.weight(1f)) { PrinterMonitor.demo(this@MainActivity) }
+            PillButton("TEST BEENDEN", filled = false, modifier = Modifier.weight(1f)) { PrinterMonitor.stopDemo() }
+        }
+        Text(
+            "Spielt einen kurzen Testdruck ab (Bett und Düse heizen, Druck läuft, fertig). So siehst du Foto und Anzeige, ohne zu drucken.",
+            color = Muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp),
+        )
     }
 
     /** Verbindung zu Home Assistant: Adresse, Langzeit-Zugriffstoken, Test. */
