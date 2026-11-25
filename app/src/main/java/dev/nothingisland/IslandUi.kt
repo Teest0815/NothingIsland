@@ -504,7 +504,7 @@ internal fun IslandHostBody() {
     val quickBaseH = quickRows * 54f + (quickRows - 1) * 10f + 28f + (if (quickPages.size > 1) 14f else 0f)
     val isMedia = current?.kind == Kind.MEDIA && current.media != null
     val isPrinter = current?.printer != null
-    val expandedH = capH((if (land) (if (isMedia) 250f else if (isPrinter) 260f else if (hasActions) 200f else 150f) else (if (isMedia) BASE_EXPANDED_MEDIA_H else if (isPrinter) 150f else if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H)) * fsc)
+    val expandedH = capH((if (land) (if (isMedia) 250f else if (isPrinter) 260f else if (hasActions) 200f else 150f) else (if (isMedia) BASE_EXPANDED_MEDIA_H else if (isPrinter) 122f else if (hasActions) BASE_EXPANDED_ACTIONS_H else BASE_EXPANDED_H)) * fsc)
     val quickH = capH(quickBaseH * fsc)
     val calcH = capH((if (land) 330f else 292f) * fsc)
     val noteH = capH((if (land) 320f else 250f) * fsc)

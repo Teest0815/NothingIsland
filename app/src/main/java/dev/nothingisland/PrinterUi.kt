@@ -113,7 +113,7 @@ private fun PrinterArt(p: PrinterView, progress: Float, sizeDp: Float, modifier:
 
 @Composable
 private fun Stat(label: String, value: String, sc: Float, modifier: Modifier) {
-    Column(modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, color = TextGray, fontFamily = Mono, fontSize = (9f * sc).sp, letterSpacing = 1.2.sp, maxLines = 1)
         Text(value, color = Fg, fontFamily = Mono, fontSize = (12f * sc).sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
@@ -154,8 +154,8 @@ internal fun PrinterExpanded(
     } else if (p.paused) p.phase else "${p.phase}  ${p.percent}%"
     Box(modifier) {
         Column(
-            Modifier.fillMaxSize().padding(horizontal = (16f * sc).dp, vertical = (10f * sc).dp),
-            verticalArrangement = Arrangement.SpaceBetween,
+            Modifier.fillMaxSize().padding(start = (16f * sc).dp, end = (16f * sc).dp, top = (10f * sc).dp, bottom = (14f * sc).dp),
+            verticalArrangement = Arrangement.Center,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 val ph = photo
@@ -183,6 +183,7 @@ internal fun PrinterExpanded(
                         .padding(horizontal = (8f * sc).dp, vertical = (6f * sc).dp),
                 )
             }
+            Spacer(Modifier.height((8f * sc).dp))
             if (tall) {
                 Column(verticalArrangement = Arrangement.spacedBy((6f * sc).dp)) {
                     Row { Stat("REST", leftText(p.leftMin), sc, Modifier.weight(1f)); Stat("FERTIG", etaText(p.leftMin), sc, Modifier.weight(1f)) }
