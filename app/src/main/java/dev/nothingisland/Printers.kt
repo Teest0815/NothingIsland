@@ -116,7 +116,7 @@ object PrinterMonitor {
                     key = busKey, kind = Kind.PROGRESS, app = "DRUCK",
                     printer = PrinterView(
                         brand, phase, heating, st.state == "PAUSE", st.percent, st.leftMin,
-                        st.nozzle, st.nozzleT, st.bed, st.bedT, st.layer, st.total, st.file,
+                        st.nozzle, st.nozzleT, st.bed, st.bedT, st.layer, st.total, st.file, key,
                     ),
                     title = if (st.state == "PAUSE") "$brand · PAUSE" else brand,
                     text = parts.joinToString("  ·  "),

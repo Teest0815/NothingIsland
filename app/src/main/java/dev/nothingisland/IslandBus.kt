@@ -24,6 +24,7 @@ data class PrinterView(
     val layer: Int,
     val total: Int,
     val file: String,
+    val id: String = "",
 )
 
 enum class Kind { CALL, NAVIGATION, TIMER, WORKOUT, MEDIA, PROGRESS, STATUS, OTHER }
@@ -196,6 +197,9 @@ data class IslandSettings(
     val bambuIp: String = "",
     val bambuSerial: String = "",
     val bambuCode: String = "",
+    /** Foto-Hintergrund entfernen: 0 = aus, sonst Toleranz 1..100. */
+    val bambuCut: Int = 0,
+    val crealityCut: Int = 0,
     val crealityIp: String = "",
     /** Symbol der kleinen Pille bei Meldungen: 0 App-Symbol, 1 Profil-/Gruppenbild. */
     val pillIconNotif: Int = 0,
@@ -682,6 +686,8 @@ object IslandBus {
             bambuIp = p.getString("bambuIp", "") ?: "",
             bambuSerial = p.getString("bambuSerial", "") ?: "",
             bambuCode = p.getString("bambuCode", "") ?: "",
+            bambuCut = p.getInt("bambuCut", 0).coerceIn(0, 100),
+            crealityCut = p.getInt("crealityCut", 0).coerceIn(0, 100),
             crealityIp = p.getString("crealityIp", "") ?: "",
             pillIconNotif = p.getInt("pillIconNotif", d.pillIconNotif),
             swipeDownPause = p.getBoolean("swipeDownPause", d.swipeDownPause),
@@ -778,6 +784,8 @@ object IslandBus {
             .putString("bambuIp", s.bambuIp)
             .putString("bambuSerial", s.bambuSerial)
             .putString("bambuCode", s.bambuCode)
+            .putInt("bambuCut", s.bambuCut)
+            .putInt("crealityCut", s.crealityCut)
             .putString("crealityIp", s.crealityIp)
             .putInt("pillIconNotif", s.pillIconNotif)
             .putBoolean("swipeDownPause", s.swipeDownPause)

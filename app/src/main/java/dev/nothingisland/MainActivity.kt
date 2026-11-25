@@ -122,6 +122,18 @@ class MainActivity : ComponentActivity() {
 
     private val btPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
     private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
+    private var photoFor = ""
+    private val photoPick = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        val id = photoFor
+        if (uri != null && id.isNotEmpty()) Thread {
+            if (PrinterPhotos.save(this, id, uri)) runOnUiThread {
+                edit { s ->
+                    if (id == "bambu" && s.bambuCut == 0) s.copy(bambuCut = 35)
+                    else if (id == "creality" && s.crealityCut == 0) s.copy(crealityCut = 35) else s
+                }
+            }
+        }.start()
+    }
     private val calPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { refresh++ }
 
     private val backupSave = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -1008,6 +1020,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Eigenes Foto des Druckers wählen, entfernen und den Hintergrund transparent machen. */
+    @Composable
+    private fun PrinterPhotoRow(id: String, cut: Int, onCut: (Int) -> Unit) {
+        val ver by PrinterPhotos.version.collectAsState()
+        val has = ver >= 0 && PrinterPhotos.has(this, id)
+        Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PillButton(if (has) "FOTO ÄNDERN" else "FOTO WÄHLEN", filled = false, modifier = Modifier.weight(1f)) {
+                photoFor = id
+                photoPick.launch("image/*")
+            }
+            if (has) PillButton("ENTFERNEN", filled = false, modifier = Modifier.weight(1f)) {
+                PrinterPhotos.remove(this@MainActivity, id)
+            }
+        }
+        if (has) SettingSlider(
+            "Hintergrund entfernen", if (cut == 0) "AUS" else "$cut",
+            cut.toFloat(), 0f..100f,
+        ) { v -> onCut(v.roundToInt()) }
+    }
+
     @Composable
     private fun PrinterSettings(s: IslandSettings) {
         val info by PrinterMonitor.info.collectAsState()
@@ -1019,10 +1051,12 @@ class MainActivity : ComponentActivity() {
         PrinterField(s.bambuIp, "IP-Adresse des Druckers") { v -> edit { it.copy(bambuIp = v) } }
         PrinterField(s.bambuSerial, "Seriennummer") { v -> edit { it.copy(bambuSerial = v) } }
         PrinterField(s.bambuCode, "Zugangscode (Access Code)", true) { v -> edit { it.copy(bambuCode = v) } }
-        info["bambu"]?.takeIf { it.isNotEmpty() }?.let { Text(it, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp)) }
+        info["bambu"]?.takeIf { it.isNotEmpty() }?.let { Text(it, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp)) }
+        PrinterPhotoRow("bambu", s.bambuCut) { v -> edit { it.copy(bambuCut = v) } }
         Text("CREALITY (K1 / K2 / HI)", color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp, bottom = 6.dp))
         PrinterField(s.crealityIp, "IP-Adresse des Druckers") { v -> edit { it.copy(crealityIp = v) } }
-        info["creality"]?.takeIf { it.isNotEmpty() }?.let { Text(it, color = Muted, fontSize = 12.sp) }
+        info["creality"]?.takeIf { it.isNotEmpty() }?.let { Text(it, color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp)) }
+        PrinterPhotoRow("creality", s.crealityCut) { v -> edit { it.copy(crealityCut = v) } }
     }
 
     /** Verbindung zu Home Assistant: Adresse, Langzeit-Zugriffstoken, Test. */

@@ -43,6 +43,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Calendar
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.compose.foundation.Image
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
+import java.io.File
+import kotlin.math.abs
+import kotlin.math.max
 
 private fun tempText(v: Double, target: Double): String {
     if (v.isNaN()) return "–"
@@ -115,6 +132,16 @@ internal fun PrinterExpanded(
     tall: Boolean,
 ) {
     val prog by animateFloatAsState(p.percent / 100f, tween(700, easing = FastOutSlowInEasing), label = "pp")
+    val appCtx = LocalContext.current.applicationContext
+    val ver by PrinterPhotos.version.collectAsState()
+    val st by IslandBus.settings.collectAsState()
+    val cut = if (p.id == "bambu") st.bambuCut else st.crealityCut
+    val photo by produceState<ImageBitmap?>(null, p.id, cut, ver) {
+        value = withContext(Dispatchers.Default) { PrinterPhotos.load(appCtx, p.id, cut) }
+    }
+    val pulse by rememberInfiniteTransition(label = "pf").animateFloat(
+        0.55f, 1f, infiniteRepeatable(tween(750, easing = LinearEasing), RepeatMode.Reverse), label = "pa",
+    )
     val file = p.file.removeSuffix(".3mf").removeSuffix(".gcode")
     val sub = buildString {
         if (file.isNotBlank()) append(file)
@@ -131,7 +158,14 @@ internal fun PrinterExpanded(
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                PrinterArt(p, prog, 58f * sc)
+                val ph = photo
+                if (ph != null) {
+                    Image(
+                        bitmap = ph, contentDescription = null, contentScale = ContentScale.Fit,
+                        modifier = Modifier.size((64f * sc).dp)
+                            .graphicsLayer { alpha = if (p.heating) pulse else if (p.paused) 0.6f else 1f },
+                    )
+                } else PrinterArt(p, prog, 58f * sc)
                 Spacer(Modifier.width((12f * sc).dp))
                 Column(Modifier.weight(1f)) {
                     AppLabel(e.title.ifBlank { p.brand }, sc)
@@ -169,5 +203,63 @@ internal fun PrinterExpanded(
         ) {
             Box(Modifier.fillMaxWidth(prog.coerceIn(0f, 1f)).fillMaxHeight().background(NothingRed))
         }
+    }
+}
+
+/** Eigenes Foto je Drucker (Datei im App-Speicher), optional mit entferntem Hintergrund. */
+object PrinterPhotos {
+    /** Wird bei jedem neuen oder entfernten Foto erhöht. */
+    val version = MutableStateFlow(0)
+
+    private fun file(ctx: Context, id: String) = File(ctx.filesDir, "printer_$id.png")
+
+    fun has(ctx: Context, id: String) = file(ctx, id).exists()
+
+    fun save(ctx: Context, id: String, uri: Uri): Boolean = runCatching {
+        val cr = ctx.contentResolver
+        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        cr.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, o) }
+        var sample = 1
+        while (max(o.outWidth, o.outHeight) / sample > 800) sample *= 2
+        val bmp = cr.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+        } ?: return false
+        file(ctx, id).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        version.value++
+        true
+    }.getOrDefault(false)
+
+    fun remove(ctx: Context, id: String) {
+        file(ctx, id).delete()
+        version.value++
+    }
+
+    /** Lädt das Foto; bei [cut] > 0 wird die Farbe der Ecken (Hintergrund) transparent gemacht. */
+    fun load(ctx: Context, id: String, cut: Int): ImageBitmap? {
+        val f = file(ctx, id)
+        if (!f.exists()) return null
+        val src = BitmapFactory.decodeFile(f.path) ?: return null
+        if (cut <= 0) return src.asImageBitmap()
+        val w = src.width
+        val h = src.height
+        val px = IntArray(w * h)
+        src.getPixels(px, 0, w, 0, 0, w, h)
+        fun ch(c: Int, s: Int) = (c shr s) and 0xff
+        // Hintergrundfarbe: Mittel aus den vier Ecken
+        val corners = intArrayOf(px[0], px[w - 1], px[(h - 1) * w], px[h * w - 1])
+        val br = corners.sumOf { ch(it, 16) } / 4
+        val bg = corners.sumOf { ch(it, 8) } / 4
+        val bb = corners.sumOf { ch(it, 0) } / 4
+        val t0 = cut * 1.2f
+        val t1 = t0 * 1.5f + 2f
+        for (i in px.indices) {
+            val c = px[i]
+            val d = max(abs(ch(c, 16) - br), max(abs(ch(c, 8) - bg), abs(ch(c, 0) - bb)))
+            val a = ((d - t0) / (t1 - t0)).coerceIn(0f, 1f)
+            px[i] = ((a * 255).toInt() shl 24) or (c and 0xffffff)
+        }
+        val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        out.setPixels(px, 0, w, 0, 0, w, h)
+        return out.asImageBitmap()
     }
 }
