@@ -162,10 +162,10 @@ internal fun PrinterExpanded(
                 if (ph != null) {
                     Image(
                         bitmap = ph, contentDescription = null, contentScale = ContentScale.Fit,
-                        modifier = Modifier.size((64f * sc).dp)
+                        modifier = Modifier.size((52f * sc).dp)
                             .graphicsLayer { alpha = if (p.heating) pulse else if (p.paused) 0.6f else 1f },
                     )
-                } else PrinterArt(p, prog, 58f * sc)
+                } else PrinterArt(p, prog, 50f * sc)
                 Spacer(Modifier.width((12f * sc).dp))
                 Column(Modifier.weight(1f)) {
                     AppLabel(e.title.ifBlank { p.brand }, sc)
