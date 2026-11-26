@@ -486,21 +486,26 @@ class OverlayHost(
         if (landR) {
             // Querformat: Tastatur ist hoch. Der Rahmen rutscht so weit nach oben, dass Eingabefeld und Knopf frei bleiben.
             val y0 = lp.y
-            // Während die Tastatur einfährt, ändert sich die Höhe in jedem Bild. Das Fenster springt deshalb erst
-            // einmal, wenn der Wert sich beruhigt hat (sonst flackert es durch viele Umbauten hintereinander).
+            // Die Tastatur-Höhe, die Android meldet, gilt nur für den Teil, der das Fenster überdeckt. Rutscht das Fenster
+            // nach oben, sinkt sie auf 0 und das Fenster würde zurückspringen (Pendeln zwischen beiden Lagen).
+            // Darum wird aus der ersten Meldung die feste Oberkante der Tastatur gemerkt und nur noch darauf reagiert.
             val imeHandler = android.os.Handler(android.os.Looper.getMainLooper())
             var imePending: Runnable? = null
+            var kbTop = -1
             imeReposition = { ime ->
-                imePending?.let { imeHandler.removeCallbacks(it) }
-                val r = Runnable {
-                    val newY = if (ime > 0) minOf(y0, dm.heightPixels - ime - lp.height - (4f * d).toInt()) else y0
-                    if (lp.y != newY && replyView === view) {
-                        lp.y = newY
-                        runCatching { wm.updateViewLayout(view, lp) }
+                if (ime > 0) {
+                    kbTop = lp.y + lp.height - ime
+                    imePending?.let { imeHandler.removeCallbacks(it) }
+                    val r = Runnable {
+                        val newY = minOf(y0, kbTop - lp.height - (4f * d).toInt())
+                        if (lp.y != newY && replyView === view) {
+                            lp.y = newY
+                            runCatching { wm.updateViewLayout(view, lp) }
+                        }
                     }
+                    imePending = r
+                    imeHandler.postDelayed(r, 90L)
                 }
-                imePending = r
-                imeHandler.postDelayed(r, if (ime > 0) 90L else 0L)
             }
             if (!isNote && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 view.setOnApplyWindowInsetsListener { v, insets ->

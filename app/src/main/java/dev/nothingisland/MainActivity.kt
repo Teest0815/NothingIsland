@@ -663,6 +663,14 @@ class MainActivity : ComponentActivity() {
             }
             ToggleRow("Meldung nach unten ziehen: als gelesen markieren", s.swipeDownRead) { c -> edit { it.copy(swipeDownRead = c) } }
             ToggleRow("Kopierten Text kurz anzeigen (Zwischenablage)", s.clipboard) { c -> edit { it.copy(clipboard = c) } }
+            PillButton("ZWISCHENABLAGE TESTEN", filled = false, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                QuickActions.onClipboard(this@MainActivity)
+                refresh++
+            }
+            Text(
+                "Kopiere einen Text und tippe hier. Die Pille zeigt ihn dann kurz. Klappt das, liegt es nur an der Benachrichtigung im Hintergrund.",
+                color = Muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp),
+            )
             ToggleRow("System-Pop-ups anderer Apps ausblenden", s.suppressPopups) { c ->
                 edit { it.copy(suppressPopups = c) }
                 QuickActions.applyHeadsUp(ctx, c)
