@@ -72,6 +72,7 @@ class OverlayHost(
     private var layoutJob: Job? = null
     private var touchView: View? = null
     private var replyView: ComposeView? = null
+    private var replyRot = -1
     private var replyScrim: View? = null
     private var replyJob: Job? = null
     private var lockReceiver: BroadcastReceiver? = null
@@ -306,6 +307,15 @@ class OverlayHost(
         replyJob = scope.launch {
             IslandBus.replyTarget.collect { ev -> if (ev != null) showReply() else closeReplyAnimated() }
         }
+        // Dreht sich das Gerät bei offenem Antwortfenster, wird es für die neue Lage neu aufgebaut.
+        scope.launch {
+            IslandBus.rotation.collect { r ->
+                if (replyView != null && r != replyRot) {
+                    removeReply()
+                    if (IslandBus.replyTarget.value != null) showReply()
+                }
+            }
+        }
         probeJob = scope.launch {
             IslandBus.settings.map { it.hideFullscreen }.distinctUntilChanged().collect { updateProbeLoop() }
         }
@@ -374,6 +384,7 @@ class OverlayHost(
         val d = dm.density
         val s = IslandBus.settings.value
         val rotNow = IslandBus.rotation.value
+        replyRot = rotNow
         val isNote0 = IslandBus.replyTarget.value?.noteSink != null
         val landAny = rotNow == 1 || rotNow == 3
         // Meldungen oben in der Mitte (Einstellung): Antwortfenster wie im Hochformat, Notizen bleiben senkrecht.
@@ -492,6 +503,32 @@ class OverlayHost(
             val imeHandler = android.os.Handler(android.os.Looper.getMainLooper())
             var imePending: Runnable? = null
             var kbTop = -1
+            var polling = false
+            var animDown: android.animation.ValueAnimator? = null
+            // Android meldet nichts mehr, wenn die Tastatur verschwindet (das Fenster überlappt sie nicht mehr).
+            // Darum wird die Sichtbarkeit der Tastatur kurz abgefragt, bis das Fenster wieder nach unten gleitet.
+            lateinit var hidePoll: Runnable
+            var hiddenCount = 0
+            hidePoll = Runnable {
+                if (replyView !== view || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) { polling = false; return@Runnable }
+                val visible = view.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) ?: true
+                hiddenCount = if (visible) 0 else hiddenCount + 1
+                if (hiddenCount >= 2 && lp.y != y0) {
+                    polling = false
+                    kbTop = -1
+                    animDown?.cancel()
+                    animDown = android.animation.ValueAnimator.ofInt(lp.y, y0).apply {
+                        duration = 260
+                        interpolator = android.view.animation.DecelerateInterpolator(1.6f)
+                        addUpdateListener {
+                            if (replyView !== view) { cancel(); return@addUpdateListener }
+                            lp.y = it.animatedValue as Int
+                            runCatching { wm.updateViewLayout(view, lp) }
+                        }
+                        start()
+                    }
+                } else imeHandler.postDelayed(hidePoll, 120L)
+            }
             imeReposition = { ime ->
                 if (ime > 0) {
                     kbTop = lp.y + lp.height - ime
@@ -499,8 +536,11 @@ class OverlayHost(
                     val r = Runnable {
                         val newY = minOf(y0, kbTop - lp.height - (4f * d).toInt())
                         if (lp.y != newY && replyView === view) {
+                            animDown?.cancel()
                             lp.y = newY
                             runCatching { wm.updateViewLayout(view, lp) }
+                            hiddenCount = 0
+                            if (!polling) { polling = true; imeHandler.postDelayed(hidePoll, 400L) }
                         }
                     }
                     imePending = r
